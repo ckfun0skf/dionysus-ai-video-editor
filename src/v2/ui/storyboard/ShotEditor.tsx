@@ -3,7 +3,7 @@
  * Desktop: the side panel with Cancel / Save (⌘/Ctrl+Enter). A save is one undo step.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { board, clipSource, storyEdit, storyRefs, story, type AssetSlot, type Project, type QaCheck, type Shot } from "../../domain";
+import { board, clipSource, storyEdit, storyRefs, story, type AssetSlot, type Project, type QaCheck, type Shot, type StoryPath } from "../../domain";
 type StoryAssetType = AssetSlot["type"];
 import { getPreset, listPresets, parsePresetRef } from "../../registry";
 import { Ic } from "../Icon";
@@ -68,6 +68,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
   const [stillMode, setStillMode] = useState<"image" | "color">(bgSlot ? "color" : "image");
   const [bg, setBg] = useState<story.StoryBackground>(bgSlot?.background ?? "#000000");
   const [layers, setLayers] = useState(shot.layers ?? []);
+  const [newPaths, setNewPaths] = useState<StoryPath[]>([]);
   const [effects, setEffects] = useState(shot.effects ?? []);
   const [refs, setRefs] = useState(() => shot.slotIds.filter((id) => id !== shot.clipSlot));
   const [pending, setPending] = useState<{ id: string; patch: storyRefs.SlotPatch }[]>([]);
@@ -104,7 +105,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
     title: title.trim() || (isNew ? "New shot" : shot.title), description, durationSec: n, ...(reusing ? { clipInSec: inN || 0, ...(picked && picked.key === `slot:${sharedClip?.id}` ? {} : { clipSource: { reuse: pick, inSec: inN || 0 } }) }
       : render === "ai" && sharedClip ? { clipSource: { own: true as const }, prompt } : render === "ai" && makeShared ? { clipPrompt: prompt, clipSource: { share: true as const } } : { prompt }), camera, dialogue, captions: captions && !!dialogue.trim(),
     ...(render === "ai" && !reusing ? { genDurationSec: gen.trim() ? g : null } : {}),
-    qa, layers, effects, render, ...(render !== "ai" ? { clipSlot } : {}), ...(render === "still" ? { background: useBg ? bg : null } : {}),
+    qa, layers, effects, ...(newPaths.length ? { newPaths } : {}), render, ...(render !== "ai" ? { clipSlot } : {}), ...(render === "still" ? { background: useBg ? bg : null } : {}),
     slotIds: refs, ...(pending.length ? { newSlots: pending.filter((x) => refs.includes(x.id)) } : {}),
   });
   const save = () => {
@@ -297,7 +298,7 @@ export function ShotEditor({ project, shot, number, isNew, mobile, onSave, onCan
           <button type="button" className="v2-btn v2-sb-btn" onClick={() => setQa([...qa, { id: storyEdit.newCheckId(shot.id, qa), text: "" }])}><Ic g="+" size={16} /> Add check</button>
         </fieldset>
 
-        <LayersEditor b={b} layers={layers} effects={effects} dur={n} onLayers={setLayers} onEffects={setEffects} effectName={effectName} />
+        <LayersEditor b={b} layers={layers} effects={effects} dur={n} onLayers={setLayers} onEffects={setEffects} effectName={effectName} newPaths={newPaths} onNewPath={(x) => setNewPaths((a) => [...a, x])} />
         {mobile && <button type="submit" className="v2-btn primary v2-sb-btn v2-sb-wide" disabled={!ok}>{isNew ? "Add shot" : "Save"}</button>}
         {onDelete && !isNew && <button type="button" className="v2-btn v2-sb-btn v2-sb-danger v2-sb-wide" onClick={onDelete}><Ic g="🗑" size={16} /> Delete shot</button>}
       </form>

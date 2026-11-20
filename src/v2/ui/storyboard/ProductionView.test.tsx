@@ -58,7 +58,7 @@ describe("production to-do list", () => {
     const model = sec().querySelector(".v2-sb-model") as HTMLInputElement;
     await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(model, "Imagen 4"); model.dispatchEvent(new Event("input", { bubbles: true })); });
     await pick(sec().querySelector('input[type="file"]') as HTMLInputElement, new File(["a"], "keeper.png", { type: "image/png" }));
-    const owner = "slot" in first.target ? p().storyboard!.slots[first.target.slot] : p().storyboard!.shots[first.target.shot];
+    const owner = "slot" in first.target ? p().storyboard!.slots[first.target.slot] : p().storyboard!.shots[(first.target as { shot: string }).shot];
     const v = board.selectedOf(p(), owner)!;
     expect(p().storyboard!.versions[v].model).toBe("Imagen 4");
     expect(sec().textContent).toContain("Imagen 4");

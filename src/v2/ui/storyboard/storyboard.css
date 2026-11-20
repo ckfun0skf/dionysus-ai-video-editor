@@ -181,6 +181,7 @@
   .v2-sb-qa-btn:hover { background: #ffffff12; }
   .v2-prod-step:hover { border-color: #ffffff40; }
   .v2-sb-prepare-item:hover { background: #ffffff10; }
+  .v2-pathstep-users .v2-linkbtn:hover { text-decoration: underline; }
 }
 
 /* V2-SB-R05/R06/R07 */
@@ -528,3 +529,38 @@ button.v2-sb-conn:focus-visible { outline: 2px solid var(--accent); outline-offs
 .v2-pi-issues.existing { background: var(--panel-2, #ffffff0d); color: var(--muted); border: 1px solid var(--line); }
 .v2-pi-issues.existing summary { min-height: 44px; display: flex; align-items: center; cursor: pointer; font-weight: 600; color: var(--text); }
 .v2-pi-issues code { overflow-wrap: anywhere; }
+
+/* P89b storyboard paths: the path step and its drawing sheet. */
+.v2-pathstep-main { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 820px) { .v2-pathstep-main { grid-template-columns: 1fr; } }
+.v2-pathstep-side { display: grid; gap: 10px; align-content: start; }
+.v2-pathstep-state { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--muted); }
+.v2-pathstep-state.is-made { color: var(--text); }
+.v2-pathstep-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.v2-pathstep-users { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.v2-pathstep-users .v2-linkbtn { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; color: var(--text); text-decoration: none; }
+.v2-pathprev { position: relative; width: 100%; background: #0b0b0d; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.v2-pathprev img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; opacity: .7; }
+.v2-pathprev svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.v2-pathprev-line { fill: none; stroke: #fff; stroke-width: 1.4; vector-effect: non-scaling-stroke; stroke-linecap: round; }
+.v2-pathprev circle { fill: #0b0b0d; stroke: #fff; stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.v2-pathprev circle.is-first { fill: #fff; }
+.v2-pathprev-grid, .v2-pathdraw-blank { position: absolute; inset: 0; background-image: linear-gradient(#ffffff10 1px, transparent 1px), linear-gradient(90deg, #ffffff10 1px, transparent 1px); background-size: 10% 10%; }
+.v2-pathprev-empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-size: 13px; }
+
+.v2-pathdraw { position: fixed; inset: 0; z-index: 60; background: #0e0e11; display: flex; flex-direction: column; color: var(--text); }
+.v2-pathdraw-head { flex: none; display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 14px; border-bottom: 1px solid var(--line); }
+.v2-pathdraw-head b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-pathdraw-sub { color: var(--muted); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.v2-pathdraw-body { flex: 1; min-height: 0; display: flex; gap: 12px; padding: 12px; }
+.v2-pathdraw-stagebox { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+.v2-pathdraw-stage { position: relative; flex: none; background: #000; overflow: hidden; border-radius: 6px; }
+.v2-pathdraw-frame { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; }
+.v2-pathdraw-tip { margin: 0; text-align: center; }
+.v2-pathdraw-side { flex: none; width: 300px; overflow-y: auto; display: grid; gap: 12px; align-content: start; }
+.v2-pathdraw.is-mobile .v2-pathdraw-body { padding: 8px; }
+.v2-pathdraw .v2-mp-bar { padding-bottom: max(6px, env(safe-area-inset-bottom)); }
+.v2-sb-pathrow { align-items: end; }
+.v2-sb-pathrow .v2-sb-field > span { display: inline-flex; align-items: center; gap: 4px; }
+.v2-sb-pathrow select { min-height: 44px; }
+.v2-sb-pathrow .v2-sb-check { min-height: 44px; }

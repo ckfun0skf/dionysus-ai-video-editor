@@ -12,6 +12,7 @@ import { assetRefId, dialogueLines, expandAssetStates, dialogueText, keyframeId,
 import { followStoryLinks } from "./storyLinks";
 import type { HtmlClipParam, HtmlParamValues } from "./htmlClipPackage";
 import { orderSteps } from "./storySteps";
+import { pathStepState, type StoryPath } from "./storyPaths";
 import { TICKS_PER_SECOND } from "./time";
 
 export interface QaCheck { id: string; text: string }
@@ -211,6 +212,8 @@ export interface Storyboard {
    * per audio cue, so "Update timeline" redoes only the ones edited since. Not part of the JSON format.
    */
   sent?: { shots: Record<string, string>; cues: Record<string, string> };
+  /** P89b: named motion paths (planned points and / or a reference to make them from); layers refer to them by id. */
+  paths?: StoryPath[];
 }
 
 /** `{ refRoles }` from an asset's object-form references (V2-SB-123), or nothing when none has a role or note. */
@@ -281,7 +284,7 @@ export function storyboardFromDoc(doc: StoryDoc): Storyboard {
       shots[s.id].slotIds.unshift(id);
     }
   }
-  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {}, ...(doc.audio?.length ? { audio: structuredClone(doc.audio) } : {}), ...(doc.captionStyle ? { captionStyle: structuredClone(doc.captionStyle) } : {}) };
+  return { format: "dionysus.storyboard/1", meta: structuredClone(doc.meta), order: doc.shots.map((s) => s.id), shots, slots, connections: doc.connections.map((c) => structuredClone(c)), versions: {}, ...(doc.audio?.length ? { audio: structuredClone(doc.audio) } : {}), ...(doc.captionStyle ? { captionStyle: structuredClone(doc.captionStyle) } : {}), ...(doc.paths?.length ? { paths: structuredClone(doc.paths) } : {}) };
 }
 
 export function setStoryboard(p: Project, board: Storyboard | undefined): Project {
@@ -664,7 +667,9 @@ export function setStorySkipped(p: Project, target: Target, skipped: boolean): P
 
 /** One row of the production to-do list (V2-CUT-11). */
 export type StepState = "todo" | "blocked" | "check" | "stale" | "done" | "skipped";
-export interface ProductionStep { target: Target; key: string; state: StepState; blockedBy?: string; waitsFor?: string; qaDone: number; qaTotal: number }
+/** P89b: a step makes an asset, a shot's clip or a named path ("Create path <name> from <reference>"). */
+export type StepTarget = Target | { path: string };
+export interface ProductionStep { target: StepTarget; key: string; state: StepState; blockedBy?: string; waitsFor?: string; qaDone: number; qaTotal: number }
 
 /**
  * The production to-do list in a workable order: every asset comes before the shots that use it,
@@ -706,6 +711,7 @@ export function productionSteps(p: Project): ProductionStep[] {
     seen.add(`shot:${id}`);
     s.slotIds.forEach((x) => { if (x !== s.keyframe) slot(x); });
     (s.layers ?? []).forEach((l) => { if (l.type !== "text") slot(l.asset); }); // media-layer assets come before the shot too
+    (s.layers ?? []).forEach((l) => { if (l.pathRef) path(l.pathRef.ref); }); // P89b: and the paths its layers move along
     // V2-SB-124: the keyframe comes right before its clip (after the references it is made from).
     if (s.keyframe) slot(s.keyframe);
     // html/still shots: the step is checking the clip slot's version (its upload is the slot's own step).
@@ -715,8 +721,18 @@ export function productionSteps(p: Project): ProductionStep[] {
     if (!s.render && s.clipSlot) return;
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
+  // P89b: a path step comes after the reference it is made from. A planned path (points, nothing to make it from) is done.
+  function path(id: string) {
+    const pa = b!.paths?.find((x) => x.id === id);
+    if (!pa || seen.has(`path:${id}`)) return;
+    seen.add(`path:${id}`);
+    if (pa.from) slot(pa.from);
+    const st = pathStepState(pa, (sid) => !!b!.slots[sid] && !!selectedOf(p, b!.slots[sid]));
+    out.push({ target: { path: id }, key: `path:${id}`, qaDone: 0, qaTotal: 0, ...(st === "waiting" ? { state: "blocked" as const, waitsFor: pa.from } : { state: st === "todo" ? "todo" as const : "done" as const }) });
+  }
   b.order.forEach(shot);
   Object.keys(b.slots).forEach(slot);
+  (b.paths ?? []).forEach((x) => path(x.id));
   if (!b.stepOrder?.length) return out;
   const byKey = new Map(out.map((s) => [s.key, s]));
   return orderSteps(b, out.map((s) => s.key)).map((k) => byKey.get(k)!);

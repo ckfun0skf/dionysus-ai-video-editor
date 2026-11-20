@@ -5,7 +5,7 @@
  *   asset over the picture) or Code (an html asset). Effects stay listed (remove only).
  */
 import { useState } from "react";
-import { story, storyAuto, type AssetSlot, type Storyboard } from "../../domain";
+import { story, storyAuto, storyPaths, type AssetSlot, type StoryPath, type Storyboard } from "../../domain";
 type StoryBackground = story.StoryBackground; type StoryColorStop = story.StoryColorStop; type StoryEffect = story.StoryEffect; type StoryLayer = story.StoryLayer;
 const { STILL_ASSET_TYPES } = story;
 import { Ic } from "../Icon";
@@ -65,9 +65,10 @@ export function nextLayerId(layers: StoryLayer[], base: string): string {
   return `${base}-${i}`;
 }
 
-export function LayersEditor({ b, layers, effects, dur, onLayers, onEffects, effectName }: {
+export function LayersEditor({ b, layers, effects, dur, onLayers, onEffects, effectName, newPaths = [], onNewPath }: {
   b: Storyboard; layers: StoryLayer[]; effects: StoryEffect[]; dur: number;
   onLayers: (l: StoryLayer[]) => void; onEffects: (e: StoryEffect[]) => void; effectName: (id: string) => string;
+  /** P89b: paths made here, not on the board yet (saved with the shot). */ newPaths?: StoryPath[]; onNewPath?: (p: StoryPath) => void;
 }) {
   const [menu, setMenu] = useState(false);
   const [open, setOpen] = useState<string>();
@@ -88,6 +89,20 @@ export function LayersEditor({ b, layers, effects, dur, onLayers, onEffects, eff
   };
   const set = (i: number, patch: Partial<StoryLayer>) => onLayers(layers.map((x, j) => (j === i ? ({ ...x, ...patch } as StoryLayer) : x)));
   const num = (v: string, fb: number) => { const n = Number(v.replace(",", ".")); return Number.isFinite(n) ? Math.max(0, n) : fb; };
+  // P89b: a layer moves along a named storyboard path (linked: Send / Update fit it to the clip), its own path, or none.
+  const allPaths = [...(b.paths ?? []), ...newPaths.filter((x) => !b.paths?.some((y) => y.id === x.id))];
+  const pathLabel = (x: StoryPath) => `${storyPaths.pathName(x)} · ${x.createdBy ? "made" : x.motionPath?.nodes.length ? "planned" : "to make"}`;
+  const pickPath = (i: number, l: StoryLayer, v: string) => {
+    if (v === "__own") return;
+    if (v === "") { set(i, { pathRef: undefined } as Partial<StoryLayer>); return; }
+    let id = v;
+    if (v === "__new") {
+      const name = `Path ${allPaths.length + 1}`;
+      id = storyPaths.freshPathId({ paths: allPaths }, name);
+      onNewPath?.({ id, name, durationSec: Math.max(0.5, Math.round((l.endSec - l.startSec) * 100) / 100) });
+    }
+    set(i, { pathRef: { ref: id, ...(l.pathRef && !l.pathRef.stretch ? {} : { stretch: true as const }) }, motionPath: undefined, follow: undefined } as Partial<StoryLayer>);
+  };
   return (
     <fieldset className="v2-sb-field v2-sb-layers" data-testid="layers-editor">
       <legend>Layers & effects</legend>
@@ -116,6 +131,16 @@ export function LayersEditor({ b, layers, effects, dur, onLayers, onEffects, eff
                     <label className="v2-sb-field">From (s)<input inputMode="decimal" value={sec(l.startSec)} onChange={(e) => set(i, { startSec: num(e.target.value, l.startSec) })} aria-label={`Layer ${i + 1} start`} /></label>
                     <label className="v2-sb-field">To (s)<input inputMode="decimal" value={sec(l.endSec)} onChange={(e) => set(i, { endSec: num(e.target.value, l.endSec) })} aria-label={`Layer ${i + 1} end`} /></label>
                   </div>
+                  {l.type !== "video" && <div className="v2-sb-row2 v2-sb-pathrow">
+                    <label className="v2-sb-field"><span><Ic g="motion-path" size={14} /> Path</span>
+                      <select value={l.pathRef?.ref ?? (l.motionPath ? "__own" : "")} aria-label={`Layer ${i + 1} path`} data-testid="layer-path" onChange={(e) => pickPath(i, l, e.target.value)}>
+                        <option value="">None</option>
+                        {l.motionPath && !l.pathRef && <option value="__own">Its own path · {l.motionPath.nodes.length} points</option>}
+                        {allPaths.map((x) => <option key={x.id} value={x.id}>{pathLabel(x)}</option>)}
+                        {onNewPath && <option value="__new">＋ New path (a step to track or draw it)</option>}
+                      </select></label>
+                    {l.pathRef && <label className="v2-sb-check" title="Fit the path's timing to this layer's length; off = play it at its own speed"><input type="checkbox" checked={!!l.pathRef.stretch} onChange={() => set(i, { pathRef: { ...l.pathRef!, stretch: l.pathRef!.stretch ? undefined : true } } as Partial<StoryLayer>)} /> Fit to layer</label>}
+                  </div>}
                 </div>
               )}
             </li>

@@ -18,9 +18,10 @@ import type { StoryAudio, StoryEffect, StoryLayer, StoryMediaLayer, StoryTextLay
 import { maskToJson, type ClipMask } from "./mask";
 import { getPreset, parsePresetRef } from "../registry";
 import { TICKS_PER_SECOND } from "./time";
+import { findPath, pathName, pathUsers, resolvePathRef, samePath, unresolvePath } from "./storyPaths";
 import { storyOf } from "../clipTypes";
 
-export type SyncChangeKind = "shot" | "newShot" | "removedShot" | "layer" | "newLayer" | "removedLayer" | "effects" | "cue" | "newCue" | "removedCue" | "order" | "trim";
+export type SyncChangeKind = "shot" | "newShot" | "removedShot" | "layer" | "newLayer" | "removedLayer" | "effects" | "cue" | "newCue" | "removedCue" | "order" | "trim" | "path";
 export interface SyncChange { kind: SyncChangeKind; id: string; label: string; needsPrompt?: boolean }
 export interface SyncPlan { project: Project; changes: SyncChange[] }
 
@@ -246,16 +247,35 @@ export function syncPlan(p: Project): SyncPlan {
         if (pl.mask) (next as StoryMediaLayer).mask = structuredClone(pl.mask); else delete (next as StoryMediaLayer).mask;
       }
       // P89: the clip's motion path (times from the clip start = the layer start); a path replaces "follow": "shot".
-      if (pl.motionPath) { next.motionPath = structuredClone(pl.motionPath); delete next.follow; } else delete next.motionPath;
+      // P89b: a clip linked to a named path keeps the link while its path is what the link gives; an edited path goes
+      // back into the named path when this layer is its only user, else the layer gets its own copy.
+      const ref = pl.pathRef && findPath(b, pl.pathRef.ref) ? pl.pathRef : undefined;
+      if (ref) {
+        const named = findPath(b, ref.ref)!, want = resolvePathRef(b, ref, pl.durationTicks);
+        if (samePath(pl.motionPath, want)) { next.pathRef = structuredClone(ref); delete next.motionPath; delete next.follow; }
+        else if (pl.motionPath && pathUsers(b, ref.ref).every((u) => u.shot === shotId && u.layer === l.id)) {
+          const src = unresolvePath(ref, pl.motionPath, named.motionPath?.nodes.at(-1)?.t, pl.durationTicks);
+          if (src) {
+            b.paths = b.paths!.map((x) => (x.id === named.id ? { ...x, motionPath: src } : x));
+            changes.push({ kind: "path", id: named.id, label: `Path "${pathName(named)}" updated from layer "${l.id}" of "${s.title}"` });
+            next.pathRef = structuredClone(ref); delete next.motionPath; delete next.follow;
+          } else { next.motionPath = structuredClone(pl.motionPath); delete next.pathRef; delete next.follow; }
+        } else if (pl.motionPath) { next.motionPath = structuredClone(pl.motionPath); delete next.pathRef; delete next.follow; }
+        else { delete next.pathRef; delete next.motionPath; }
+      } else {
+        delete next.pathRef;
+        if (pl.motionPath) { next.motionPath = structuredClone(pl.motionPath); delete next.follow; } else delete next.motionPath;
+      }
       delete next.removedFromTimeline;
       pl.storyLayer = l.id;
-      if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s${eq(l.box, (next as StoryMediaLayer).box) && eq((l as StoryTextLayer).position, (next as StoryTextLayer).position) ? "" : ", moved"}` }); }
+      if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; for (const k of ["motionPath", "pathRef", "follow"] as const) if (next[k] === undefined) delete l[k]; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s${eq(l.box, (next as StoryMediaLayer).box) && eq((l as StoryTextLayer).position, (next as StoryTextLayer).position) ? "" : ", moved"}` }); }
       continue;
     }
     const id = uniqueId("tl-layer-", (x) => layers.some((y) => y.id === x));
     const base = { id, startSec, endSec, needsPrompt: true as const, ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) };
     let nl: StoryLayer;
-    if (pl.motionPath) Object.assign(base, { motionPath: structuredClone(pl.motionPath) });
+    if (pl.pathRef && findPath(b, pl.pathRef.ref) && samePath(pl.motionPath, resolvePathRef(b, pl.pathRef, pl.durationTicks))) Object.assign(base, { pathRef: structuredClone(pl.pathRef) });
+    else if (pl.motionPath) Object.assign(base, { motionPath: structuredClone(pl.motionPath) });
     if (pl.clipType === "text") nl = { ...base, type: "text", text: pl.text?.text ?? "" } as StoryTextLayer;
     else nl = { ...base, type: storyOf(pl.clipType).layerType, asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl), ...(pl.mask ? { mask: structuredClone(pl.mask) } : {}) } as StoryMediaLayer;
     layers.push(nl); layerSeen.add(`${shotId}/${id}`); pl.storyLayer = id;

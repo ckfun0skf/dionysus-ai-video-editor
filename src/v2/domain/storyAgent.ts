@@ -296,6 +296,36 @@ export const STORY_TOOLS: StoryTool[] = [
     },
   },
   {
+    name: "set_story_path", title: "Add or change a named path", readOnly: false,
+    description: 'P89b: add (or replace, by id) a named motion path on the storyboard. Layers move along it with "motionPath": { "ref": "<id>", "stretch"?: true, "offset"?: { "x", "y" } } (set_shot_layers). A planned path gives points now: "motionPath": { "nodes": [{ "x", "y", "t"?, "in"?, "out"?, "ease"? }], "constantSpeed"?, "orient"? } in frame points (0–1 from the top-left = where the layer centre goes) and seconds from the path start; no video is needed. "from" (a video or image asset id) plus "track" (what to follow, e.g. "the bee") adds the guide step "Create path <name> from <reference>": the user tracks it in the reference with the Track sheet or draws it over the reference; planned points move the layer until then. With neither, the guide asks to draw it.',
+    inputSchema: obj({ path: obj({ id: id("Path id."), name: str("Display name, e.g. \"Bee flight\"."), description: str("What the path is for."), from: str("Video or image asset id to make it from (optional)."), track: str("With from: what to follow."), durationSec: num("The path's length in seconds (default: its last point's time)."), motionPath: { type: "object", description: "Planned points (see the description)." } }, ["id"], "A named path.") }, ["path"]),
+    edit: (raw, a) => {
+      if (!isObj(a.path) || typeof a.path.id !== "string") return '"path" must be an object with an "id".';
+      const p = clone(a.path), list = ((raw as Obj).paths as Obj[] | undefined) ?? [];
+      if (isObj(p.motionPath) && "ref" in p.motionPath) return 'A path\'s "motionPath" holds points ({ "nodes": [...] }); "ref" goes on a layer.';
+      const i = findIdx(list, p.id);
+      // Points made in the app (tracked or drawn) are kept when only the plan (name, description, track …) changes.
+      if (i >= 0 && list[i].createdBy && p.motionPath === undefined) { p.motionPath = list[i].motionPath; p.createdBy = list[i].createdBy; }
+      const next = i < 0 ? [...list, p] : list.map((x, j) => (j === i ? p : x));
+      (raw as Obj).paths = next;
+      return { label: `AI: path ${String(p.id)}`, message: `Path "${String(p.id)}" ${i < 0 ? "added" : "updated"}.` };
+    },
+  },
+  {
+    name: "remove_story_path", title: "Remove a named path", readOnly: false,
+    description: "P89b: remove a named path. Layers that referred to it stop moving along it (their ref is removed; they keep their box / position).",
+    inputSchema: obj({ id: str("Path id.") }, ["id"]),
+    edit: (raw, a) => {
+      const list = ((raw as Obj).paths as Obj[] | undefined) ?? [], i = findIdx(list, a.id);
+      if (i < 0) return `No path "${String(a.id)}". Paths: ${list.map((x) => x.id).join(", ") || "none"}.`;
+      list.splice(i, 1);
+      if (!list.length) delete (raw as Obj).paths;
+      let n = 0;
+      for (const sh of raw.shots) for (const l of (sh.layers as Obj[] | undefined) ?? []) if (isObj(l.motionPath) && l.motionPath.ref === a.id) { delete l.motionPath; n += 1; }
+      return { label: `AI: remove path ${String(a.id)}`, message: `Path "${String(a.id)}" removed${n ? `; ${n} layer${n === 1 ? "" : "s"} no longer move along it` : ""}.` };
+    },
+  },
+  {
     name: "add_cue", title: "Add an audio cue", readOnly: false,
     description: 'Add an audio cue (voiceover, music, sfx, ambience, sting, dialogue) that plays from a shot: an audio "asset", or "source": { "fromVideo", "inSec"?, "outSec"? } to use the sound of a video asset or of a shot\'s clip. Gets "audio<n>" as id when you give none.',
     inputSchema: obj({ cue: CUE }, ["cue"]),

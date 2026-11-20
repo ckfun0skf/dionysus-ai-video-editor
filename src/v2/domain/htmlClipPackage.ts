@@ -60,14 +60,15 @@ export interface HtmlClipManifest {
  * P43: three reference types — "graphic" (a picture: Program, a video track or clip → luma, avgColor, motion,
  * histogram), "audio" (a sound: Mix, an audio-carrying track or clip → rms, peak, bands, onset, envelope) and
  * "tracker" (a tracker on a clip → x, y, width, height, scale, rotation, found). The P38/P39 names "scene", "beat" and
- * "track" are still accepted and mean graphic, audio and tracker.
+ * "track" are still accepted and mean graphic, audio and tracker. P89b: "path" (a named motion path → x, y, angle,
+ * progress, found at the clip's own time).
  */
-export const REF_TYPES = ["graphic", "audio", "tracker"] as const;
+export const REF_TYPES = ["graphic", "audio", "tracker", "path"] as const;
 export type RefType = (typeof REF_TYPES)[number];
 export const INPUT_TYPES = [...REF_TYPES, "scene", "beat", "track"] as const;
 export type InputType = (typeof INPUT_TYPES)[number];
 /** The reference type an input type means ("scene" → "graphic", "beat" → "audio", "track" → "tracker"). */
-export const refType = (t: InputType | string): RefType => (t === "scene" || t === "graphic" ? "graphic" : t === "beat" || t === "audio" ? "audio" : "tracker");
+export const refType = (t: InputType | string): RefType => (t === "scene" || t === "graphic" ? "graphic" : t === "beat" || t === "audio" ? "audio" : t === "path" ? "path" : "tracker");
 export interface HtmlClipInput { type: InputType; label?: string; description?: string }
 
 export const CODE_PACKAGE_ROLES = ["clip", "effect", "transition"] as const;
@@ -160,10 +161,10 @@ export function validateManifest(raw: unknown, libs: readonly ClipLibrary[]): Ht
   }
   if (m.params !== undefined) for (const i of validateParamDecls(m.params)) out.push(i);
   if (m.inputs !== undefined) {
-    if (!isObj(m.inputs)) err("inputs", `"inputs" must be an object of name → { "type": "graphic" | "audio" | "tracker" }.`);
+    if (!isObj(m.inputs)) err("inputs", `"inputs" must be an object of name → { "type": "graphic" | "audio" | "tracker" | "path" }.`);
     else for (const [k, v] of Object.entries(m.inputs)) {
       if (!NAME_RE.test(k)) err("input-name", `Input name "${k}" must start with a letter or _ and use letters, digits, _ . or -.`);
-      if (!isObj(v) || !(INPUT_TYPES as readonly string[]).includes(String(v.type))) err("input-type", `Input "${k}" needs "type": "graphic" (a picture's signals), "audio" (a sound's signals) or "tracker" (a tracker's box).`);
+      if (!isObj(v) || !(INPUT_TYPES as readonly string[]).includes(String(v.type))) err("input-type", `Input "${k}" needs "type": "graphic" (a picture's signals), "audio" (a sound's signals), "tracker" (a tracker's box) or "path" (a named motion path).`);
       else if (m.params && k in m.params) err("input-name", `"${k}" is both a param and an input; use different names.`);
     }
   }

@@ -11,7 +11,7 @@ import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
 import { captions, cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 
 import { getPreset, listPresets } from "../../registry";
-import { tracking, sourceAt, ticksToSeconds, masking, motion, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
+import { tracking, sourceAt, ticksToSeconds, masking, motion, storyPaths, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
 
 /** P39: the analyser track_clip uses (tests swap it; jsdom can't decode video). */
@@ -665,11 +665,51 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const root = rootOf(project()), pl = findPlacement(root, id)!.placement;
       if (!ops.canMotionPathIn(root, id)) return fail(`Clip ${id} cannot have a motion path (only overlay, text and code clips off the main track; not placeholders).`);
       const { width, height } = project().settings;
+      const given = ["path", "ref", "saved"].filter((k) => a[k] !== undefined);
+      if (given.length !== 1) return fail('Give exactly one of "path" (points), "ref" (a storyboard path id) or "saved" (a saved path id or name). list_motion_paths lists the named ones.');
+      // P89b: link to a storyboard path (resolved for this clip's length now; Update and Sync keep them together).
+      if (a.ref !== undefined) {
+        const sp = storyPaths.findPath(project().storyboard, typeof a.ref === "string" ? a.ref : "");
+        if (!sp) return fail(`No storyboard path "${String(a.ref)}". Paths: ${(project().storyboard?.paths ?? []).map((x) => x.id).join(", ") || "none (add one with set_story_path)"}.`);
+        if (!storyPaths.hasPoints(sp)) return fail(`Storyboard path "${sp.id}" has no points yet: make it first (its guide step "${storyPaths.pathStepTitle(sp)}", or give it points with set_story_path).`);
+        const off = a.offset as { x?: unknown; y?: unknown } | undefined;
+        if (off !== undefined && !(off && typeof off.x === "number" && typeof off.y === "number")) return fail('"offset" is { x, y } (fractions of the frame).');
+        const ref: storyPaths.StoryPathRef = { ref: sp.id, ...(a.stretch === false ? {} : { stretch: true as const }), ...(off && ((off.x as number) || (off.y as number)) ? { offset: { x: off.x as number, y: off.y as number } } : {}) };
+        const mp = storyPaths.resolvePathRef(project().storyboard, ref, pl.durationTicks)!;
+        return edit(cmd.setMotionPath(id, mp, `Path “${storyPaths.pathName(sp)}”`, { pathRef: ref }), id);
+      }
+      if (a.saved !== undefined) {
+        const key = typeof a.saved === "string" ? a.saved.trim().toLowerCase() : "";
+        const sv = (project().motionPaths ?? []).find((x) => x.id.toLowerCase() === key || x.name.toLowerCase() === key);
+        if (!sv) return fail(`No saved path "${String(a.saved)}". Saved: ${(project().motionPaths ?? []).map((x) => `${x.id} "${x.name}"`).join(", ") || "none (save one with save_motion_path)"}.`);
+        const mp = storyPaths.resolvePathRef({ paths: [{ id: "s", motionPath: sv.path }] }, { ref: "s", stretch: true }, pl.durationTicks)!;
+        return edit(cmd.setMotionPath(id, mp, `Path “${sv.name}”`, { pathRef: null }), id);
+      }
       const parsed = motion.parseMotionPath(a.path, { path: "path", durationSec: pl.durationTicks / TICKS_PER_SECOND, aspect: width / height, ticksPerSecond: TICKS_PER_SECOND });
       if (!parsed.path) return fail(parsed.issues.map((i) => `${i.path}: ${i.message}`).join(" ") || "The motion path is not valid.");
       const warn = parsed.issues.filter((i) => i.level === "warning").map((i) => `${i.path}: ${i.message}`);
-      const res = edit(cmd.setMotionPath(id, parsed.path), id);
+      const res = edit(cmd.setMotionPath(id, parsed.path, undefined, { pathRef: null }), id);
       return res.ok ? { ...res, text: warn.length ? `${res.text}\n${warn.join(" ")}` : res.text } : res;
+    }
+    case "list_motion_paths": {
+      const p = project(), tps = TICKS_PER_SECOND, b = p.storyboard;
+      const story = (b?.paths ?? []).map((x) => ({
+        id: x.id, name: storyPaths.pathName(x), points: x.motionPath?.nodes.length ?? 0, seconds: b ? Math.round(storyPaths.pathDurationSec(b, x, tps) * 1000) / 1000 : 0,
+        ...(x.from ? { from: x.from } : {}), ...(x.track ? { track: x.track } : {}), made: x.createdBy ?? (x.from ? false : x.motionPath?.nodes.length ? "planned" : false),
+        usedBy: b ? storyPaths.pathUsers(b, x.id).map((u) => `${u.shot}/${u.layer}`) : [],
+        clips: rootOf(p).tracks.flatMap((t) => t.placements.filter((pl) => pl.pathRef?.ref === x.id).map((pl) => pl.id)),
+      }));
+      const saved = (p.motionPaths ?? []).map((x) => ({ id: x.id, name: x.name, points: x.path.nodes.length, seconds: Math.round(((x.path.nodes.at(-1)?.t ?? 0) / tps) * 1000) / 1000 }));
+      return { ok: true, changed: false, text: JSON.stringify({ storyboard: story, saved }, null, 1) };
+    }
+    case "save_motion_path": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const pl = findPlacement(rootOf(project()), id)!.placement, name = s("name")?.trim();
+      if (!pl.motionPath?.nodes.length) return fail(`Clip ${id} has no motion path to save.`);
+      if (!name) return fail('"name" is required.');
+      const res = edit(cmd.saveMotionPath(name, pl.motionPath), id);
+      const sv = project().motionPaths?.find((x) => x.name.toLowerCase() === name.toLowerCase());
+      return res.ok && sv ? { ...res, text: `Saved path ${sv.id} "${sv.name}" (${sv.path.nodes.length} points).` } : res;
     }
     case "clear_clip_motion_path": {
       const id = needClip(); if (typeof id !== "string") return id;

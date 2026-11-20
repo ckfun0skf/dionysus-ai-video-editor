@@ -24,6 +24,7 @@ import { textOf, textStyleData, textStyleFields, type TextData } from "./text";
 import { previousAdjacent, setTransition } from "./transitions";
 import { secondsToTicks, TICKS_PER_SECOND } from "./time";
 import { followKeyframes, type MotionEffect } from "./storyFollow";
+import { resolvePathRef } from "./storyPaths";
 import { evenSplitCueWords, expandWordPop } from "./subtitleLayer";
 import { CLIP_TYPES, storyOf } from "../clipTypes";
 
@@ -178,8 +179,21 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     ...(st.params && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
     ...(l.mask ? { mask: structuredClone(l.mask) } : {}),
-    ...(l.motionPath ? { motionPath: structuredClone(l.motionPath) } : {}),
+    ...layerPath(b, l, len),
   };
+}
+
+/**
+ * P89 / P89b: a layer clip's motion path: its own, or the named path it refers to resolved for this clip's length
+ * (`pathRef` stays on the clip so Update, Re-lay and Sync know where it came from). A named path with no points yet
+ * gives no path: the clip stays where its box or position puts it.
+ */
+function layerPath(b: Storyboard, l: StoryLayer, durTicks: number): Pick<Placement, "motionPath" | "pathRef"> {
+  if (l.pathRef) {
+    const mp = resolvePathRef(b, l.pathRef, durTicks);
+    return { pathRef: structuredClone(l.pathRef), ...(mp ? { motionPath: mp } : {}) };
+  }
+  return l.motionPath ? { motionPath: structuredClone(l.motionPath) } : {};
 }
 
 /**
@@ -227,7 +241,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       const t = l.opacity !== undefined ? { ...t0, opacity: l.opacity } : t0;
       const keyframes = follow(l, r, t);
       const td = textLayerData(b, l);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: td, ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...(l.motionPath ? { motionPath: structuredClone(l.motionPath) } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: td, ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...layerPath(b, l, r.duration), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
       c = placeOnFreeTrack(c, pl, plainText());
       if (td.animIn === "word-pop") {
         const entrance = typeof td.animInParams?.entrance === "string" ? String(td.animInParams.entrance) : "pop";
@@ -254,7 +268,8 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
   for (const w of withRefs) {
     const inputs: Record<string, string> = {};
     for (const [name, r] of Object.entries(w.refs)) {
-      const target = r.clip === undefined ? undefined : r.clip === "main" ? anchor : placedLayer.get(r.clip);
+      const target = r.type === "path" || r.clip === undefined ? undefined : r.clip === "main" ? anchor : placedLayer.get(r.clip);
+      if (r.type === "path") { inputs[name] = `path:${r.path}`; continue; }
       if (r.type === "tracker") { if (target) inputs[name] = `clip:${target}#@${r.track}`; }
       else if (target) inputs[name] = `clip:${target}`;
     }
@@ -480,8 +495,14 @@ export function sendStory(p: Project): { project: Project; result: SendResult } 
   return { project: recordSent({ ...p, settings, compositions: { ...p.compositions, [p.rootCompositionId]: comp } }), result };
 }
 
+/** P89b: the named paths a shot's layers use (an edited path refreshes the shot on Update). */
+const usedPaths = (b: Pick<Storyboard, "paths"> | undefined, s: Shot) => {
+  const ids = [...new Set((s.layers ?? []).flatMap((l) => (l.pathRef ? [l.pathRef.ref] : [])))];
+  return ids.map((id) => b?.paths?.find((x) => x.id === id) ?? null);
+};
 /** P2A: what a shot sends besides its clip (layers, captions, effects, html params), for change detection. */
-export const shotSignature = (s: Shot): string => JSON.stringify([s.layers ?? [], s.mask ?? null, s.captions ? captionText(s) : "", s.effects ?? [], s.render === "html" ? s.params ?? {} : {}]);
+// P89b: the named paths go last and only when used, so signatures recorded before P89b still match.
+export const shotSignature = (s: Shot, b?: Pick<Storyboard, "paths">): string => { const used = usedPaths(b, s); return JSON.stringify([s.layers ?? [], s.mask ?? null, s.captions ? captionText(s) : "", s.effects ?? [], s.render === "html" ? s.params ?? {} : {}, ...(used.length ? [used] : [])]); };
 const cueSignature = (cue: NonNullable<Storyboard["audio"]>[number]): string => JSON.stringify(cue);
 
 /** Record signatures for shots and cues on the timeline; `force` ids are overwritten, others only filled in. */
@@ -490,7 +511,7 @@ export function recordSent(p: Project, force: Set<string> = new Set()): Project 
   if (!b) return p;
   const comp = p.compositions[p.rootCompositionId];
   const shots = { ...b.sent?.shots }, cues = { ...b.sent?.cues };
-  for (const id of shotClips(comp).keys()) if (b.shots[id] && (force.has(id) || !(id in shots))) shots[id] = shotSignature(b.shots[id]);
+  for (const id of shotClips(comp).keys()) if (b.shots[id] && (force.has(id) || !(id in shots))) shots[id] = shotSignature(b.shots[id], b);
   const placed = new Set(comp.tracks.flatMap((t) => t.placements.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : []))));
   for (const cue of b.audio ?? []) if (placed.has(cue.id) && (force.has(`cue:${cue.id}`) || !(cue.id in cues))) cues[cue.id] = cueSignature(cue);
   return { ...p, storyboard: { ...b, sent: { shots, cues } } };
@@ -512,7 +533,7 @@ export function updatePlan(p: Project): { clips: string[]; refreshed: string[]; 
     const a = s.assetId ? p.assets[s.assetId] : undefined;
     if (a && selectedVersion(a) && clip.source.assetId !== a.id) out.clips.push(id);
     const sig = b.sent?.shots[id];
-    if (sig !== undefined && sig !== shotSignature(s)) out.refreshed.push(id);
+    if (sig !== undefined && sig !== shotSignature(s, b)) out.refreshed.push(id);
   }
   const placed = new Set(comp.tracks.flatMap((t) => t.placements.flatMap((pl) => (pl.storyCue ? [pl.storyCue] : []))));
   for (const cue of b.audio ?? []) { const sig = b.sent?.cues[cue.id]; if (placed.has(cue.id) && sig !== undefined && sig !== cueSignature(cue)) out.cues.push(cue.id); }

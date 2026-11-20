@@ -12,6 +12,7 @@ import { storyboardFromDoc, type AssetSlot, type QaCheck, type Shot, type Storyb
 import { splitStateId, stateBaseNote, type StoryReference, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryLayer, type StoryMediaLayer, type StoryShot } from "./storyJson";
 import { maskToJson, type ClipMask } from "./mask";
 import { motionPathToJson, type MotionPath } from "./motionPath";
+import { pathRefToJson, storyPathToJson, type StoryPath } from "./storyPaths";
 import { TICKS_PER_SECOND } from "./time";
 
 /** Key times are ticks in memory and seconds in the JSON. */
@@ -20,6 +21,8 @@ const exportLayer = (l: StoryLayer): StoryLayer => {
   if (copy.type !== "text" && copy.mask) (copy as StoryMediaLayer).mask = maskToJson(copy.mask) as unknown as ClipMask;
   // P89: frame points and seconds in the JSON.
   if (copy.motionPath) copy.motionPath = motionPathToJson(copy.motionPath, TICKS_PER_SECOND, true) as unknown as MotionPath;
+  // P89b: a named path is written as "motionPath": { "ref", … }.
+  if (copy.pathRef) { copy.motionPath = pathRefToJson(copy.pathRef) as unknown as MotionPath; delete copy.pathRef; }
   return copy;
 };
 
@@ -115,6 +118,7 @@ export function storyboardToDoc(b: Storyboard): StoryDoc {
     shots: b.order.filter((id) => b.shots[id]).map((id) => shotOut(b, b.shots[id])),
     connections: b.connections.map((c) => structuredClone(c)),
     ...(b.audio?.length ? { audio: structuredClone(b.audio) } : {}),
+    ...(b.paths?.length ? { paths: b.paths.map((x) => storyPathToJson(x, TICKS_PER_SECOND) as unknown as StoryPath) } : {}),
   };
 }
 
@@ -123,7 +127,7 @@ export interface DiffItem { id: string; name: string; fields?: string[]; uploads
 export interface StoryDiff {
   assets: { added: DiffItem[]; changed: DiffItem[]; removed: DiffItem[] };
   shots: { added: DiffItem[]; changed: DiffItem[]; removed: DiffItem[] };
-  /** Other parts of the document that differ: "meta", "order", "connections", "audio". */
+  /** Other parts of the document that differ: "meta", "order", "connections", "audio", "paths". */
   other: string[];
   /** True when nothing differs. */
   same: boolean;
@@ -136,7 +140,7 @@ const uploads = (p: Project, ...ids: (string | undefined)[]) => ids.reduce((n, i
 /** What re-importing `doc` into the project's storyboard would add, change and remove (assets by top-level id, states and keyframes included). */
 export function storyDiff(p: Project, doc: StoryDoc): StoryDiff {
   const b = p.storyboard;
-  const old = b ? storyboardToDoc(b) : { meta: {}, assets: [], shots: [], connections: [], audio: undefined };
+  const old: Pick<StoryDoc, "meta" | "assets" | "shots" | "connections" | "audio" | "paths"> = b ? storyboardToDoc(b) : { meta: {} as StoryDoc["meta"], assets: [], shots: [], connections: [], audio: undefined };
   const d: StoryDiff = { assets: { added: [], changed: [], removed: [] }, shots: { added: [], changed: [], removed: [] }, other: [], same: true };
   const oa = new Map(old.assets.map((a) => [a.id, a])), na = new Map(doc.assets.filter((a) => !a.implicit).map((a) => [a.id, a]));
   const slotUploads = (id: string) => uploads(p, ...Object.values(b?.slots ?? {}).filter((s) => s.id === id || s.stateOf === id).map((s) => s.assetId));
@@ -161,6 +165,7 @@ export function storyDiff(p: Project, doc: StoryDoc): StoryDiff {
   if (!eq(old.shots.map((s) => s.id).filter((id) => ns.has(id)), doc.shots.map((s) => s.id).filter((id) => os.has(id)))) d.other.push("order");
   if (!eq(old.connections, doc.connections)) d.other.push("connections");
   if (!eq(old.audio ?? [], doc.audio ?? [])) d.other.push("audio");
+  if (!eq(old.paths ?? [], (doc.paths ?? []).map((x) => storyPathToJson(x, TICKS_PER_SECOND)))) d.other.push("paths");
   d.same = !d.other.length && [d.assets, d.shots].every((g) => !g.added.length && !g.changed.length && !g.removed.length);
   return d;
 }

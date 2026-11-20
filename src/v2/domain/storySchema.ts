@@ -68,11 +68,11 @@ export function normalizeSchema(raw: Obj, warn: (path: string, message: string) 
       warn(`${path}.${k}`, k === "prompt" ? `Schema 3.1 shots have no prompt: edit the prompt of clip "${id}" instead. This one is ignored.` : `"${k}" belongs to the clip in schema 3.1; set it on clip "${id}". It is ignored here.`);
       delete s[k];
     }
-    // Single use: this shot's clip and nothing else (no other shot, layer, cue or reference) names the asset.
+    // Single use: this shot's clip and nothing else (no other shot, layer, cue, path or reference) names the asset.
     const uses = shots.filter((x) => clipOf(x) === id).length;
     const others = strings(assets.filter((x) => x !== a), [], (k) => TEXT_KEYS.has(k)).concat(
       strings(shots, [], (k, o) => TEXT_KEYS.has(k) || (k === "clip" && clipOf(o) === id)),
-      strings(out.audio, []), strings(out.connections, []),
+      strings(out.audio, []), strings(out.connections, []), strings(out.paths, []), // P89b: a path made from this clip
     ).filter((x) => x === id || x.startsWith(`${id}@`)).length;
     if (uses !== 1 || others || a.states !== undefined) {
       for (const k of ["keyframe", "camera"]) if (a[k] !== undefined) { warn(`assets[${assets.indexOf(a)}].${k}`, `"${k}" is only used on a clip that a single shot plays; clip "${id}" is shared, so it is ignored.`); delete a[k]; }

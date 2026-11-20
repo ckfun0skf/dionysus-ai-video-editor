@@ -29,7 +29,7 @@ import { StoryAssetPicker, type LibraryEntry } from "./StoryAssetPicker";
 import { TrimPicker } from "./TrimPicker";
 import { VersionDeleteConfirm } from "../ClipVersionPicker";
 import { VersionSaveModeChoice } from "../VersionSaveMode";
-import { series as S } from "../../domain";
+import { series as S, storyPaths, type StoryPath } from "../../domain";
 import { seriesStore, useSeries } from "../series/seriesStore";
 
 const ACCEPT: Partial<Record<MediaKind, string>> = { image: "image/*", video: "video/*", audio: "audio/*", html: HTML_IMPORT_ACCEPT, scene: ".json,application/json,application/vnd.dionysus.scene+json" };
@@ -629,6 +629,9 @@ const secs = (a?: number, z?: number) => (a === undefined && z === undefined ? "
 
 /** V2-SB-126: a layer with follow "shot" gets the shot's zoom and pan as keyframes on Send to timeline. */
 const follows = (l: { follow?: "shot" }) => (l.follow === "shot" ? " · moves with the shot" : "");
+/** P89b: a layer on a named storyboard path (or its own motion path). */
+const pathNote = (b: { paths?: StoryPath[] }, l: { pathRef?: { ref: string }; motionPath?: { nodes: unknown[] } }) =>
+  l.pathRef ? ` · moves along path “${storyPaths.pathName(storyPaths.findPath(b, l.pathRef.ref) ?? { id: l.pathRef.ref })}”` : l.motionPath ? ` · motion path (${l.motionPath.nodes.length} points)` : "";
 
 /** What "Send to timeline" adds with this shot (v1.1): text and media layers, captions, effects. */
 function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; onOpen: (t: BoardTarget) => void }) {
@@ -639,9 +642,9 @@ function ShotLayers({ shot, project, onOpen }: { shot: Shot; project: Project; o
     <Section title="Layers & effects">
       <ul className="v2-sb-layers">
         {layers.map((l, i) => l.type === "text"
-          ? <li key={i}><Ic g="T" size={14} /> <span>Text “{l.text.split("\n").join(" / ")}”{l.textStyle ? ` · ${l.textStyle}` : ""}{secs(l.startSec, l.endSec)}{follows(l)}</span></li>
+          ? <li key={i}><Ic g="T" size={14} /> <span>Text “{l.text.split("\n").join(" / ")}”{l.textStyle ? ` · ${l.textStyle}` : ""}{secs(l.startSec, l.endSec)}{follows(l)}{pathNote(b, l)}</span></li>
           : <li key={i}><Ic g={TYPE_ICON[l.type] ?? "image"} size={14} /> <span>{l.type === "html" ? "HTML" : l.type === "image" ? "Image" : "Video"} layer{" "}
-              {b.slots[l.asset] ? <button className="v2-linkbtn" onClick={() => onOpen({ slot: l.asset })}>{b.slots[l.asset].name}</button> : l.asset}{secs(l.startSec, l.endSec)}{follows(l)}</span></li>)}
+              {b.slots[l.asset] ? <button className="v2-linkbtn" onClick={() => onOpen({ slot: l.asset })}>{b.slots[l.asset].name}</button> : l.asset}{secs(l.startSec, l.endSec)}{follows(l)}{pathNote(b, l)}</span></li>)}
         {shot.captions && <li><Ic g="≡" size={14} /> <span>Captions from the dialogue{shot.dialogue ? "" : " (none written)"}</span></li>}
         {effects.map((e, i) => <li key={`e${i}`}><Ic g="effect" size={14} /> <span>Effect {e.preset}{secs(e.startSec, e.endSec)}</span></li>)}
       </ul>
