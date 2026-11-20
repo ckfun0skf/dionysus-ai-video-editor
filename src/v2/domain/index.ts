@@ -67,3 +67,4 @@ export * from "./sceneGizmo";
 export * from "./sceneAgent";
 export * from "./sceneScriptCode";
 export * from "./sceneScript";
+export * from "./pluginManifest";

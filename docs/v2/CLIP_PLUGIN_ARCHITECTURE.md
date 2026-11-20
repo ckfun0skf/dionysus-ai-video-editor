@@ -3,7 +3,8 @@
 **Status: Accepted** (proposed in P64, accepted 2026-11-15; Phase 1 started in P65 and is **done** since P73; Phase 2
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
-the table was renumbered in P76, see the note under it. Phase 3 is next).
+the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); step 3.1 (P83) is done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -19,9 +20,23 @@ Accepted by the owner on 2026-11-15 (the answers to the §9 open questions):
 | 4 | Custom scene functions | **Declarative only** in Phase 2 (GLB animation, material, visibility, state tables); user JavaScript only with Phase 3 sandboxed plugins. |
 | 5 | Storyboard `render: "scene"` / asset type `scene` (accepted 2026-11-15, recorded in P74) | **Yes, as recommended:** a storyboard may mark a shot `render: "scene"` and use a `scene` asset type. Both are **optional values within `dionysus/3.1`** (and `dionysus.storyboard/1`); **no version bump**. Older builds reject such a storyboard on import, as with any new optional value; storyboards without them are unchanged. Implemented in step **2.6** (renumbered in P76; it was 2.5). |
 | 6 | Per-object sub-tracks | **Late in Phase 2**, after the scene clip, events and WebMCP tools work. *Updated in P76 (owner-confirmed UX):* the per-object tracks live in the scene clip's **own timeline editor** (step 2.3, P76: tracks with selection and forms; step 2.4, P77: drag and resize, done), not under the clip on the main timeline; they come before the WebMCP tools, which then reuse the editor's pure edit operations. |
-| 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. |
+| 7 | Third-party plugins | **Deferred to Phase 3**; trust and sources are decided then. *Decided 2026-11-19:* decisions 10–17 below. |
 | 8 | Phase 1 size | The **eight small PRs** of §7, one at a time, each merged on green CI. |
 | 9 | Placeholder (recorded in P70, 2026-11-15) | A placeholder is a **cross-type clip state**, not an `image` variant or plugin. Any clip type can be a placeholder: a slot with no asset yet that knows its intended type, so asset pickers can filter by it. The player, timeline and export check `placeholder` **first** and use one shared slate renderer before any plugin lookup; plugins never handle placeholders. `blank` stays a small plugin (`image` variant). No schema change. Implemented in **step 1.8** (P73), together with unknown-type handling (§6): `clipTypes/state.ts`, `render/placeholderSlate.ts`, `PLACEHOLDER_UI` in `ui/clipTypeUi.tsx`; `clipTypes/placeholder/` is gone. |
+
+**Phase 3 decisions**, accepted by the owner on 2026-11-19 (recorded in P83; the recommendations of the Phase 3 plan;
+they answer decision 7 and §9 question 7):
+
+| # | Question | Decision |
+|---|---|---|
+| 10 | Plugin renderer | A **worker drawing on an `OffscreenCanvas`**, started by a host-written bootstrap page in the sandboxed, opaque-origin iframe with the clip CSP. The plugin has no DOM; the worker can be terminated, so a hung plugin can't freeze the editor or an export (the P82 lesson). Not the HTML clip page model. |
+| 11 | Where packages live | **Embedded in the project** (a blob in the project's store, carried by project export) **plus a device library** in the browser for reuse across projects. The project references them with an optional `Project.plugins` lock (id, version, content hash) within `dionysus/3.1`. |
+| 12 | Trust | **Per project, per package hash, per device.** Until the user allows a plugin for a project on this device, its clips show a "not enabled" slate and export black after a warning. A new version is a new hash and is asked again. |
+| 13 | Sources and ids | **A file (zip) or an https URL** to a manifest; no signing, no allowlist, no marketplace in v1. Plugin **ids must start with `x-`** (built-in ids never do). The publisher is shown as unverified. |
+| 14 | AI text from plugins | **Structured only:** `agent.description` and `agent.examples` (capped, checked against the params), given to agents as third-party text. **No free-form AI rule text.** |
+| 15 | v1 scope | **Visual only:** video track, no sound, no source time, **no project media inputs** (no bindings, inputs, program frame). Later versions may add them behind a new `api`. |
+| 16 | Storyboard | Storyboard plugin shots (`render: "plugin:<id>"`) **later**, not in Phase 3. |
+| 17 | Agent tools | **Only generic host tools** (`list_clip_plugins`, `add_plugin_clip`, `set_plugin_clip_params`, `request_plugin_install`), validated by the host against the manifest. Plugins declare **no tools**; one host AI rule (contributed by the plugin host core, so built-in numbers don't move). |
 
 ## 1. Why
 
@@ -480,15 +495,87 @@ closes the owner's follow-ups; the next work is Phase 3.
 
 ### Phase 3 — third-party clip types
 
-- A plugin package is a zip (or URL) with a manifest (`dionysus.cliptype/1`: id, version, data schema, params,
-  storyboard mapping, agent tool declarations, AI rule texts) and a renderer page that speaks the HTML clip frame
-  protocol (`dionysus:init`/`params`/`frame`, `render(t, ctx)`).
-- The renderer always runs sandboxed (iframe with opaque origin and the clip CSP, or a worker), like HTML clips today:
-  no access to the editor, storage, cookies or network beyond its own files and allowed libraries.
-- The host owns everything else (core rules are data, not code). Agent tool calls are validated against the declared
-  schemas by the host and forwarded to the sandbox as messages.
-- Projects keep working without the plugin (§6). Loading is per project, with the user's consent; a lock records
-  id + version + content hash.
+Decisions 10–17 (§0). Author guide and the exact package format: [PLUGIN_PACKAGE.md](PLUGIN_PACKAGE.md). The original
+sketch (a renderer page speaking the HTML clip frame protocol, plugin-declared agent tools and AI rule texts) was
+replaced by these decisions.
+
+**Package (`dionysus.cliptype/1`, host API 1).** A folder with `manifest.json`, a render entry (a classic script calling
+`dionysus.clip({ init?(ctx), render(t, ctx) })`) and the files it lists; zipped as `*.dionysus-cliptype.zip` or served
+next to its manifest (https URL, fetched without credentials). The manifest has `id` (`x-…`), `name`, `version`
+(semver), optional `publisher`, `description`, `homepage`, `icon` (one of the host's line icons), `trackKind`
+(`video`), `caps` (`visual`, `keyable` only), `durationSec`, `render { entry, libs }` (pinned libraries by id),
+`params` (the HTML clip param shape), `editor { groups: [{ label, fields }] }` (a declarative form only), `agent
+{ description, examples }` and `files`. Limits: 64 files, 10 MB per file, 20 MB per package. The content hash is a
+SHA-256 over a canonical byte layout (PLUGIN_PACKAGE.md §1). The pure validator `domain/pluginManifest.ts` reports
+errors and warnings with JSON paths (P83).
+
+**Host core from data.** The host builds a `ClipTypeCore` for each enabled plugin from its manifest: `trackKind:
+"video"`, caps `{ visual: true, keyable, sound: false, sourceTime: false, still: false, thumb: false, asset: "none" }`,
+`duration.natural` from `durationSec`, `dataField: "plugin"`, `story` absent (decision 16), `agent.describe` adding
+`plugin` and `params` to `get_timeline`. It is registered at runtime (the registry gets a runtime `register` with a
+change signal; ids starting with `x-` only). No plugin code runs in the editor.
+
+**Project data (within `dionysus/3.1`, optional fields only).**
+
+- `Project.plugins?: Record<id, { version, hash, name, publisher?, blobKey }>`: the lock; `blobKey` points at the
+  package (stored as one blob in the project's blob store, so project export and import carry it; GC keeps it while
+  locked).
+- A plugin clip has `clipType: "<x-id>"` (the branded `PluginClipType`, decision 3) and `plugin: { data: { params },
+  v }`; `v` is the manifest version the values were last written for.
+- The device library is a separate IndexedDB store (`dionysus-plugins`) keyed by hash; trust is a device-local set of
+  `projectId + hash`.
+- **Missing or not enabled:** an older build, or this build without the package, uses the P73 unknown-type path
+  (§6) unchanged; this build with the package but without trust shows the same slate with "Plugin “Name” not
+  enabled · Review" and the export warning.
+
+**Sandbox.** One sandboxed iframe (`sandbox="allow-scripts"`, opaque origin) per plugin per Player, running only our
+bootstrap; it starts one classic worker (from a `blob:` URL, as P82 had to) per placement that draws on an
+`OffscreenCanvas` and returns `ImageBitmap`s, checked by `isValidFrame`. The CSP is the clip CSP (`default-src 'none'`,
+`connect-src blob: data:`, scripts only from `blob:`/`data:` and the pinned libraries), so there is no network. The
+worker gets the determinism shim (virtual `performance.now` / `Date` / `requestAnimationFrame` from `t`, seeded
+`Math.random`). Limits: `init` 15 s, a frame 4 s in export (preview drops a frame after about 1 s); two timeouts in a
+row terminate and restart the worker; after three restarts the clip shows "Plugin stopped" and export reports the
+frames as issues. The bootstrap never runs plugin code itself, so the editor stays responsive. Output size is capped
+like HTML clips (8K side).
+
+**Permissions and trust UI.** The install dialog (a modal at 1440, a bottom sheet at 390) shows the name, the
+unverified publisher, version, size, short hash, source (file or URL), libraries and settings, and what the plugin
+can't do. Opening a project with plugins this device hasn't allowed for it shows a banner ("This project uses 2
+plugins · Review"); the review sheet allows them one by one. Removing a plugin from a project turns its clips into the
+slate (undoable); deleting it from the device library doesn't touch projects that embed it.
+
+**Agents.** Generic host tools (step 3.6): `list_clip_plugins` (installed and project plugins with their params and
+structured hints, fenced as third-party text), `add_plugin_clip({ type, atSec, durationSec, params, track })`,
+`set_plugin_clip_params`, and `request_plugin_install(url)`, which only opens the install dialog for the user. Params
+are validated with `checkParamValue` against the manifest. One host rule, contributed by the plugin host core after
+the scene type's rule (so it is 80 and no built-in number moves); `gen:ai` lists only these host tools and rule.
+
+**Export parity.** Export uses the same Player path (`host.media.pluginHost`, like `sceneHost`) and awaits each frame;
+frame problems show in the export dialog like HTML clips. Checked in Chrome per PR: shuffled, forward and backward
+renders identical, and a 720p MP4 export without frame issues; WebGL output is promised identical per device only.
+
+**Versioning.** One version per id per project. The library may hold several versions; a newer one shows "Update
+available" in projects using an older one. Updating is explicit, one undo step, asks for trust again (new hash) and
+migrates params: values that still exist and fit are kept, new params take their defaults, removed or invalid values
+are dropped with a warning. The same id and version with a different hash is refused as a conflict. A manifest whose
+`api` is higher than the host's is refused with "Update Dionysus"; downgrades are allowed with a warning.
+
+**UX.** Desktop 1440: a **Plugins** entry in the left rail (puzzle line icon) lists installed plugins as tiles
+(click or drag to add a clip) with **Add plugin** (File / URL) and a row menu (Details, Update, Remove from project,
+Export package); the inspector gets a **Plugin** tab with the declarative form, the plugin's details and its trust
+state. Phone 390: a **Plugins** tab in the Add media sheet, a **Params** tool on the clip toolbar opening a sheet, and
+Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges "Unverified", "Not enabled", "Update".
+
+Steps (one PR each, merged on green CI):
+
+| Step | PR | What | Status |
+|---|---|---|---|
+| 3.1 | P83 | Decisions, this design, [PLUGIN_PACKAGE.md](PLUGIN_PACKAGE.md), the pure manifest validator `domain/pluginManifest.ts` (JSON-path errors, package file check, semver order) and the sample `public/plugins/samples/x-dionysus-stripes/` | **done** |
+| 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | next |
+| 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | |
+| 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | |
+| 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | |
+| 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | |
 
 ## 8. What this does not change
 
@@ -498,7 +585,8 @@ video/audio/text/effect. Undo stays one engine dispatch per edit. The storyboard
 
 ## 9. Open questions
 
-Answered on 2026-11-15; see [§0 Decisions](#0-decisions). Kept for the record.
+Answered on 2026-11-15; see [§0 Decisions](#0-decisions). Kept for the record. Question 7 (Phase 3 trust) was answered
+on 2026-11-19 by decisions 10–17.
 
 1. **Scene rendering:** run the scene clip in the sandboxed HTML clip host (recommended: safe, export already proven)
    or in-process WebGL in the player (faster, simpler debugging, but a new export path)?
