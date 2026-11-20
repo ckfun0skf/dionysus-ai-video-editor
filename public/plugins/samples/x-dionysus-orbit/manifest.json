@@ -1,0 +1,35 @@
+{
+  "format": "dionysus.cliptype/1",
+  "api": 1,
+  "id": "x-dionysus-orbit",
+  "name": "3D knot",
+  "version": "1.0.0",
+  "publisher": "Dionysus samples",
+  "description": "A lit 3D torus knot that turns with time, with a ring of orbiting dots, drawn with three.js.",
+  "icon": "box",
+  "trackKind": "video",
+  "caps": { "visual": true, "keyable": true },
+  "durationSec": 6,
+  "render": { "entry": "render.js", "libs": ["three"] },
+  "params": {
+    "color": { "type": "color", "default": "#5ad1c8", "label": "Knot colour" },
+    "dots": { "type": "color", "default": "#f5c400", "label": "Dot colour" },
+    "background": { "type": "color", "default": "#101418", "label": "Background" },
+    "transparent": { "type": "boolean", "default": false, "label": "Transparent background", "description": "Show the tracks below instead of the background colour." },
+    "turns": { "type": "number", "default": 0.25, "min": 0, "max": 2, "step": 0.05, "label": "Turns per second" },
+    "count": { "type": "number", "default": 48, "min": 0, "max": 400, "step": 1, "label": "Dots" }
+  },
+  "editor": {
+    "groups": [
+      { "label": "Look", "fields": ["color", "dots", "background", "transparent"] },
+      { "label": "Motion", "fields": ["turns", "count"] }
+    ]
+  },
+  "agent": {
+    "description": "A full-frame 3D object (a turning torus knot with orbiting dots) on a plain or transparent background. Good for tech intros, title backdrops and loading moments.",
+    "examples": [
+      { "description": "A slow teal knot on a transparent background over a video.", "params": { "transparent": true, "turns": 0.1 } }
+    ]
+  },
+  "files": ["render.js"]
+}

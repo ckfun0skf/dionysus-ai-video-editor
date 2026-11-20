@@ -15,7 +15,7 @@
  *   project, per hash (decision 12). The UI for both comes in P86.
  */
 import { PLUGIN_API, PLUGIN_LIMITS, PLUGIN_MANIFEST_FILE, checkPluginFiles, parsePluginManifest, pluginLocks, setPluginLock, type PluginIssue, type PluginLock, type PluginManifest, type Project } from "../domain";
-import { CLIP_TYPES, pluginCoreOf, setPluginIssues, type ClipTypeCore, type PluginIssueState } from "../clipTypes";
+import { CLIP_TYPES, pluginCoreOf, setPluginIssues, setPluginsEnabled, type ClipTypeCore, type PluginIssueState } from "../clipTypes";
 import type { BlobStore } from "../ports/storage";
 import { Sha256 } from "./archive/sha256";
 import { readBlobBytes, readZipIndex, zipEntryBlob, ZipWriter, type ZipEntry } from "./archive/zip";
@@ -217,7 +217,7 @@ export async function loadProjectPlugins(project: Pick<Project, "plugins">, blob
       if (pkg.hash !== lock.hash) throw new PluginPackageError(`The stored package of “${lock.name}” doesn't match the project's lock (content hash).`);
       if (pkg.manifest.id !== id) throw new PluginPackageError(`The stored package is “${pkg.manifest.id}”, not “${id}”.`);
       const cached = coreCache.get(lock.hash);
-      const core = cached && cached.id === id ? cached : pluginCoreOf(pkg.manifest, lock);
+      const core = cached && cached.id === id ? cached : pluginCoreOf(pkg.manifest, lock, pkg.files);
       coreCache.set(lock.hash, core);
       cores.push(core);
     } catch (e) {
@@ -228,11 +228,20 @@ export async function loadProjectPlugins(project: Pick<Project, "plugins">, blob
   return { cores, issues };
 }
 
-/** Load the project's plugins and make them the registered runtime types (replacing the previous project's). */
-export async function syncProjectPlugins(project: Pick<Project, "plugins">, blobs: BlobStore, opts: PluginReadOptions & { library?: Pick<PluginLibrary, "blob"> } = {}): Promise<PluginLoadResult> {
+/**
+ * Load the project's plugins and make them the registered runtime types (replacing the previous project's). P85:
+ * `trusted(hash)` says which may run on this device (decision 12; without it none are enabled).
+ */
+export async function syncProjectPlugins(project: Pick<Project, "plugins">, blobs: BlobStore, opts: PluginReadOptions & { library?: Pick<PluginLibrary, "blob">; trusted?: (hash: string) => Promise<boolean> } = {}): Promise<PluginLoadResult> {
   const r = await loadProjectPlugins(project, blobs, opts);
+  const on: [string, string][] = [];
+  for (const c of r.cores) {
+    const hash = c.plugin!.hash;
+    if (opts.trusted && (await opts.trusted(hash).catch(() => false))) on.push([c.id, hash]);
+  }
   const issuesChanged = setPluginIssues(r.issues);
-  if (!CLIP_TYPES.setRuntime(r.cores) && issuesChanged) CLIP_TYPES.notify();
+  const enabledChanged = setPluginsEnabled(on);
+  if (!CLIP_TYPES.setRuntime(r.cores) && (issuesChanged || enabledChanged)) CLIP_TYPES.notify();
   return r;
 }
 

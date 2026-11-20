@@ -1415,6 +1415,10 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-clip.is-plugin,
 .v2-timeline .v2-lane .v2-clip.is-plugin { background: repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, rgba(255,255,255,.02) 6px 12px), #202127; border: 1px solid rgba(255,255,255,.32); color: rgba(255,255,255,.85); box-shadow: none; }
 .v2-clip.is-plugin.is-selected { border-color: #fff; }
+/* P85: an enabled plugin draws real frames: a solid card like the other code-drawn clips. */
+.v2-clip.is-plugin.is-on,
+.v2-timeline .v2-lane .v2-clip.is-plugin.is-on { background: linear-gradient(rgba(255,255,255,.06), rgba(255,255,255,0)), #2a2d35; border-color: rgba(255,255,255,.22); color: rgba(255,255,255,.92); }
+.v2-clip.is-plugin.is-on.is-selected { border-color: #fff; }
 .v2-plugin-panel h4 { display: flex; align-items: center; gap: 6px; }
 .v2-plugin-state { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 4px 0 8px; color: var(--muted); font-size: 13px; line-height: 1.4; }
 .v2-plugin-facts { display: grid; grid-template-columns: minmax(84px, max-content) 1fr; gap: 6px 12px; margin: 0; font-size: 13px; }
@@ -1426,6 +1430,7 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-clip-name.v2-ph { display: flex; align-items: center; gap: 4px; min-width: 0; overflow: hidden; white-space: nowrap; }
 .v2-ph-label { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .v2-ph-state { flex: none; font-size: 10px; padding: 0 4px; border-radius: 3px; border: 1px solid rgba(255,255,255,.35); color: rgba(255,255,255,.7); text-transform: uppercase; letter-spacing: .03em; }
+.v2-ph-state.is-on { border-color: var(--accent, #5ad1c8); color: var(--accent, #5ad1c8); }
 
 /* P36: Import subtitles (paste or file) */
 .v2-modal-back { position: fixed; inset: 0; z-index: 60; background: rgba(0,0,0,.55); display: grid; place-items: center; padding: 12px; }

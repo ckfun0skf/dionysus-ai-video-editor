@@ -3,7 +3,8 @@ import { loadBundledFonts } from "../fonts";
 import { ArrayBufferTarget, Muxer } from "mp4-muxer";
 import type { Project } from "../../domain/model";
 import type { BlobStore } from "../../ports/storage";
-import { Player } from "../player";
+import { Player, type RenderIssue } from "../player";
+import { pluginMetaOf } from "../../clipTypes";
 import { ExportVideoFrames } from "./videoFrames";
 import { audioFxData, buildFxChain } from "../audioFx";
 import { buildSpatial } from "../spatial";
@@ -228,7 +229,9 @@ async function toWebm(player: Player, canvas: HTMLCanvasElement, audio: AudioBuf
 
 const clipName = (project: Project, id: string, fallback: string) => {
   const p = project.compositions[project.rootCompositionId].tracks.flatMap((t) => t.placements).find((x) => x.id === id);
-  return { name: (p && project.assets[p.source.assetId]?.name) || fallback, at: p ? p.startTicks / 120_000 : 0 };
+  // P85: a plugin clip is named by its plugin.
+  const plugin = p && pluginMetaOf(p.clipType);
+  return { name: (plugin && `Plugin “${plugin.name}”`) || (p && project.assets[p.source.assetId]?.name) || fallback, at: p ? p.startTicks / 120_000 : 0 };
 };
 
 /** How to get a clip through export when this browser can't decode it. */
@@ -249,23 +252,27 @@ export function stopOnBlankVideo(project: Project, player: Pick<Player, "videoSt
 }
 
 /** One line per clip whose frames timed out, were rejected, failed to load an attached file (HTML clips) or had no picture (video clips). */
-export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: "timeout" | "invalid" | "blank" | "asset"; detail?: string }[], videoStats?: Player["videoStats"]): string[] {
-  const by = new Map<string, { timeout: number; invalid: number; blank: number; asset: number; first: number; details: string[] }>();
+export function frameWarnings(project: Project, issues: { placementId: string; t: number; issue: RenderIssue; detail?: string }[], videoStats?: Player["videoStats"]): string[] {
+  const by = new Map<string, { timeout: number; invalid: number; blank: number; asset: number; stopped: number; first: number; details: string[] }>();
   for (const i of issues) {
-    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, blank: 0, asset: 0, first: i.t, details: [] };
+    const e = by.get(i.placementId) ?? { timeout: 0, invalid: 0, blank: 0, asset: 0, stopped: 0, first: i.t, details: [] };
     if (i.issue === "asset") { e.asset += 1; if (i.detail) e.details.push(i.detail); }
     else e[i.issue] += 1;
+    if (i.issue === "stopped" && i.detail && !e.details.length) e.details.push(i.detail);
     e.first = Math.min(e.first, i.t);
     by.set(i.placementId, e);
   }
   return [...by].map(([id, e]) => {
     const name = clipName(project, id, e.blank ? "Video clip" : "HTML clip").name;
     const s = (n: number) => (n > 1 ? "s" : "");
+    const at = `first at ${(e.first / 120_000).toFixed(2)} s`;
+    // P85: a plugin that hung or failed too often is stopped; its remaining frames are black.
+    if (e.stopped) return `${name}: the plugin stopped${e.details[0] ? ` (${e.details[0].replace(/\.$/, "").replace(/^(The|A) /, (w) => w.toLowerCase())})` : ""}, so ${e.stopped} frame${s(e.stopped)} ${e.stopped > 1 ? "are" : "is"} black, ${at}.`;
     const assetWhat = e.asset ? (e.details[0] || "an attached file could not be loaded") : "";
     const what = [e.timeout && `${e.timeout} frame${s(e.timeout)} timed out (4 s)`, e.invalid && `${e.invalid} invalid frame${s(e.invalid)}`, e.blank && `${e.blank} frame${s(e.blank)} had no picture${videoStats?.get(id)?.detail ? ` (${videoStats.get(id)!.detail})` : ""}`, assetWhat].filter(Boolean).join(", ");
     if (e.asset && !e.timeout && !e.invalid && !e.blank) {
       return `${name}: ${what} The clip used its fallback instead of failing the export silently.`;
     }
-    return `${name}: ${what}, first at ${(e.first / 120_000).toFixed(2)} s. ${e.blank ? "Those frames show what is underneath the clip." : "Those frames reuse the last good image (or are blank)."}`;
+    return `${name}: ${what}, ${at}. ${e.blank ? "Those frames show what is underneath the clip." : "Those frames reuse the last good image (or are blank)."}`;
   });
 }

@@ -4,7 +4,7 @@
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
 the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
-on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83) and 3.2 (P84) are done).
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84) and 3.3 (P85) are done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -533,7 +533,7 @@ bootstrap; it starts one classic worker (from a `blob:` URL, as P82 had to) per 
 `OffscreenCanvas` and returns `ImageBitmap`s, checked by `isValidFrame`. The CSP is the clip CSP (`default-src 'none'`,
 `connect-src blob: data:`, scripts only from `blob:`/`data:` and the pinned libraries), so there is no network. The
 worker gets the determinism shim (virtual `performance.now` / `Date` / `requestAnimationFrame` from `t`, seeded
-`Math.random`). Limits: `init` 15 s, a frame 4 s in export (preview drops a frame after about 1 s); two timeouts in a
+`Math.random`). Limits: `init` 15 s, a frame 4 s (preview never waits: it keeps the last frame); two timeouts in a
 row terminate and restart the worker; after three restarts the clip shows "Plugin stopped" and export reports the
 frames as issues. The bootstrap never runs plugin code itself, so the editor stays responsive. Output size is capped
 like HTML clips (8K side).
@@ -550,7 +550,7 @@ structured hints, fenced as third-party text), `add_plugin_clip({ type, atSec, d
 are validated with `checkParamValue` against the manifest. One host rule, contributed by the plugin host core after
 the scene type's rule (so it is 80 and no built-in number moves); `gen:ai` lists only these host tools and rule.
 
-**Export parity.** Export uses the same Player path (`host.media.pluginHost`, like `sceneHost`) and awaits each frame;
+**Export parity.** Export uses the same Player path (`host.plugins`, see "Done in P85") and awaits each frame;
 frame problems show in the export dialog like HTML clips. Checked in Chrome per PR: shuffled, forward and backward
 renders identical, and a 720p MP4 export without frame issues; WebGL output is promised identical per device only.
 
@@ -592,14 +592,52 @@ Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges 
   phones) and is named in the export warning. Locked plugins that can't load and unlocked `x-` ids keep the unknown
   path with plugin-specific text. No plugin code runs yet; trust is stored but not asked for (P86).
 
+**Done in P85 (step 3.3).**
+
+- `render/pluginHost.ts`: `pluginCsp()` (`default-src 'none'`; scripts inline in the host-written page or `blob:`;
+  `worker-src blob:`; `connect-src`, images, fonts and media only `blob:` / `data:`; so no network and no `eval`) and
+  the bootstrap page with it as a meta tag before its script. `PluginSandbox` is one `sandbox="allow-scripts"` srcdoc
+  iframe (opaque origin) per package hash per Player; it only talks to its own iframe and routes replies by worker
+  id. The bootstrap starts one **classic** `blob:` worker per placement (`PLUGIN_WORKER_JS`): virtual
+  `performance.now` / `Date` (2026-01-01 + t) / `requestAnimationFrame`, `Math.random` seeded and reset before `init`
+  and before every frame, the package files as `blob:` URLs (`ctx.asset`), the libraries and then the entry by
+  `importScripts`, frames returned as transferred `ImageBitmap`s. `PluginClipHost` is the watchdog: lazy start, init
+  15 s, one frame in flight (requests coalesce; a params change redraws), two frame timeouts in a row or a failed
+  init kill and restart the worker, after three restarts the clip is `stopped` (last errors kept for the warning);
+  `settle()` lets export await it like other hosts.
+- `render/pluginLibs.ts`: the pinned libraries for a plugin (dependencies first, editor-only ones refused), fetched
+  without credentials from the app, checked against their SRI hash, and turned from ES modules into classic scripts
+  (`import … from "three"` and `export { … }` become the global `THREE`; anything else module-like is refused).
+- `render/pluginClip.ts`: `PLUGIN_RENDERER` draws the latest valid frame with the HTML clip path (placement, look,
+  blend, chroma key); a stopped clip is the slate "Plugin “Name” stopped" / IT HUNG OR FAILED in preview and black in
+  export. `clipRendererFor` picks it only when the plugin is **enabled**: `clipTypes/plugin.ts`
+  `setPluginsEnabled` / `isPluginEnabled` (id and the exact locked hash), set by `syncProjectPlugins` from the
+  device trust store (`trusted(hash)`, decision 12).
+- `render/player.ts`: `plugins()` gives renderers their host (keyed by hash and output size), prunes hosts and
+  sandboxes of removed, disabled or changed clips after each draw, awaits them in `settleAll`, redraws a paused
+  preview when a frame arrives, and reports `stopped` / `timeout` / `invalid` render issues; export's warnings name
+  the plugin ("the plugin stopped (…), so N frames are black"), and an enabled plugin is no longer an unknown type.
+- UI: an enabled plugin's timeline card is solid (`is-plugin is-on`), its inspector / phone sheet shows **Enabled**
+  with what the sandbox allows. Trust UI is P86; until then `window.__dionysusDev.trustPlugin(id)` /
+  `untrustPlugin(id)` exist only in development builds (`import.meta.env.DEV`), for tests and manual checks.
+- Sample `public/plugins/samples/x-dionysus-orbit/` (three.js "3D knot").
+- Checked in Chrome (SwiftShader WebGL): every sandbox probe blocked (fetch of the editor and remote URLs, remote
+  `importScripts`, WebSocket, XHR, IndexedDB, DOM, `eval`, nested workers, wall clock); 50 frames of the knot with
+  stripes over it identical forward, shuffled and backwards, and across browser launches; a 1280×720 MP4 export
+  without warnings; a hung plugin stopped after its restarts with the editor responsive (≤10 ms main-thread lag),
+  its export finishing with the "stopped" warning; non-plugin projects render identically to `main`.
+- **Gaps:** a stopped plugin stays stopped until the project is reopened; each placement keeps its worker until the
+  clip is removed (no idle limit yet); a hung plugin adds about 32 s to an export before it is stopped; WebGL output
+  is identical per device only; clip thumbnails don't show plugin frames.
+
 Steps (one PR each, merged on green CI):
 
 | Step | PR | What | Status |
 |---|---|---|---|
 | 3.1 | P83 | Decisions, this design, [PLUGIN_PACKAGE.md](PLUGIN_PACKAGE.md), the pure manifest validator `domain/pluginManifest.ts` (JSON-path errors, package file check, semver order) and the sample `public/plugins/samples/x-dionysus-stripes/` | **done** |
 | 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | **done** |
-| 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | next |
-| 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | |
+| 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | **done** |
+| 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | next |
 | 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | |
 | 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | |
 

@@ -17,9 +17,11 @@ import type { AssetVersion, Placement, Project, Track } from "../domain/model";
 import type { HtmlClipInput, HtmlClipManifest } from "../domain/htmlClipPackage";
 import type { TrackSignal } from "../domain/tracking";
 import type { SceneDoc } from "../domain/scene";
-import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, isPlaceholder, variantOf } from "../clipTypes";
+import { CLIP_TYPES, UNKNOWN_CLIP_TYPE, isPlaceholder, isPluginEnabled, variantOf } from "../clipTypes";
 import { PLACEHOLDER_RENDERER } from "./placeholderSlate";
 import { PLUGIN_SLATE_RENDERER } from "./pluginSlate";
+import { PLUGIN_RENDERER } from "./pluginClip";
+import type { PluginClipHost } from "./pluginHost";
 import type { ActiveLayer, Placed } from "./frame";
 import type { ClipLoad } from "./stability";
 import type { HtmlClipHost } from "./htmlClip";
@@ -53,6 +55,16 @@ export interface ClipDrawHost {
   paint(blend: string | undefined, fn: (dc: CanvasRenderingContext2D) => void): void;
   /** Draw a `srcW`×`srcH` picture placed at `r` with the clip's mask and crop (the Player's `blit` → `paintClip`). */
   blit(g: Ctx2D, srcW: number, srcH: number, r: Placed, draw: (g: Ctx2D) => void): void;
+  /** P85: the sandboxed workers of enabled plugin clips (absent where no Player hosts them, e.g. thumbnails). */
+  plugins?: PluginFrames;
+}
+
+/** P85: the Player's plugin workers, one per plugin clip and output size (render/pluginHost.ts). */
+export interface PluginFrames {
+  /** The clip's host (started on first use), or undefined when its plugin isn't registered and enabled. */
+  host(placementId: string, clipType: string, width: number, height: number): PluginClipHost | undefined;
+  /** The chroma key to apply (none while the eyedropper samples this clip). */
+  keyOf(p: Placement): Placement["chromaKey"];
 }
 
 export type MediaEl = HTMLVideoElement | HTMLAudioElement | HTMLImageElement;
@@ -162,6 +174,7 @@ export const clipRendererFor = (p: Placement): ClipRenderer | undefined => {
   if (isPlaceholder(p)) return PLACEHOLDER_RENDERER;
   const id = variantOf(p);
   const core = CLIP_TYPES.core(id);
-  if (core?.plugin) return PLUGIN_SLATE_RENDERER; // P84: registered plugin type (its sandboxed renderer comes in P85)
+  // P84: a registered plugin type draws the "not enabled" slate; P85: once enabled, its sandboxed renderer.
+  if (core?.plugin) return isPluginEnabled(core.id) ? PLUGIN_RENDERER : PLUGIN_SLATE_RENDERER;
   return CLIP_RENDERERS.get(id) ?? (core ? undefined : CLIP_RENDERERS.get(UNKNOWN_CLIP_TYPE));
 };
