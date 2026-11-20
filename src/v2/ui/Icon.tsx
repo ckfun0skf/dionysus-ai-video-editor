@@ -1,5 +1,5 @@
 import type { LucideIcon } from "lucide-react";
-import { Route, PenTool, Navigation2, ChartSpline, Timer, Waypoints, Pentagon } from "lucide-react";
+import { Route, PenTool, Navigation2, ChartSpline, Timer, Waypoints, Pentagon, Info } from "lucide-react";
 import { Box, Camera, ChevronDown, Focus, KeyRound, Lightbulb, Move3d, Palette, Puzzle, Rotate3d, Scale3d } from "lucide-react";
 import { ChartLine, CircleArrowUp, History, Globe, LayoutGrid, PackagePlus, Shapes, ShieldCheck, Star, Sun, Waves } from "lucide-react";
 import { ChevronLeft, ChevronRight, MoveHorizontal, Replace, ArrowRightToLine, Library, Unlink, Bot, AudioWaveform, Headphones, Pipette, ScanSearch, Crosshair, Spline } from "lucide-react";
@@ -15,7 +15,7 @@ import {
  * (e.g. "✂") so menus stay data; unknown keys fall back to the text itself.
  */
 export const ICONS: Record<string, LucideIcon> = {
-  board: Clapperboard, library: Library, unlink: Unlink, agent: Bot, "⋯": Ellipsis, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward, "to-timeline": Film,
+  board: Clapperboard, info: Info, library: Library, unlink: Unlink, agent: Bot, "⋯": Ellipsis, json: FileJson, link: Link2, ok: CircleCheck, alert: CircleAlert, todo: ListTodo, "image-up": ImageUp, regen: RefreshCw, skip: SkipForward, "to-timeline": Film,
   "≡": Captions, "⟳": RotateCw, "🧲": Magnet,
   "✎": Pencil, "✕": X, "↶": Undo2, "↷": Redo2, "⏮": SkipBack, "❚❚": Pause, "▶": Play, "⇤": ArrowLeftToLine, "⧉": CopyPlus, "⎘": Copy,
   "📋": ClipboardPaste, "🗑": Trash2, "✓": Check, "⤓": FileAudio, "🔈": Volume1, "🔇": VolumeX, "🔊": Volume2, "❄": Snowflake, "⟲": Rewind,

@@ -53,8 +53,10 @@ export function ProductionView({ project, thumbs, engine, blobs, player, mobile,
     if ("path" in s.target) {
       const pa = pathOf(s), n = pa?.motionPath?.nodes.length ?? 0;
       if (pa?.createdBy) return `${pa.createdBy === "track" ? "Tracked" : "Drawn"} · ${n} points`;
-      if (n) return pa?.from ? `Planned · ${n} points · track or draw to make it` : `Planned · ${n} points · edit them any time`;
-      return pa?.from ? "Track it in the reference, or draw it" : "Draw it on the frame";
+      if (pa?.skipped) return n ? `Skipped · the ${n} planned points are final` : "Skipped · the layers keep their place";
+      const video = !!pa?.from && b.slots[pa.from]?.type === "video";
+      if (n) return pa?.from ? `Planned · ${n} points · ${video ? "track or draw" : "draw"} to make it` : `Planned · ${n} points · edit them any time`;
+      return pa?.from ? (video ? "Track it in the reference, or draw it" : "Draw it over the reference") : "Draw it on the frame";
     }
     if ("slot" in s.target) { const sl = b.slots[s.target.slot]; return sl.source.type === "frameOf" ? `Pick frame from Shot ${b.order.indexOf(sl.source.shotId) + 1} (required before shot ${b.order.findIndex((id) => b.shots[id].slotIds.includes(sl.id)) + 1})` : sl.source.type === "lastFrame" ? `Last frame of shot ${b.order.indexOf(sl.source.shotId) + 1}` : sl.source.type === "upload" ? "Upload your file" : sl.source.type === "json" ? "Paste the audio JSON from your AI" : sl.type === "html" ? "Make the HTML and upload it" : `Generate ${sl.type}`; }
     const sh = b.shots[s.target.shot];

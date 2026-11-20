@@ -722,13 +722,14 @@ export function productionSteps(p: Project): ProductionStep[] {
     out.push({ target: { shot: id }, key: `shot:${id}`, ...state(s, status.shots[id], undefined, s.clipSlot) });
   };
   // P89b: a path step comes after the reference it is made from. A planned path (points, nothing to make it from) is done.
+  // P90: a skipped path step is "skipped" (its planned points are final), also while its reference is missing.
   function path(id: string) {
     const pa = b!.paths?.find((x) => x.id === id);
     if (!pa || seen.has(`path:${id}`)) return;
     seen.add(`path:${id}`);
     if (pa.from) slot(pa.from);
     const st = pathStepState(pa, (sid) => !!b!.slots[sid] && !!selectedOf(p, b!.slots[sid]));
-    out.push({ target: { path: id }, key: `path:${id}`, qaDone: 0, qaTotal: 0, ...(st === "waiting" ? { state: "blocked" as const, waitsFor: pa.from } : { state: st === "todo" ? "todo" as const : "done" as const }) });
+    out.push({ target: { path: id }, key: `path:${id}`, qaDone: 0, qaTotal: 0, ...(st === "waiting" ? { state: "blocked" as const, waitsFor: pa.from } : { state: st === "todo" ? "todo" as const : st === "skipped" ? "skipped" as const : "done" as const }) });
   }
   b.order.forEach(shot);
   Object.keys(b.slots).forEach(slot);

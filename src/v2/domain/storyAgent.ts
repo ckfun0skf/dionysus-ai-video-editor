@@ -297,8 +297,8 @@ export const STORY_TOOLS: StoryTool[] = [
   },
   {
     name: "set_story_path", title: "Add or change a named path", readOnly: false,
-    description: 'P89b: add (or replace, by id) a named motion path on the storyboard. Layers move along it with "motionPath": { "ref": "<id>", "stretch"?: true, "offset"?: { "x", "y" } } (set_shot_layers). A planned path gives points now: "motionPath": { "nodes": [{ "x", "y", "t"?, "in"?, "out"?, "ease"? }], "constantSpeed"?, "orient"? } in frame points (0–1 from the top-left = where the layer centre goes) and seconds from the path start; no video is needed. "from" (a video or image asset id) plus "track" (what to follow, e.g. "the bee") adds the guide step "Create path <name> from <reference>": the user tracks it in the reference with the Track sheet or draws it over the reference; planned points move the layer until then. With neither, the guide asks to draw it.',
-    inputSchema: obj({ path: obj({ id: id("Path id."), name: str("Display name, e.g. \"Bee flight\"."), description: str("What the path is for."), from: str("Video or image asset id to make it from (optional)."), track: str("With from: what to follow."), durationSec: num("The path's length in seconds (default: its last point's time)."), motionPath: { type: "object", description: "Planned points (see the description)." } }, ["id"], "A named path.") }, ["path"]),
+    description: 'P89b: add (or replace, by id) a named motion path on the storyboard. Layers move along it with "motionPath": { "ref": "<id>", "stretch"?: true, "offset"?: { "x", "y" } } (set_shot_layers). A planned path gives points now: "motionPath": { "nodes": [{ "x", "y", "t"?, "in"?, "out"?, "ease"? }], "constantSpeed"?, "orient"? } in frame points (0–1 from the top-left = where the layer centre goes) and seconds from the path start; no video is needed. "from" (a video or image asset id) plus "track" (what to follow, e.g. "the bee") adds the guide step "Create path <name> from <reference>": the user tracks it in the reference with the Track sheet or draws it over the reference; planned points move the layer until then. With neither, the guide asks to draw it. P90: "skipped": true marks the step skipped (the planned points stay final; without points the layers keep their box); false reopens it. A path that was tracked or drawn is done and can\'t be skipped.',
+    inputSchema: obj({ path: obj({ id: id("Path id."), name: str("Display name, e.g. \"Bee flight\"."), description: str("What the path is for."), from: str("Video or image asset id to make it from (optional)."), track: str("With from: what to follow."), durationSec: num("The path's length in seconds (default: its last point's time)."), motionPath: { type: "object", description: "Planned points (see the description)." }, skipped: { type: "boolean", description: "P90: true skips the guide step (the planned points are final, the user can reopen it); false reopens it; left out keeps it." } }, ["id"], "A named path.") }, ["path"]),
     edit: (raw, a) => {
       if (!isObj(a.path) || typeof a.path.id !== "string") return '"path" must be an object with an "id".';
       const p = clone(a.path), list = ((raw as Obj).paths as Obj[] | undefined) ?? [];
@@ -306,6 +306,9 @@ export const STORY_TOOLS: StoryTool[] = [
       const i = findIdx(list, p.id);
       // Points made in the app (tracked or drawn) are kept when only the plan (name, description, track …) changes.
       if (i >= 0 && list[i].createdBy && p.motionPath === undefined) { p.motionPath = list[i].motionPath; p.createdBy = list[i].createdBy; }
+      // P90: "skipped" true skips the guide step (planned points are final), false reopens it; left out, it is kept.
+      if (p.skipped === undefined && i >= 0 && list[i].skipped) p.skipped = true;
+      if (p.skipped !== true) delete p.skipped;
       const next = i < 0 ? [...list, p] : list.map((x, j) => (j === i ? p : x));
       (raw as Obj).paths = next;
       return { label: `AI: path ${String(p.id)}`, message: `Path "${String(p.id)}" ${i < 0 ? "added" : "updated"}.` };

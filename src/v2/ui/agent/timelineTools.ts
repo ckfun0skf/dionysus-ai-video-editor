@@ -695,7 +695,7 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const p = project(), tps = TICKS_PER_SECOND, b = p.storyboard;
       const story = (b?.paths ?? []).map((x) => ({
         id: x.id, name: storyPaths.pathName(x), points: x.motionPath?.nodes.length ?? 0, seconds: b ? Math.round(storyPaths.pathDurationSec(b, x, tps) * 1000) / 1000 : 0,
-        ...(x.from ? { from: x.from } : {}), ...(x.track ? { track: x.track } : {}), made: x.createdBy ?? (x.from ? false : x.motionPath?.nodes.length ? "planned" : false),
+        ...(x.from ? { from: x.from } : {}), ...(x.track ? { track: x.track } : {}), made: x.createdBy ?? (x.skipped ? "skipped" : x.from ? false : x.motionPath?.nodes.length ? "planned" : false),
         usedBy: b ? storyPaths.pathUsers(b, x.id).map((u) => `${u.shot}/${u.layer}`) : [],
         clips: rootOf(p).tracks.flatMap((t) => t.placements.filter((pl) => pl.pathRef?.ref === x.id).map((pl) => pl.id)),
       }));
