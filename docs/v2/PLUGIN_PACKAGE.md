@@ -3,7 +3,8 @@
 **Format:** `dionysus.cliptype/1`, host API **1**. **Status:** the format and its validator are done (P83); a project
 stores, carries and loads its plugin packages since P84 (their clips show by name with "Not enabled"); since P85 an
 enabled plugin draws in the sandbox described in §3, in preview and export; since P86 users install plugins and allow
-them per project with the screens in §4 (see
+them per project with the screens in §4, and since P87 they edit a clip's settings with your `editor` form and
+switch a project to another version of your plugin (§6) (see
 [CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3](CLIP_PLUGIN_ARCHITECTURE.md#phase-3--third-party-clip-types) for the steps).
 Design and decisions: [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md) §0, decisions 10–17.
 
@@ -189,8 +190,12 @@ the reason and the frame count in its warnings. Keep frames fast: preview wants 
   show a slate) or remove them too; Undo brings everything back. "Delete from this device" removes a package that no
   open project uses from the library; projects keep their own copy.
 - **Stopped:** a clip whose plugin hung or failed repeatedly shows "Stopped" with the last problem and **Retry**.
-- **Editing:** the inspector's **Plugin** tab (a sheet on phones) shows your `editor` form; move, trim, split, fades,
-  transitions, masks, blend modes and chroma key (when `keyable`) come from the editor.
+- **Editing:** the inspector's **Plugin** tab (on phones the **Params** tool, a half-height sheet under the preview)
+  shows your `editor` form: each group with its label, the params in your order, as sliders (numbers with `min` and
+  `max`), number fields, colour wells, text fields, switches and drop-downs; params in no group come last under
+  "More". The preview redraws while the user drags or types; each committed edit is one undo step. The timeline card
+  shows your `icon`, your `name` and the clip's first non-empty text setting. Move, trim, split, fades, transitions,
+  masks, blend modes and chroma key (when `keyable`) come from the editor.
 
 ## 5. Agents
 
@@ -204,11 +209,15 @@ against your params by the editor before they reach the clip.
 
 - Bump `version` for every release; a new hash with the same version is refused as a conflict.
 - A project uses **one version** of each plugin. Installing a newer one shows "Update available" in projects that use
-  an older one; updating is the user's choice, one undo step, and needs their OK again (it is a new hash).
-- On update, each clip keeps the values of params that still exist and fit; new params get their defaults; values of
-  removed or now-invalid params are dropped with a warning. So add params freely, and avoid renaming or narrowing
+  an older one (on the tile, in Project → Plugins and in the inspector); updating is the user's choice, one undo step,
+  and needs their OK again (it is a new hash). Older versions on the device can be picked from **Versions**; that
+  downgrade shows a warning.
+- On update, each clip keeps the values of params that still exist and fit (numbers outside a new range are clamped
+  and reported); new params get their defaults; values of removed or now-invalid params are dropped. The dialog lists
+  these changes by label before the user confirms, and the toast repeats them. So add params freely, and avoid renaming or narrowing
   existing ones; if the look of old settings must change, make it a new param.
-- `api` is the host API. Ask for a higher one only when you need a feature of a newer editor.
+- `api` is the host API. Ask for a higher one only when you need a feature of a newer editor: an older editor refuses
+  the package with "This plugin needs a newer Dionysus".
 
 ## 7. Checklist and sample
 

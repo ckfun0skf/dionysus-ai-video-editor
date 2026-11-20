@@ -111,7 +111,7 @@ describe("install and the Plugins list (P86)", () => {
     const pkg = await pkgOf();
     const { blobs } = createMemoryStorage();
     const e = new Engine(createProject("Install"));
-    const id = await installPlugin({ engine: e, blobs }, pkg, "https://example.com/stripes/manifest.json", { at: S, id: "plc_first" });
+    const { clipId: id } = await installPlugin({ engine: e, blobs }, pkg, "https://example.com/stripes/manifest.json", { at: S, id: "plc_first" });
     expect(id).toBe("plc_first");
     const p = e.getState().project;
     expect(p.plugins?.[ID]?.hash).toBe(pkg.hash);
@@ -133,7 +133,7 @@ describe("install and the Plugins list (P86)", () => {
     expect(pluginRows(other, lib)).toEqual([expect.objectContaining({ id: ID, inProject: false, state: "device", clips: 0 })]);
   });
 
-  it("lists plugins that aren't allowed on this device for the review banner, and refuses another version", async () => {
+  it("lists plugins that aren't allowed on this device for the review banner, and refuses changed contents", async () => {
     const pkg = await pkgOf();
     const { blobs } = createMemoryStorage();
     const e = new Engine(createProject("Review"));
@@ -150,8 +150,9 @@ describe("install and the Plugins list (P86)", () => {
     expect(isPluginEnabled(ID)).toBe(true);
     expect(e.getState().canUndo).toBe(undoBefore);
     expect(e.getState().project).toBe(p);
-    const newer = await pkgOf({ version: "1.1.0" });
-    await expect(installPlugin({ engine: e, blobs }, newer, "file")).rejects.toThrow(/another version/);
+    // the same version with other contents is a conflict (another version is a switch, P87)
+    const changed = await pkgOf({ description: "Changed without a new version number." });
+    await expect(installPlugin({ engine: e, blobs }, changed, "file")).rejects.toThrow(/needs a new version number/);
   });
 
   it("states the consent facts plainly", async () => {

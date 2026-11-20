@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P87-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P88-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P86-PLUGIN-INSTALL`; the next is **P87**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P87-PLUGIN-PARAMS`; the next is **P88**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P87: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P88: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -510,9 +510,18 @@ lets the inspector / phone sheet show **Stopped** with **Retry** (a retry genera
 `ui/pluginInstall.test.tsx`. Chrome checks and gaps are in CLIP_PLUGIN_ARCHITECTURE "Done in P86" (no update or
 version switch, icon-only tiles, manual Retry, about 32 s until a hung plugin stops, the dev hook still in dev builds).
 
-**Next: P87 (step 3.5),** clip editing UX: the inspector Plugin tab and phone Params sheet built from the manifest's
-declarative form, the timeline icon and name, and plugin updates with param migration (the version switch the P86
-dialogs refuse today). Then P88 agent tools.
+**P87 (step 3.5, done):** editing plugin clips and switching versions. `ui/PluginClipPanel.tsx` draws the settings
+form from the manifest's `editor` groups with `ParamControls` (`cmd.setPluginParams`, one undo step per committed
+edit, Reset); `part="params"` is the phone **Params** sheet (undimmed, half height, live preview), `part="details"` the
+phone Plugin sheet. The card shows the plugin icon, name and first text setting. `domain/pluginLocks.ts`
+`migratePluginParams`, `pluginSwitchSummary`, `switchPluginVersion` (+ `cmd.switchPlugin`): another version of a
+project plugin is an update or downgrade that migrates every clip in one undo step; `pluginRows` reports `update` and
+`versions`, shown as Update available / Update / Versions (`ui/PluginLibrary.tsx`). A higher `api` says "needs a newer
+Dionysus". Tests: `ui/pluginParams.test.tsx`. Chrome checks and gaps: CLIP_PLUGIN_ARCHITECTURE "Done in P87".
+
+**Next: P88 (step 3.6),** agent tools and the host AI rule: `list_clip_plugins`, `add_plugin_clip`,
+`set_plugin_clip_params` (values checked with `checkParamValue`), `request_plugin_install(url)` (only opens the install
+dialog), one host rule after the scene type's, `gen:ai`, WEB_MCP docs. That completes Phase 3.
 New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
 **Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):

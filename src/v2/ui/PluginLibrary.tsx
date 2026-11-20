@@ -3,10 +3,12 @@
  * editor places: the desktop rail's Plugins tab (tiles: click to add at the playhead, drag onto a track), the phone Add
  * media sheet's Plugins tab, the Project → Plugins list, the review banner and one overlay (the add-from dialog, the
  * consent dialog, the manage list and the remove confirmation; a modal at 1440, a bottom sheet at 390).
+ * P87: "Update available" on rows and tiles, a Versions list per project plugin, and the consent dialog for a version
+ * switch (update or downgrade) with what happens to the clips' settings.
  * Logic: ui/pluginManager.ts. Nothing here runs plugin code.
  */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { newId, type Project } from "../domain";
+import { comparePluginVersions, newId, type Project } from "../domain";
 import type { Engine } from "../engine";
 import type { BlobStore } from "../ports";
 import { CLIP_LIBRARIES } from "../render";
@@ -16,19 +18,21 @@ import { Sheet } from "./Sheet";
 import { setDragItem } from "./desktop/dnd";
 import {
   PLUGIN_SAMPLES, addPluginClipAt, deleteFromDevice, installPlugin, libraryPluginPackage, pluginErrorText, pluginFacts, pluginRows, pluginSampleUrl, pluginSize,
-  pluginSourceText, pluginsToReview, projectPluginPackage, readPluginFrom, removePluginFromProject, shortPluginHash, usePluginLibraryItems,
+  pluginSourceText, pluginSwitchPreview, pluginsToReview, projectPluginPackage, readPluginFrom, removePluginFromProject, shortPluginHash, usePluginLibraryItems,
   type PluginFacts, type PluginRow,
 } from "./pluginManager";
 
 type Where = "main" | "overlay" | { trackId: string };
 type ClipAt = { at: number; where?: Where };
 /** `back`: where Cancel / Esc go; `done`: where the dialog goes after it did its job (undefined = closed). */
-type Consent = { facts: PluginFacts; pkg: PluginPackage; source: string; mode: "install" | "add" | "allow"; clipAt?: ClipAt; back?: Dialog; done?: Dialog; busy?: boolean; error?: string };
+type Switch = NonNullable<ReturnType<typeof pluginSwitchPreview>>;
+type Consent = { facts: PluginFacts; pkg: PluginPackage; source: string; mode: "install" | "add" | "allow" | "switch"; sw?: Switch; clipAt?: ClipAt; back?: Dialog; done?: Dialog; busy?: boolean; error?: string };
 type Dialog =
   | { kind: "add"; busy?: string; error?: string; back?: Dialog; clipAt?: ClipAt }
   | { kind: "consent"; c: Consent }
   | { kind: "manage" }
-  | { kind: "remove"; row: PluginRow; back?: Dialog };
+  | { kind: "remove"; row: PluginRow; back?: Dialog }
+  | { kind: "versions"; id: string; back?: Dialog };
 const MANAGE: Dialog = { kind: "manage" };
 
 export interface PluginCenterOptions {
@@ -47,7 +51,7 @@ export interface PluginCenterOptions {
 
 const libName = (id: string) => { const l = CLIP_LIBRARIES.find((x) => x.id === id); return l ? `${l.name} ${l.version}` : id; };
 const STATE_TEXT: Record<PluginRow["state"], string> = {
-  enabled: "Enabled", review: "Not enabled", missing: "Missing", damaged: "Damaged", newer: "Needs update", conflict: "Can't load", device: "On this device",
+  enabled: "Enabled", review: "Not enabled", missing: "Missing", damaged: "Damaged", newer: "Needs a newer Dionysus", conflict: "Can't load", device: "On this device",
 };
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
@@ -69,6 +73,17 @@ export function usePluginCenter(o: PluginCenterOptions) {
     } catch (e) { o.onToast(pluginErrorText(e)); }
   };
 
+  /** P87: switch a project plugin to the device's version `hash` (update or downgrade), after the consent dialog. */
+  const openSwitch = async (id: string, hash: string, from?: Dialog) => {
+    try {
+      const pkg = await libraryPluginPackage(hash);
+      const source = library.find((e) => e.hash === hash)?.source ?? "project";
+      const sw = pluginSwitchPreview(o.engine.getState().project, pkg);
+      if (!sw || pkg.manifest.id !== id) { o.onToast("That version can't be used in this project."); return; }
+      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: "switch", sw, back: from, done: from } });
+    } catch (e) { o.onToast(pluginErrorText(e)); }
+  };
+
   /** Click or tap on a tile, or a drop at `at`: add a clip, or ask first. */
   const activate = (row: PluginRow, clipAt: ClipAt = { at: now() }) => {
     if (row.inProject && row.state === "enabled") {
@@ -84,17 +99,21 @@ export function usePluginCenter(o: PluginCenterOptions) {
     setDialog({ kind: "add", busy: "file" in from ? `Reading ${from.file.name}…` : "Downloading…", back, clipAt });
     try {
       const { pkg, source } = await readPluginFrom(from);
-      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: "install", clipAt, back: { kind: "add", back, clipAt }, done: back } });
+      const sw = pluginSwitchPreview(o.engine.getState().project, pkg);
+      setDialog({ kind: "consent", c: { facts: pluginFacts(pkg, source), pkg, source, mode: sw ? "switch" : "install", sw, clipAt, back: { kind: "add", back, clipAt }, done: back } });
     } catch (e) { setDialog({ kind: "add", error: pluginErrorText(e), back, clipAt }); }
   };
 
   const confirm = async (c: Consent) => {
     setDialog({ kind: "consent", c: { ...c, busy: true, error: undefined } });
     try {
-      const clipId = await installPlugin(ctx, c.pkg, c.source, c.clipAt ? { ...c.clipAt, id: newId("plc") } : undefined);
+      const { clipId, switched } = await installPlugin(ctx, c.pkg, c.source, c.clipAt ? { ...c.clipAt, id: newId("plc") } : undefined);
       setDialog(c.done);
       if (clipId) o.onAdded(clipId);
-      o.onToast(c.mode === "allow" ? `“${c.facts.name}” is enabled in this project` : clipId ? `Added “${c.facts.name}” and a clip at the playhead` : `“${c.facts.name}” is installed. Add clips from its tile in Plugins`, c.mode !== "allow");
+      const lost = switched ? switched.changes.filter((x) => x.reason !== "clamped").length : 0, clamped = switched ? switched.changes.length - lost : 0;
+      o.onToast(switched
+        ? `${switched.kind === "update" ? "Updated" : "Switched"} “${c.facts.name}” to ${switched.to}${lost ? ` · ${plural(lost, "setting")} dropped` : ""}${clamped ? ` · ${plural(clamped, "value")} adjusted` : ""}`
+        : c.mode === "allow" ? `“${c.facts.name}” is enabled in this project` : clipId ? `Added “${c.facts.name}” and a clip at the playhead` : `“${c.facts.name}” is installed. Add clips from its tile in Plugins`, c.mode !== "allow");
     } catch (e) { setDialog({ kind: "consent", c: { ...c, busy: false, error: pluginErrorText(e) } }); }
   };
 
@@ -107,7 +126,7 @@ export function usePluginCenter(o: PluginCenterOptions) {
   // Esc closes (or goes back from) the open dialog, wherever the focus is.
   useEffect(() => {
     if (!dialog) return;
-    const to: Dialog | undefined = dialog.kind === "consent" ? dialog.c.back : dialog.kind === "add" || dialog.kind === "remove" ? dialog.back : undefined;
+    const to: Dialog | undefined = dialog.kind === "consent" ? dialog.c.back : dialog.kind === "add" || dialog.kind === "remove" || dialog.kind === "versions" ? dialog.back : undefined;
     const k = (e: KeyboardEvent) => { if (e.key === "Escape" && !(dialog.kind === "consent" && dialog.c.busy)) { e.stopPropagation(); back(to); } };
     addEventListener("keydown", k, true);
     return () => removeEventListener("keydown", k, true);
@@ -160,6 +179,7 @@ export function usePluginCenter(o: PluginCenterOptions) {
   /** Phone Project sheet / desktop manage dialog: one list for the project and the device. */
   const manageList = (from?: Dialog) => (
     <PluginManageList rows={rows} onAdd={() => setDialog({ kind: "add", back: from })} onAllow={(r) => void openConsent(r, undefined, from)}
+      onUpdate={(r) => r.update && void openSwitch(r.id, r.update.hash, from)} onVersions={(r) => setDialog({ kind: "versions", id: r.id, back: from })}
       onAddToProject={(r) => void openConsent(r, undefined, from)} onRemove={(r) => askRemove(r, from)}
       onDelete={(r) => void deleteFromDevice(r.hash).then(() => o.onToast(`Deleted “${r.name}” from this device`), (e) => o.onToast(pluginErrorText(e)))} />
   );
@@ -175,7 +195,11 @@ export function usePluginCenter(o: PluginCenterOptions) {
 
   let overlay: ReactNode = null;
   if (dialog?.kind === "add") overlay = frame("Add plugin", <PluginAddSource busy={dialog.busy} error={dialog.error} installed={new Set(rows.filter((r) => r.inProject).map((r) => r.id))} onFile={(f) => void pickSource({ file: f }, dialog.back, dialog.clipAt)} onUrl={(u) => void pickSource({ url: u }, dialog.back, dialog.clipAt)} onCancel={() => back(dialog.back)} />, () => back(dialog.back), "is-add");
-  else if (dialog?.kind === "consent") { const c = dialog.c; overlay = frame(c.mode === "install" ? "Install plugin" : c.mode === "add" ? "Add plugin to project" : "Allow plugin", <PluginConsent c={c} onCancel={() => back(c.back)} onConfirm={() => void confirm(c)} />, () => back(c.back), "is-consent"); }
+  else if (dialog?.kind === "versions") {
+    const r = rows.find((x) => x.id === dialog.id && x.inProject), d = dialog;
+    overlay = r ? frame(`“${r.name}” versions`, <PluginVersions row={r} onPick={(h) => void openSwitch(r.id, h, d)} onClose={() => back(d.back)} />, () => back(d.back), "is-versions") : null;
+  }
+  else if (dialog?.kind === "consent") { const c = dialog.c; overlay = frame(c.mode === "switch" ? (c.sw?.kind === "update" ? "Update plugin" : "Use an older version") : c.mode === "install" ? "Install plugin" : c.mode === "add" ? "Add plugin to project" : "Allow plugin", <PluginConsent c={c} onCancel={() => back(c.back)} onConfirm={() => void confirm(c)} />, () => back(c.back), "is-consent"); }
   else if (dialog?.kind === "manage") overlay = frame("Plugins", manageList(MANAGE), close, "is-manage");
   else if (dialog?.kind === "remove") { const r = dialog.row; overlay = frame(`Remove “${r.name}”?`, (
     <div className="v2-pl-body">
@@ -193,6 +217,8 @@ export function usePluginCenter(o: PluginCenterOptions) {
     manageList: () => manageList(),
     openManage: () => setDialog(MANAGE),
     openAdd: () => setDialog({ kind: "add" }),
+    /** P87: update a project plugin to the newest version on this device (the inspector's Update available). */
+    update: (id: string) => { const r = rows.find((x) => x.id === id && x.inProject); if (r?.update) void openSwitch(id, r.update.hash); },
     /** Review one plugin (the inspector's Not enabled state). */
     review: (id: string) => { const r = rows.find((x) => x.id === id); if (r) void openConsent(r); },
     /** A plugin tile dropped on the timeline. */
@@ -209,7 +235,7 @@ function PluginTiles({ rows, onActivate, onRemove, onManage }: { rows: PluginRow
         onClick={() => onActivate(r)}>
         <span className="v2-tile-thumb v2-pl-thumb">
           <Ic g={pluginIconKey(r.icon)} size={26} />
-          {r.state !== "enabled" && <em className="v2-pl-state">{STATE_TEXT[r.state]}</em>}
+          {r.state !== "enabled" ? <em className="v2-pl-state">{STATE_TEXT[r.state]}</em> : r.update && <em className="v2-pl-state is-update" title={`Version ${r.update.version} is on this device: update it in Manage plugins`}>Update</em>}
           <span className="v2-tile-add" aria-hidden><Ic g={r.state === "enabled" ? "＋" : r.state === "review" ? "shield" : r.state === "device" ? "＋" : "⚠"} size={16} /></span>
         </span>
         <span className="v2-tile-name">{r.name}<small> {r.version}</small></span>
@@ -228,8 +254,9 @@ function PluginTiles({ rows, onActivate, onRemove, onManage }: { rows: PluginRow
   );
 }
 
-function PluginManageList({ rows, onAdd, onAllow, onAddToProject, onRemove, onDelete }: {
+function PluginManageList({ rows, onAdd, onAllow, onAddToProject, onRemove, onDelete, onUpdate, onVersions }: {
   rows: PluginRow[]; onAdd: () => void; onAllow: (r: PluginRow) => void; onAddToProject: (r: PluginRow) => void; onRemove: (r: PluginRow) => void; onDelete: (r: PluginRow) => void;
+  onUpdate: (r: PluginRow) => void; onVersions: (r: PluginRow) => void;
 }) {
   const [confirmDel, setConfirmDel] = useState<string>();
   const row = (r: PluginRow) => (
@@ -239,10 +266,13 @@ function PluginManageList({ rows, onAdd, onAllow, onAddToProject, onRemove, onDe
         <b>{r.name} <small>{r.version}</small></b>
         <span className="v2-pl-sub"><span className={`v2-ph-state ${r.state === "enabled" ? "is-on" : ""}`}>{STATE_TEXT[r.state]}</span>{r.inProject ? ` ${plural(r.clips, "clip")}` : r.publisher ? ` by ${r.publisher}` : ""}</span>
         {r.message && r.state !== "review" && <span className="v2-pl-msg">{r.message}</span>}
+        {r.inProject && r.update && <span className="v2-pl-upd"><Ic g="plugin-update" size={14} /> Update available: {r.update.version}</span>}
       </span>
       <span className="v2-pl-rowacts">
         {r.state === "review" && <button className="v2-btn primary" onClick={() => onAllow(r)}><Ic g="shield" size={16} /> Review</button>}
         {r.state === "device" && <button className="v2-btn" onClick={() => onAddToProject(r)}><Ic g="＋" size={16} /> Add</button>}
+        {r.inProject && r.update && r.state !== "review" && <button className="v2-btn primary" data-testid="plugin-update" title={`Update this project to ${r.update.version} (asks first; Undo reverts it)`} onClick={() => onUpdate(r)}>Update</button>}
+        {r.inProject && r.versions.length > 0 && <button className="v2-icon-btn" aria-label={`Versions of ${r.name}`} title="Other versions on this device" onClick={() => onVersions(r)}><Ic g="history" size={18} /></button>}
         {r.inProject && <button className="v2-icon-btn" aria-label={`Remove ${r.name} from this project`} title="Remove from this project (Undo restores it)" onClick={() => onRemove(r)}><Ic g="🗑" size={18} /></button>}
         {!r.inProject && (confirmDel === r.hash
           ? <button className="v2-btn is-danger" onClick={() => { setConfirmDel(undefined); onDelete(r); }}>Delete</button>
@@ -293,9 +323,50 @@ function PluginAddSource({ busy, error, installed, onFile, onUrl, onCancel }: { 
   );
 }
 
+function PluginVersions({ row, onPick, onClose }: { row: PluginRow; onPick: (hash: string) => void; onClose: () => void }) {
+  return (
+    <div className="v2-pl-body v2-pl-versions" data-testid="plugin-versions">
+      <p className="v2-abnote">A project uses one version of each plugin. Switching changes all its clips in one step; Undo reverts it.</p>
+      <ul className="v2-pl-list">
+        <li className="v2-pl-row is-enabled"><span className="v2-pl-ic" aria-hidden><Ic g="✓" size={20} /></span><span className="v2-pl-main"><b>{row.version}</b><span className="v2-pl-sub">Used by this project · {plural(row.clips, "clip")}</span></span></li>
+        {row.versions.map((v) => {
+          const newer = v.version === row.update?.version || (row.update && v.hash === row.update.hash);
+          return (
+            <li key={v.hash} className="v2-pl-row">
+              <span className="v2-pl-ic" aria-hidden><Ic g={newer ? "plugin-update" : "history"} size={20} /></span>
+              <span className="v2-pl-main"><b>{v.version}</b><span className="v2-pl-sub">On this device{newer ? " · newest" : ""}</span></span>
+              <span className="v2-pl-rowacts"><button className={`v2-btn ${newer ? "primary" : ""}`} onClick={() => onPick(v.hash)}>{versionVerb(v.version, row.version)}</button></span>
+            </li>
+          );
+        })}
+      </ul>
+      <div className="v2-pl-actions"><button className="v2-btn" onClick={onClose}>Back</button></div>
+    </div>
+  );
+}
+const versionVerb = (to: string, from: string) => (comparePluginVersions(to, from) > 0 ? "Update" : "Use this");
+
+function SwitchSummary({ sw, to }: { sw: Switch; to: string }) {
+  const lost = sw.changes.filter((x) => x.reason !== "clamped"), clamped = sw.changes.filter((x) => x.reason === "clamped");
+  const L = (k: string) => sw.labels[k] ?? k;
+  return (
+    <div className={`v2-pl-switch ${sw.kind === "downgrade" ? "is-warn" : ""}`} data-testid="plugin-switch">
+      {sw.kind === "downgrade"
+        ? <p><Ic g="⚠" size={16} /> <span><b>{to} is older than {sw.from}</b>, the version this project uses. Settings added after {to} are dropped from its clips.</span></p>
+        : <p><Ic g="plugin-update" size={16} /> <span>This project uses <b>{sw.from}</b>. Updating to <b>{to}</b> changes its {plural(sw.clips, "clip")} in one step; Undo reverts it.</span></p>}
+      <ul>
+        {sw.added.length > 0 && <li>New settings start at their defaults: {sw.added.map(L).join(", ")}.</li>}
+        {lost.map((x) => <li key={x.key} className="is-drop">“{L(x.key)}” is dropped from {plural(x.clips, "clip")}: {x.detail}.</li>)}
+        {clamped.map((x) => <li key={x.key}>“{L(x.key)}” is adjusted in {plural(x.clips, "clip")}: {x.detail}.</li>)}
+        {!lost.length && !clamped.length && <li>{sw.clips ? "Every clip keeps its settings." : "No clips use it yet."}</li>}
+      </ul>
+    </div>
+  );
+}
+
 function PluginConsent({ c, onCancel, onConfirm }: { c: Consent; onCancel: () => void; onConfirm: () => void }) {
   const f = c.facts;
-  const verb = c.mode === "install" ? "Install" : c.mode === "add" ? "Add to project" : "Allow";
+  const verb = c.mode === "switch" ? `${c.sw?.kind === "update" ? "Update" : "Switch"} to ${f.version}` : c.mode === "install" ? "Install" : c.mode === "add" ? "Add to project" : "Allow";
   return (
     <div className="v2-pl-body v2-pl-consent" data-testid="plugin-consent">
       <div className="v2-pl-who">
@@ -310,8 +381,9 @@ function PluginConsent({ c, onCancel, onConfirm }: { c: Consent; onCancel: () =>
         <div><dt>Libraries</dt><dd>{f.libs.length ? f.libs.map(libName).join(", ") : "None"}</dd></div>
         <div><dt>Settings</dt><dd>{f.params.length ? f.params.map((p) => p.label).join(", ") : "None"}</dd></div>
       </dl>
+      {c.mode === "switch" && c.sw && <SwitchSummary sw={c.sw} to={f.version} />}
       <p className="v2-pl-promise"><Ic g="shield" size={18} /><span>It draws frames from its settings. It can&apos;t use the network or read your projects, files or accounts.</span></p>
-      <p className="v2-abnote">{c.mode === "install" ? `Installing keeps it on this device and adds it to this project, where it may run${c.clipAt ? ", with a clip at the playhead" : ""}. ` : c.clipAt ? "A clip is added at the playhead. " : ""}It runs only in this project on this device; other projects ask again. The publisher isn&apos;t checked by Dionysus.</p>
+      <p className="v2-abnote">{c.mode === "switch" ? "A new version is a new package, so it is allowed again here. " : c.mode === "install" ? `Installing keeps it on this device and adds it to this project, where it may run${c.clipAt ? ", with a clip at the playhead" : ""}. ` : c.clipAt ? "A clip is added at the playhead. " : ""}It runs only in this project on this device; other projects ask again. The publisher isn&apos;t checked by Dionysus.</p>
       {f.warnings.length > 0 && <ul className="v2-pl-warn">{f.warnings.slice(0, 3).map((w) => <li key={w}><Ic g="⚠" size={14} /> {w}</li>)}</ul>}
       {c.error && <p className="v2-pl-error" role="alert"><Ic g="⚠" size={16} /> {c.error}</p>}
       <div className="v2-pl-actions">

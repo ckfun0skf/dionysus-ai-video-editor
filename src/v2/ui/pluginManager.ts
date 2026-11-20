@@ -9,14 +9,16 @@
  *   undo step (optionally with a first clip);
  * - a project plugin that isn't enabled on this device is allowed from the review list (same dialog);
  * - remove from a project is one undo step (its clips keep their settings, or go with it);
- * - the device library's list, parsed once per hash for the tiles.
+ * - the device library's list, parsed once per hash for the tiles;
+ * - P87: another version of a plugin the project uses is a switch (update or downgrade) that migrates its clips'
+ *   settings in the same undo step; rows say when the device has a newer version ("Update available").
  */
 import { useSyncExternalStore } from "react";
-import { pluginLocks, type PluginLock, type PluginManifest, type Project } from "../domain";
+import { comparePluginVersions, pluginLocks, pluginSwitchSummary, type PluginLock, type PluginManifest, type PluginSwitchSummary, type Project } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
 import { isPluginEnabled, pluginIssueOf, pluginMetaOf } from "../clipTypes";
-import { PluginConflictError, PluginPackageError, fetchPluginPackage, pluginProjectProblem, readPluginZip, storePluginPackage, type PluginLibraryEntry, type PluginPackage } from "../persistence";
+import { PluginConflictError, PluginPackageError, fetchPluginPackage, pluginProjectProblem, pluginSwitchOf, readPluginZip, storePluginPackage, type PluginLibraryEntry, type PluginPackage } from "../persistence";
 import { devicePluginLibrary, PLUGIN_LIBS, syncPlugins } from "./pluginRuntime";
 
 const TICKS = 120_000;
@@ -133,6 +135,10 @@ export interface PluginRow {
   message?: string;
   clips: number;
   durationSec: number;
+  /** P87: the newest version on this device when it is newer than the project's ("Update available"). */
+  update?: { version: string; hash: string };
+  /** P87: the other versions of this plugin on this device, newest first (for a project plugin). */
+  versions: { version: string; hash: string }[];
 }
 
 const clipCount = (project: Project, id: string) =>
@@ -144,6 +150,9 @@ export function pluginRows(project: Project, library: readonly LibraryItem[]): P
   const locked = pluginLocks(project);
   for (const [id, lock] of locked) {
     const meta = pluginMetaOf(id);
+    const versions = library.filter((e) => e.id === id && e.hash !== lock.hash && e.version !== lock.version)
+      .sort((a, b) => comparePluginVersions(b.version, a.version)).map((e) => ({ version: e.version, hash: e.hash }));
+    const newest = versions[0];
     const issue = pluginIssueOf(id);
     const lib = library.find((e) => e.hash === lock.hash)?.manifest;
     const m = meta?.manifest ?? lib;
@@ -151,6 +160,7 @@ export function pluginRows(project: Project, library: readonly LibraryItem[]): P
       id, name: meta?.name ?? lock.name, version: lock.version, hash: lock.hash, publisher: lock.publisher, description: m?.description, icon: m?.icon,
       inProject: true, state: meta ? (isPluginEnabled(id) ? "enabled" : "review") : issue?.state ?? "missing", ...(issue ? { message: issue.message } : {}),
       clips: clipCount(project, id), durationSec: meta?.durationSec ?? m?.durationSec ?? 5,
+      versions, ...(newest && comparePluginVersions(newest.version, lock.version) > 0 ? { update: newest } : {}),
     });
   }
   const newest = new Map<string, LibraryItem>();
@@ -160,7 +170,7 @@ export function pluginRows(project: Project, library: readonly LibraryItem[]): P
     if (!o || o.installedAt < e.installedAt) newest.set(e.id, e);
   }
   for (const e of [...newest.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-    rows.push({ id: e.id, name: e.name, version: e.version, hash: e.hash, publisher: e.publisher, description: e.manifest?.description, icon: e.manifest?.icon, inProject: false, state: "device", clips: 0, durationSec: e.manifest?.durationSec ?? 5 });
+    rows.push({ id: e.id, name: e.name, version: e.version, hash: e.hash, publisher: e.publisher, description: e.manifest?.description, icon: e.manifest?.icon, inProject: false, state: "device", clips: 0, durationSec: e.manifest?.durationSec ?? 5, versions: [] });
   }
   return rows;
 }
@@ -177,12 +187,31 @@ export interface PluginActionContext {
 
 const projectOf = (engine: Engine) => engine.getState().project;
 
+/** P87: what switching the project to `pkg` would do (none when it isn't a switch). */
+export function pluginSwitchPreview(project: Project, pkg: PluginPackage): ({ kind: "update" | "downgrade"; from: string; labels: Record<string, string> } & PluginSwitchSummary) | undefined {
+  const sw = pluginSwitchOf(project, pkg);
+  if (!sw) return undefined;
+  const id = pkg.manifest.id;
+  const old = pluginMetaOf(id);
+  const oldParams = old && old.hash === project.plugins?.[id]?.hash ? old.params : undefined;
+  const labels: Record<string, string> = {};
+  for (const [k, d] of [...Object.entries(oldParams ?? {}), ...Object.entries(pkg.manifest.params ?? {})]) labels[k] = d.label || k;
+  return { ...sw, labels, ...pluginSwitchSummary(project, id, pkg.manifest.params ?? {}, oldParams) };
+}
+
+export interface InstallResult {
+  /** The new clip's id, if one was added. */
+  clipId?: string;
+  /** P87: set when the project switched versions; `changes` lists the settings that were dropped or clamped. */
+  switched?: { kind: "update" | "downgrade"; from: string; to: string; changes: PluginSwitchSummary["changes"]; clips: number };
+}
+
 /**
- * The user said Install (or Add to project / Allow) in the consent dialog: device library, project blob, trust for
- * this project, the lock as one undo step (with a first clip at `clipAt` when given), then reload the plugins.
- * Returns the new clip's id, if one was added.
+ * The user said Install (or Add to project / Allow / Update) in the consent dialog: device library, project blob,
+ * trust for this project, the lock as one undo step (with a first clip at `clipAt` when given), then reload the
+ * plugins. Another version of a plugin the project uses switches it (P87), migrating its clips in the same step.
  */
-export async function installPlugin(ctx: PluginActionContext, pkg: PluginPackage, source: string, clipAt?: { at: number; where?: "main" | "overlay" | { trackId: string }; id: string }): Promise<string | undefined> {
+export async function installPlugin(ctx: PluginActionContext, pkg: PluginPackage, source: string, clipAt?: { at: number; where?: "main" | "overlay" | { trackId: string }; id: string }): Promise<InstallResult> {
   const project = projectOf(ctx.engine);
   const problem = pluginProjectProblem(project, pkg);
   if (problem) throw new PluginConflictError(problem);
@@ -195,14 +224,20 @@ export async function installPlugin(ctx: PluginActionContext, pkg: PluginPackage
   await lib.setTrusted(project.id, pkg.hash, true);
   const id = pkg.manifest.id;
   const now = projectOf(ctx.engine);
+  const preview = pluginSwitchPreview(now, pkg);
   const cmds = [
-    ...(now.plugins?.[id]?.hash === pkg.hash ? [] : [cmd.lockPlugin(id, lock)]),
+    ...(now.plugins?.[id]?.hash === pkg.hash ? [] : preview ? [cmd.switchPlugin(id, lock, pkg.manifest.params ?? {})] : [cmd.lockPlugin(id, lock)]),
     ...(clipAt ? [cmd.addPluginClip(clipAt.at, id as `x-${string}`, pkg.manifest.version, Math.round((pkg.manifest.durationSec ?? 5) * TICKS), clipAt.where ?? "overlay", clipAt.id)] : []),
   ];
-  const added = cmds.length ? ctx.engine.dispatch(cmds, clipAt ? `Add plugin “${pkg.manifest.name}” clip` : `Add plugin “${pkg.manifest.name}”`) : false;
+  const label = preview ? `${preview.kind === "update" ? "Update" : "Downgrade"} plugin “${pkg.manifest.name}” to ${pkg.manifest.version}` : clipAt ? `Add plugin “${pkg.manifest.name}” clip` : `Add plugin “${pkg.manifest.name}”`;
+  const done = cmds.length ? ctx.engine.dispatch(cmds, label) : false;
+  if (cmds.length && !done) throw new PluginConflictError(`Couldn't ${preview ? "switch" : "add"} “${pkg.manifest.name}” in this project.`);
   await syncPlugins(projectOf(ctx.engine), ctx.blobs);
   void refreshPluginLibrary();
-  return added && clipAt ? clipAt.id : undefined;
+  return {
+    ...(done && clipAt ? { clipId: clipAt.id } : {}),
+    ...(done && preview ? { switched: { kind: preview.kind, from: preview.from, to: pkg.manifest.version, changes: preview.changes, clips: preview.clips } } : {}),
+  };
 }
 
 /** The stored package of a plugin this project locks (to show in the review dialog, and to add it to the device library). */

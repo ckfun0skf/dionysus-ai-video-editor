@@ -113,7 +113,7 @@ export function unknownSlateText(clipType: string): [string, string] {
   switch (i?.state) {
     case "missing": return [`Plugin “${name}” is missing`, "PACKAGE NOT FOUND"];
     case "damaged": return [`Plugin “${name}” can't be loaded`, "PACKAGE DAMAGED"];
-    case "newer": return [`Plugin “${name}”`, "NEEDS A NEWER VERSION"];
+    case "newer": return [`Plugin “${name}”`, "NEEDS A NEWER DIONYSUS"];
     case "conflict": return [`Plugin “${name}” can't be loaded`, "ID CONFLICT"];
     default: return [`Plugin “${name}” is not installed`, "NOT IN THIS PROJECT"];
   }

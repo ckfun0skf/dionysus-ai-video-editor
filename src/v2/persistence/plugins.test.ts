@@ -78,7 +78,7 @@ describe("plugin package and content hash (P84)", () => {
     await expect(readPluginZip(await zipOf([["manifest.json", sampleManifest]]))).rejects.toThrow(/"render\.js" is listed but not in the package/);
     const bad = readPluginZip(await zipOf([["manifest.json", manifestWith({ id: "stripes", caps: { sound: true } })], ["render.js", sampleRender]]));
     await expect(bad).rejects.toThrow(/2 problems: id: .*caps\.sound/);
-    await expect(readPluginZip(await zipOf([["manifest.json", manifestWith({ api: 9 })], ["render.js", sampleRender]]))).rejects.toThrow(/needs host API 9/);
+    await expect(readPluginZip(await zipOf([["manifest.json", manifestWith({ api: 9 })], ["render.js", sampleRender]]))).rejects.toThrow(/needs a newer Dionysus \(host API 9/);
     await expect(readPluginZip(await zipOf([["manifest.json", manifestWith({ render: { entry: "render.js", libs: ["jquery"] } })], ["render.js", sampleRender]]), { libs: LIBS })).rejects.toThrow(/jquery/);
     const big = new Uint8Array(PLUGIN_LIMITS.fileBytes + 1);
     await expect(readPluginZip(await zipOf([["manifest.json", manifestWith({ files: ["render.js", "big.bin"] })], ["render.js", sampleRender], ["big.bin", big]]))).rejects.toThrow(/"big\.bin" is 10\.0 MB; the most is 10 MB/);

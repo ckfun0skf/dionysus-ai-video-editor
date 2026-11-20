@@ -98,7 +98,7 @@ export function validatePluginManifest(raw: unknown, opts: PluginValidateOptions
   if (m.format !== PLUGIN_FORMAT) err("format", `"format" must be "${PLUGIN_FORMAT}".`);
   if (m.api !== undefined) {
     if (!Number.isInteger(m.api) || (m.api as number) < 1) err("api", `"api" must be a whole number from 1.`);
-    else if ((m.api as number) > PLUGIN_API) err("api", `This plugin needs host API ${m.api as number}; this build has ${PLUGIN_API}. Update Dionysus.`);
+    else if ((m.api as number) > PLUGIN_API) err("api", `This plugin needs a newer Dionysus (host API ${m.api as number}; this build has ${PLUGIN_API}). Update Dionysus to use it.`);
   }
   if (typeof m.id !== "string") err("id", `"id" is required: a lower-case id starting with "x-", e.g. "x-acme-confetti".`);
   else if (!PLUGIN_ID_RE.test(m.id)) err("id", `"id" "${m.id}" must start with "x-" and use only a–z, 0–9 and "-" (e.g. "x-acme-confetti").`);

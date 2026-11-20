@@ -15,7 +15,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
 import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, isPluginEnabled, pluginIssueOf, pluginMetaOf, unknownSlateText, variantOf } from "../clipTypes";
-import { Ic } from "./Icon";
+import { Ic, pluginIconKey } from "./Icon";
 import { pluginStatus } from "../render";
 
 export type WaveKind = "audio" | "video";
@@ -27,7 +27,7 @@ export type InspectorTabRef = InspectorTabId | { id: InspectorTabId; label: stri
 /** Buttons in the desktop inspector header (P70); `edit-all` only for a clip on a styled text layer. */
 export type InspectorActionId = "edit-all" | "caption-style" | "subtitles" | "edit-code";
 /** Primary tools on the mobile clip toolbar (P70); a nested list is "the first of these that applies". */
-export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio" | "scene" | "plugin";
+export type ToolId = "adjust" | "audio" | "speed" | "link" | "to-main" | "colour" | "fx" | "style" | "anim" | "subs" | "params" | "code" | "edit-audio" | "scene" | "plugin" | "plugin-params";
 export type ToolRef = ToolId | ToolId[];
 
 export interface ClipTypeUi {
@@ -223,23 +223,28 @@ export const PLUGIN_CLIP_UI: ResolvedClipTypeUi = {
   inspectorIcon: "puzzle",
   inspectorTitle: (p) => `Plugin “${pluginMetaOf(p.clipType)?.name ?? p.clipType}”`,
   inspectorTabs: ["plugin", "transition"],
-  toolbar: ["plugin", "link", "to-main"],
-  toolbarMain: ["plugin"],
+  toolbar: ["plugin-params", "plugin", "link", "to-main"],
+  toolbarMain: ["plugin-params", "plugin"],
   speed: false,
   volume: false,
   body: (p) => {
-    const name = pluginMetaOf(p.clipType)?.name ?? p.clipType;
+    const meta = pluginMetaOf(p.clipType);
+    const name = meta?.name ?? p.clipType;
+    // P87: the plugin's own line icon, and the clip's first non-empty text setting (say a title) after the name.
+    const icon = <Ic g={pluginIconKey(meta?.icon)} size={12} />;
+    const text = meta ? Object.entries(meta.params).find(([k, d]) => d.type === "text" && typeof p.plugin?.data?.params?.[k] === "string" && String(p.plugin?.data?.params?.[k]).trim())?.[0] : undefined;
+    const sub = text ? <span className="v2-clip-sub"> · {String(p.plugin!.data!.params![text]).trim()}</span> : null;
     // P85: an enabled plugin draws in its sandbox, so its card is a plain named card.
     if (isPluginEnabled(p.clipType)) {
       // P86: a clip whose plugin stopped in the preview says so on its card too.
       const stop = pluginStatus.stopped(p.id);
       return stop
-        ? <span className="v2-clip-name v2-ph" title={`Plugin “${name}” stopped: it hung or failed. Select the clip and choose Retry.`}><Ic g="puzzle" size={12} /><span className="v2-ph-label">{name}</span><span className="v2-ph-state is-stopped">Stopped</span></span>
-        : <span className="v2-clip-name" title={`Plugin “${name}”`}><Ic g="puzzle" size={12} /> {name}</span>;
+        ? <span className="v2-clip-name v2-ph" title={`Plugin “${name}” stopped: it hung or failed. Select the clip and choose Retry.`}>{icon}<span className="v2-ph-label">{name}</span><span className="v2-ph-state is-stopped">Stopped</span></span>
+        : <span className="v2-clip-name" title={`Plugin “${name}”${meta ? ` ${meta.version}` : ""}`}>{icon} {name}{sub}</span>;
     }
     return (
       <span className="v2-clip-name v2-ph" title={`Plugin “${name}” is not enabled. Its settings are kept; it shows as a slate and exports as a black frame.`}>
-        <Ic g="puzzle" size={12} /><span className="v2-ph-label">{name}</span><span className="v2-ph-state">Not enabled</span>
+        {icon}<span className="v2-ph-label">{name}</span><span className="v2-ph-state">Not enabled</span>
       </span>
     );
   },

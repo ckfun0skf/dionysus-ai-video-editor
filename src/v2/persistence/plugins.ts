@@ -14,7 +14,7 @@
  * - The device library (IndexedDB `dionysus-plugins`): packages by hash for reuse across projects, and trust per
  *   project, per hash (decision 12). The UI for both comes in P86.
  */
-import { PLUGIN_API, PLUGIN_LIMITS, PLUGIN_MANIFEST_FILE, checkPluginFiles, parsePluginManifest, pluginLocks, setPluginLock, type PluginIssue, type PluginLock, type PluginManifest, type Project } from "../domain";
+import { PLUGIN_API, PLUGIN_LIMITS, comparePluginVersions, PLUGIN_MANIFEST_FILE, checkPluginFiles, parsePluginManifest, pluginLocks, setPluginLock, type PluginIssue, type PluginLock, type PluginManifest, type Project } from "../domain";
 import { CLIP_TYPES, pluginCoreOf, setPluginIssues, setPluginsEnabled, type ClipTypeCore, type PluginIssueState } from "../clipTypes";
 import type { BlobStore } from "../ports/storage";
 import { Sha256 } from "./archive/sha256";
@@ -71,7 +71,7 @@ export async function pluginPackageFrom(manifestBytes: Uint8Array, present: read
   const { manifest, issues } = parsePluginManifest(text, opts);
   if (!manifest) {
     const errs = issues.filter((i) => i.level === "error");
-    const newer = errs.find((i) => i.path === "api" && /needs host API/.test(i.message));
+    const newer = errs.find((i) => i.path === "api" && /needs a newer Dionysus/.test(i.message));
     throw new PluginPackageError(newer ? newer.message : `The plugin's manifest has ${errs.length} problem${errs.length === 1 ? "" : "s"}: ${errs.slice(0, 3).map((i) => `${i.path || "manifest"}: ${i.message}`).join(" ")}`, issues);
   }
   const fileIssues = checkPluginFiles(manifest, present);
@@ -198,14 +198,21 @@ export async function storePluginPackage(pkg: PluginPackage, blobs: BlobStore): 
 }
 
 /**
- * P86: why a package can't be added to this project as is, if it can't: the same id is already locked at another
- * version (updating a project's plugin comes in P87), or at the same version with other contents (a conflict).
+ * P86: why a package can't be added to this project as is, if it can't: the same id is already locked at the same
+ * version with other contents (a conflict). Another version is a switch (P87: update or downgrade, see `pluginSwitchOf`).
  */
 export function pluginProjectProblem(project: Pick<Project, "plugins">, pkg: Pick<PluginPackage, "manifest" | "hash">): string | undefined {
   const old = project.plugins?.[pkg.manifest.id];
   if (!old || old.hash === pkg.hash) return undefined;
   if (old.version === pkg.manifest.version) return `This project already uses “${old.name}” ${old.version} with different contents. A changed plugin needs a new version number.`;
-  return `This project uses “${old.name}” ${old.version}. Switching a project to another version of a plugin isn't available yet.`;
+  return undefined;
+}
+
+/** P87: whether adding `pkg` to the project switches the version it uses: "update" (newer) or "downgrade" (older). */
+export function pluginSwitchOf(project: Pick<Project, "plugins">, pkg: Pick<PluginPackage, "manifest" | "hash">): { kind: "update" | "downgrade"; from: string } | undefined {
+  const old = project.plugins?.[pkg.manifest.id];
+  if (!old || old.hash === pkg.hash || old.version === pkg.manifest.version) return undefined;
+  return { kind: comparePluginVersions(pkg.manifest.version, old.version) > 0 ? "update" : "downgrade", from: old.version };
 }
 
 // ---------------------------------------------------------------- loading the open project's plugins
@@ -242,7 +249,7 @@ export async function loadProjectPlugins(project: Pick<Project, "plugins">, blob
       cores.push(core);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      issues.set(id, { state: /needs host API/.test(message) ? "newer" : "damaged", name: lock.name, message });
+      issues.set(id, { state: /needs a newer Dionysus/.test(message) ? "newer" : "damaged", name: lock.name, message });
     }
   }
   return { cores, issues };
