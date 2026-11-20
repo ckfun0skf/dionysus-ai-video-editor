@@ -259,3 +259,98 @@ describe("P81b scene editor: the camera and lights as their own tracks", () => {
     t.done();
   });
 });
+
+describe("P82 scene editor: Script objects", () => {
+  const typeCode = async (t: Awaited<ReturnType<typeof open>>, code: string) => {
+    const ta = t.el.querySelector<HTMLTextAreaElement>('textarea[aria-label="Script code"]')!;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta, code);
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); });
+    await settle();
+  };
+
+  it("Add object offers the script templates; one adds a Script object, selected, with its own track, params and code", async () => {
+    const t = await open();
+    await t.click(t.button(/^Add object$/));
+    const items = [...t.el.querySelectorAll<HTMLElement>("[data-template]")];
+    expect(items.map((b) => b.textContent!.trim())).toEqual(["Particles", "Procedural shape", "Text", "Empty script"]);
+    await t.click(items[0]);
+    const o = t.work().objects.at(-1)!;
+    expect(o).toMatchObject({ id: "particles", script: { file: "particles.js" } });
+    const track = [...t.el.querySelectorAll<HTMLElement>(".v2-sed-track")].find((x) => x.querySelector(".v2-sed-tname span")?.textContent === "particles")!;
+    expect(track.className).toMatch(/kind-script/);
+    expect(track.querySelector(".v2-sed-tadd")).toBeTruthy(); // Script objects take events like any object
+    const form = t.q('[data-testid="script-form"]');
+    expect(form).toBeTruthy();
+    expect(t.el.querySelector<HTMLTextAreaElement>('textarea[aria-label="Script code"]')!.value).toMatch(/export function build/);
+    expect(t.field("count").value).toBe("600");
+    await t.typeIn(t.field("count"), "120");
+    expect(t.work().objects.at(-1)!.script!.params!.count).toBe(120);
+    // Size and colour only drew the shape, so a Script object shows the fallback shape instead.
+    expect(t.field("Shape if the script fails")).toBeTruthy();
+    t.done();
+  });
+
+  it("code is checked as you type (Apply stays off on a problem), applied as one undo step, and Revert puts it back", async () => {
+    const t = await open();
+    await t.click(t.button(/^Add object$/));
+    await t.click(t.el.querySelector('[data-template="empty"]')!);
+    const apply = () => t.button(/^Apply code$/) as HTMLButtonElement;
+    expect(apply().disabled).toBe(true);
+    await typeCode(t, 'import x from "y";\nexport function build( {');
+    const probs = t.el.querySelector('[aria-label="Code problems"]')!.textContent!;
+    expect(probs).toMatch(/can't import/);
+    expect(probs).toMatch(/Syntax error/);
+    expect(apply().disabled).toBe(true);
+    expect(t.el.textContent).toMatch(/Not applied/);
+    const code = "export function build(THREE) { return new THREE.Group(); }\n";
+    await typeCode(t, code);
+    expect(t.el.querySelector('[aria-label="Code problems"]')).toBeNull();
+    await t.click(apply());
+    const { sceneScriptCode } = await import("../domain");
+    expect(sceneScriptCode(t.work(), "empty")).toBe(code);
+    expect(t.button(/^Undo$/).getAttribute("title")).toBe("Undo script code");
+    await typeCode(t, code + "// more\n");
+    await t.click(t.button(/^Revert$/));
+    expect(t.el.querySelector<HTMLTextAreaElement>('textarea[aria-label="Script code"]')!.value).toBe(code);
+    await t.undo();
+    expect(t.el.querySelector<HTMLTextAreaElement>('textarea[aria-label="Script code"]')!.value).toMatch(/TorusKnotGeometry/);
+    t.done();
+  });
+
+  it("params can be added and removed; a template replaces code and params; a script can become a plain shape again", async () => {
+    const t = await open();
+    await t.click(t.button(/^Add object$/));
+    await t.click(t.el.querySelector('[data-template="empty"]')!);
+    const name = t.el.querySelector<HTMLInputElement>('input[aria-label="New param name"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "1x"); name.dispatchEvent(new Event("input", { bubbles: true })); });
+    expect(t.el.textContent).toMatch(/Letters, digits and _/);
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(name, "speed"); name.dispatchEvent(new Event("input", { bubbles: true })); });
+    await t.click(t.button(/^Add$/));
+    expect(t.work().objects.at(-1)!.script!.params).toEqual({ color: "#5ad1c8", spin: 0.8, speed: 0 });
+    await t.click(t.button(/^Remove param spin$/));
+    expect(t.work().objects.at(-1)!.script!.params).toEqual({ color: "#5ad1c8", speed: 0 });
+    await t.choose(t.el.querySelector<HTMLSelectElement>('select[aria-label="Template"]')!, "text");
+    await t.click(t.button(/^Use template$/));
+    expect(t.work().objects.at(-1)!.script!.params).toMatchObject({ text: "Hello" });
+    await t.click(t.button(/^Turn into a plain shape$/));
+    expect(t.work().objects.at(-1)!.script).toBeUndefined();
+    expect(t.work().files).toBeUndefined();
+    expect(t.q('[data-testid="script-form"]')).toBeNull();
+    t.done();
+  });
+
+  it("on the phone a Script object has a Script tool that opens its code in a sheet", async () => {
+    const t = await open({ mobile: true });
+    await t.click(t.button(/^Add object$/));
+    await t.click(t.el.querySelector('[data-template="shape"]')!);
+    const tools = [...t.el.querySelectorAll("nav.v2-sed-ctx .v2-toolbar-scroll button")].map((b) => b.textContent);
+    expect(tools).toEqual(["Properties", "Script", "Add event", "Delete"]);
+    await t.click(t.button(/^Script$/));
+    expect(t.q('[data-testid="script-form"]')).toBeTruthy();
+    expect(t.el.querySelector('textarea[aria-label="Script code"]')).toBeTruthy();
+    t.done();
+  });
+});

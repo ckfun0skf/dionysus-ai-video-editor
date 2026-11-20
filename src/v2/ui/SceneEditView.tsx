@@ -23,7 +23,14 @@ export interface SceneEditViewProps {
   lights?: SceneLight[];
   /** P81b: the clip's width / height (the camera frustum's shape). */
   aspect?: number;
+  /**
+   * P82: what the page reported about Script objects (failed, stopped or slow), each time the list grows; an empty list
+   * when the page is rebuilt.
+   */
+  onScriptIssues?(issues: SceneScriptIssue[]): void;
 }
+/** P82: one problem the Edit view page had running a Script object. */
+export interface SceneScriptIssue { id: string; message: string }
 
 const PHASES: readonly EditDragPhase[] = ["start", "move", "end", "cancel"];
 
@@ -34,15 +41,15 @@ const PHASES: readonly EditDragPhase[] = ["start", "move", "end", "cancel"];
  * message. Messages from the page are taken only from its own window, and only with known ids (objects, `camera`,
  * `camera:target`, `light:<i>` of a light with a position) and finite numbers.
  */
-export function SceneEditView({ doc, state, sel, opts, touch, onPick, onDrag, api, lights = [], aspect = 16 / 9 }: SceneEditViewProps) {
+export function SceneEditView({ doc, state, sel, opts, touch, onPick, onDrag, api, lights = [], aspect = 16 / 9, onScriptIssues }: SceneEditViewProps) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [ready, setReady] = useState(false);
   const key = sceneEditPageKey(doc);
   // The page for this key, built from the scene the key was first seen with.
   const docRef = useRef(doc); docRef.current = doc;
   const srcDoc = useMemo(() => withRuntime(sceneEditPage(docRef.current)), [key]); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => { setReady(false); }, [srcDoc]);
-  const cb = useRef({ onPick, onDrag }); cb.current = { onPick, onDrag };
+  const cb = useRef({ onPick, onDrag, onScriptIssues }); cb.current = { onPick, onDrag, onScriptIssues };
+  useEffect(() => { setReady(false); cb.current.onScriptIssues?.([]); }, [srcDoc]);
   const ids = useRef(new Set<string>());
   ids.current = new Set([...state.objects.map((o) => o.id), SCENE_CAMERA, GIZMO_CAMERA_TARGET, ...lights.flatMap((l, i) => (lightHasPosition(l) ? [gizmoLightId(i)] : []))]);
   const lightsKey = JSON.stringify(lights);
@@ -55,6 +62,14 @@ export function SceneEditView({ doc, state, sel, opts, touch, onPick, onDrag, ap
       const d = e.data as { type?: unknown; id?: unknown; phase?: unknown; value?: unknown } | null;
       if (!d || typeof d !== "object") return;
       if (d.type === "scene-edit:ready") { setReady(true); return; }
+      if (d.type === "scene-edit:script-issues") {
+        const list = (d as { issues?: unknown }).issues;
+        if (!Array.isArray(list)) return;
+        const out = list.slice(0, 50).filter((x): x is SceneScriptIssue => !!x && typeof x === "object" && typeof (x as SceneScriptIssue).id === "string" && typeof (x as SceneScriptIssue).message === "string" && ids.current.has((x as SceneScriptIssue).id))
+          .map((x) => ({ id: x.id, message: x.message.slice(0, 400) }));
+        cb.current.onScriptIssues?.(out);
+        return;
+      }
       if (d.type === "scene-edit:pick") {
         if (d.id === null) cb.current.onPick(null);
         else if (typeof d.id === "string" && ids.current.has(d.id)) cb.current.onPick(d.id);

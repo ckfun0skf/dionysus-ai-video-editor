@@ -52,7 +52,7 @@ This is close to the scene a new clip starts with (Code → **3D scene**).
 | `world.lights[]` | `{ id?, type, color, intensity, position }` | `type`: `ambient`, `hemisphere`, `directional`, `point`; no lights = a hemisphere and a directional light. `id` (optional, P81b) names a light: letters, digits, `_`, `-`, unique among objects and lights, not `camera`. Lights are static: no events animate them (an event naming a light is an error) |
 | `objects[]` | object | see below |
 | `events[]` | `{ at, obj, call, args, dur, ease }` | see below |
-| `files` | `{ "<name>": "data:…" }` | embedded files (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package |
+| `files` | `{ "<name>": "data:…" }` | embedded files (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package; since P82 also Script objects' code (`data:text/javascript;charset=utf-8;base64,…`) |
 
 **Objects.** `id` (letters, digits, `_`, `-`; starts with a letter; `camera` is reserved), `shape` (`box` default,
 `sphere`, `cylinder`, `cone`, `torus`, `plane`), `size` (box `[w, h, d]` or one number; sphere radius; cylinder and
@@ -80,6 +80,45 @@ the file's units. `scale`, `position`, `rotation`, `visible` and `opacity` apply
   "events": [{ "at": 1, "obj": "robot", "call": "setState", "args": { "state": "walk" }, "dur": 0.4 },
              { "at": 3, "obj": "robot", "call": "play", "args": { "clip": "Wave", "loop": "once", "fade": 0.3 } }] }
 ```
+
+**Script objects** (P82). `script: { "file", "params"? }` makes an object drawn by your own three.js code: `file`
+names a JavaScript file in `files` (a data: URL, UTF-8, up to 256 KB), `params` is a map of plain names (letters,
+digits, `_`) to numbers, text (up to 2000 characters) or `true` / `false`. An object has a `model` or a `script`, not
+both. The file is an ES module that exports
+
+- `build(THREE, params, ctx)`: called once when the page is built (it may be `async`); returns a `THREE.Object3D`
+  (a Mesh, Points, Group…) built around (0, 0, 0);
+- `update(obj, t, params, ctx)` (optional): called for every frame with the scene time `t` in seconds. It must set
+  the object from `t` (and `params`) alone, never from the frame before, so preview, export and any seek order give
+  the same picture.
+
+`ctx` has `id` (the object's id), `random(seed?)` (a new seeded generator: the same numbers every time for one object
+and seed; never use `Math.random`) and `makeCanvas(w, h)` (an OffscreenCanvas up to 4096 px a side, e.g. for a
+`CanvasTexture`). Scripts can't import anything (THREE is passed in) and run only in the sandboxed scene page (opaque
+origin, the clip CSP: no network, no editor, no storage). The object's base properties (`position`, `rotation`,
+`scale`, `visible`, `opacity`; opacity multiplies the script's own material opacity) and its events work as for any
+object; `shape` is what is drawn when the script can't run (`size` and `color` only affect that shape).
+
+```json
+{ "files": { "sparks.js": "data:text/javascript;charset=utf-8;base64,…" },
+  "objects": [{ "id": "sparks", "script": { "file": "sparks.js", "params": { "count": 600, "color": "#ffd36b" } }, "position": [0, 0, 0] }],
+  "events": [{ "at": 2, "obj": "sparks", "call": "opacity", "args": { "value": 0 }, "dur": 1 }] }
+```
+
+Templates to start from (the scene editor's **Add object** menu, and `set_scene_script`'s `template`): **Particles**
+(`particles`: a swirl of rising points; `count`, `color`, `size`, `radius`, `height`, `rise`, `swirl`), **Procedural
+shape** (`shape`: a sphere whose surface wobbles; `radius`, `detail`, `color`, `wobble`, `speed`, `faceted`), **Text**
+(`text`: words on a plane, typed on over time; `text`, `color`, `size`, `width`, `typeSpeed`) and **Empty script**
+(`empty`: a commented torus knot that spins; `color`, `spin`).
+
+The validator checks the script statically: the file is in `files` (else a warning; the shape is drawn), readable as
+UTF-8 text, under 256 KB, has no `import`, exports `build`, and compiles (a syntax error names the line); params are
+checked as above. The page then runs each script once in a **check worker** (build, then update at a few times) under
+a 3 s limit before it builds it: a script that takes longer (an endless loop) is stopped there and never freezes the
+page or an export. A script that fails to load or build, returns something that is not an `Object3D`, or can't be
+checked draws its shape; one whose `update` throws keeps what it has; an `update` slower than 250 ms per frame is
+reported. Each problem is reported once: to the player as an asset problem, and in the scene editor's Edit view to
+the object's Script form.
 
 The Scene tab's **Add GLB model** embeds a `.glb` (a new version of the scene asset, one undo step) and adds an object
 that stands in front of the camera and plays the file's first animation.
@@ -121,7 +160,8 @@ from }`; it cross-fades over the event's `dur`) and `nodes` (switches at `at`).
 unknown objects or functions, wrong argument types, unknown params, negative times, bad colours, sizes or shapes,
 duplicate ids, overlapping tweens of one property (warning), models that are missing, not GLB or unreadable (warning),
 clip and node names the GLB does not have (warning), and `play` / `stop` / `nodes` / `animation` on objects without a
-model (error). The renderer skips anything
+model (error), and for Script objects (P82) a missing file (warning), unreadable or too long code, imports, no `build`
+export, syntax errors, bad params, unknown `script` fields and `model` with `script` (errors). The renderer skips anything
 invalid instead of failing, and the clip's **Scene** tab in the inspector lists the problems. A document that is not
 JSON or has the wrong `format` shows a slate ("This 3D scene can't be read") in the preview and black in export.
 
@@ -139,7 +179,13 @@ has one `AnimationMixer`; every frame stops all actions (the rest pose), resets 
 one's weight and its time scale to its local time, and calls `mixer.setTime(1)`, never `mixer.update(delta)`. So a
 frame depends only on the document and `t`, in preview, export and any seek order.
 
-## Editing (P76, P77, P80, P81a, P81b)
+Script objects (P82): the manifest carries `files` (and only `three` when no object has a model); `init` checks each
+script in a classic worker (a blob: URL that imports three.js and the script; a module worker can't start from the
+page's opaque origin), terminating it after 3 s, then imports it in the page (a blob: URL), calls `build` and puts the
+result in a group that gets the object's transform. Every frame calls `update(obj, t, …)` with the state's `t`. The
+check worker's time limits are the page's only timers, and they run before the first frame.
+
+## Editing (P76, P77, P80, P81a, P81b, P82)
 
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
@@ -171,7 +217,7 @@ version picker, a project undo), a banner says so: the unsaved work is kept and 
 at the top and the tracks below it; a bottom toolbar (44 px targets, line icons) holds the actions for the selection,
 and a section opens in a bottom sheet: the scene (Add object, Scene, Camera, Lights), the camera (Start, Add event, and
 Move / Aim, which open the Edit view on its position or its look-at point), a light (Light, Move for directional and
-point lights, Delete), an object (Properties, Animation for models, Add event, Delete) or an event (Timing, Values, Go
+point lights, Delete), an object (Properties, Animation for models, Script for Script objects, Add event, Delete) or an event (Timing, Values, Go
 to, Duplicate, Delete), with Back to return to the scene. Esc closes an open sheet first. On desktop the side panel shows the whole form, with Cancel and Save in the
 header.
 
@@ -194,7 +240,8 @@ mirrored preview's place and is taller. Click or tap an object to select it (emp
 drag to orbit, right-drag to pan, wheel to zoom. Touch: one finger on a gizmo handle drags it, elsewhere it orbits;
 two fingers pan and zoom; the handles are larger. A floating chip bar holds **Move / Rotate / Scale** (also W / E /
 R), the axis (**X / Y / Z / Free**), **Snap** (0.25 units, 15°, 0.1 scale steps), **Auto-key** and **Reset view**; a
-line at the top says where the next drag writes and shows the live values while dragging. A drag is one step of the
+line says where the next drag writes and shows the live values while dragging (since P82: a small pill at the top
+right on desktop, and on the phone a strip under the view, so it never covers handles near the top). A drag is one step of the
 editor's undo, and nothing is stored until Save. It writes in exactly one place:
 
 - the **selected event**, when it is on that object and sets the dragged property (`moveTo` / `position`, `rotation`,
@@ -220,6 +267,17 @@ camera key ending at the playhead, else `world.camera.position` / `world.camera.
 `position` (lights don't animate; a scene on the default lights gets them written out first). A light's colour,
 intensity and position are sent with the state, so moving one does not rebuild the view's page.
 
+**Script objects in the editor (P82).** **Add object** (two columns: the shapes, a GLB model, then **Script (three.js
+code)** with the four templates) adds a Script object in front of the camera and selects it; its track has a code
+icon and takes events like any object. Its form has the usual properties (with **Shape if the script fails** instead of
+shape, size and colour) and a **Script** section: the params (numbers, text, switches and colours, each with a remove
+button; **New param** with a kind adds one), the code in a monospace box (Tab indents, Esc leaves the box, Ctrl / ⌘ +
+Enter applies), **Apply code** and **Revert**, **Start again from a template** and **Turn into a plain shape**. The
+static checks run as you type and keep **Apply code** off until they pass; what the Edit view's page reports when it
+runs the script (an error in `update`, the 3 s limit) is listed under the code until the page is rebuilt. Applying
+code, a param change, a template or turning it back into a shape is one step of the editor's undo. On the phone the
+object's toolbar has **Script**, which opens this section in a sheet.
+
 ## Agent tools (P78)
 
 Agents edit scene clips through WebMCP tools contributed by the scene clip type (see [`WEB_MCP.md`](WEB_MCP.md) for
@@ -239,6 +297,7 @@ the schemas) and AI guide RULE 79:
 | `remove_scene_event` | Removes an event by index. |
 | `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults). |
 | `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`; omit `light` to add one, `remove: true` to delete it. |
+| `set_scene_script` (P82) | Script objects: omit `objectId` to add one from `template` (`particles`, `shape`, `text`, `empty`) or `code` (with optional `id`, `params`, `position`); with `objectId` set its `code`, `template` (code and params) or `params` (replaces the map; `null` removes them), or `remove: true` to make it a plain shape. Code with static problems is refused with them listed. `list_scene_objects` gives each Script object's code and the templates. |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 
 Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message

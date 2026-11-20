@@ -9,6 +9,8 @@ import {
   setSceneEventCall, sourceAt, ticksToSeconds, TICKS_PER_SECOND, updateSceneEvent, updateSceneLight, updateSceneObject, updateSceneWorld,
   validateScene, versionOfPlacement, type Placement, type Project, type SceneArgField, type SceneDoc, type SceneEase, type SceneEvent,
   type SceneIssue, type SceneLightType, type SceneObject, type SceneShape, type SceneTrack, type Vec3, type RetimeEdge, type RetimeOptions,
+  addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, SCRIPT_PARAM_RE, sceneScriptCode, scriptProblems, setSceneScriptCode, setSceneScriptParams,
+  type SceneScriptParams,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -16,7 +18,7 @@ import { readAttachedFiles } from "./CodeEditor";
 import { Ic } from "./Icon";
 import { cachedSceneDoc, rememberSceneDoc, sceneVersion } from "./sceneAsset";
 import { sceneDraftKey, sceneDrafts, type SceneDraft, type SceneDraftStore } from "./sceneDrafts";
-import { SceneEditView, type EditDragPhase, type EditViewApi, type EditViewOpts } from "./SceneEditView";
+import { SceneEditView, type EditDragPhase, type EditViewApi, type EditViewOpts, type SceneScriptIssue } from "./SceneEditView";
 import { Sheet } from "./Sheet";
 import { ConfirmDialog } from "./Timeline";
 
@@ -98,6 +100,8 @@ export function SceneEditor(props: SceneEditorProps) {
   const [loaded, setLoaded] = useState<{ key: string; doc?: SceneDoc; error?: string }>();
   const [sel, setSel] = useState<SceneSel>(props.initialSel ?? { kind: "scene" });
   const [note, setNote] = useState<string>();
+  /** P82: what the Edit view page reported about Script objects (errors, time limits), until it is rebuilt. */
+  const [scriptIssues, setScriptIssues] = useState<SceneScriptIssue[]>([]);
   const [busy, setBusy] = useState(false);
   const [adding, setAdding] = useState(false);
   const [pps, setPps] = useState(mobile ? 64 : 96);
@@ -457,12 +461,12 @@ export function SceneEditor(props: SceneEditorProps) {
   const selObj = sel.kind === "object" ? doc.objects.find((o) => o.id === sel.id) : undefined;
   const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
   /** P81b: only the camera and objects have events (the Scene track is settings, lights are static). */
-  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model";
+  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script";
   const addEventOn = (t: SceneTrack) => {
     const call = "moveTo";
     void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, t.id, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; });
   };
-  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : "scene");
+  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : t.kind === "script" ? "</>" : "scene");
 
   const tracksEl = (
     <div ref={tracksRef} className={`v2-sed-tracks ${draft ? "is-dragging" : ""}`} role="group" aria-label="Scene tracks">
@@ -526,7 +530,7 @@ export function SceneEditor(props: SceneEditorProps) {
   const selLight: SceneLight | undefined = sel.kind === "light" ? sceneLights(doc).lights[sel.index] : undefined;
   const form = (pt?: Part) => sel.kind === "event" && selEventNow
     ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(selEventNow.obj === SCENE_CAMERA ? { kind: "camera" } : { kind: "object", id: selEventNow.obj })} atNow={atNow} />
-    : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} />
+    : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} runIssues={scriptIssues.filter((x) => x.id === selObj.id)} />
       : sel.kind === "camera" ? <CameraForm doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} />
         : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} onDeleted={() => setSel({ kind: "scene" })} />
           : <SceneForm doc={doc} edit={edit} part={pt} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} />;
@@ -540,7 +544,11 @@ export function SceneEditor(props: SceneEditorProps) {
   const addMenu = (
     <div className="v2-sed-addmenu" role="menu" aria-label="Add object">
       {SCENE_SHAPES.map((s) => <button key={s} type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); void edit(`add ${s}`, (d) => { const r = addSceneObject(d, s); return { doc: r.doc, sel: { kind: "object", id: r.id } }; }); }}><Ic g="scene" size={16} /> {s[0].toUpperCase() + s.slice(1)}</button>)}
-      <button type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); fileInput.current?.click(); }}><Ic g="⇪" size={16} /> GLB model…</button>
+      <button type="button" role="menuitem" className="v2-sed-addglb" onClick={() => { setAdding(false); setPart(undefined); fileInput.current?.click(); }}><Ic g="⇪" size={16} /> GLB model…</button>
+      <p className="v2-sed-addhead" role="presentation"><Ic g="</>" size={14} /> Script (three.js code)</p>
+      {SCENE_SCRIPT_TEMPLATES.map((t) => <button key={t.id} type="button" role="menuitem" title={t.description} data-template={t.id}
+        onClick={() => { setAdding(false); setPart(undefined); void edit(`add ${t.label.toLowerCase()} script`, (d) => { const r = addSceneScript(d, t.id); return { doc: r.doc, sel: { kind: "object", id: r.id }, note: `Added “${r.id}”, a Script object (${t.label}). Its code and params are under Script.` }; }); }}>
+        <Ic g={SCRIPT_ICON[t.id] ?? "</>"} size={16} /> {t.label}</button>)}
     </div>
   );
   const toolbar = (
@@ -617,10 +625,12 @@ export function SceneEditor(props: SceneEditorProps) {
     : gzSel ? `Drag writes ${gizmoTargetLabel(doc, gzSel, gzMode, gzO)}${viewAt !== atNow ? ` · showing ${viewAt}s` : ""}`
       : sel.kind === "light" ? `${selLight ? sceneLightLabel(selLight, sel.index) : "This light"} is ${selLight?.type ?? "a"} light: it lights from everywhere, so it has nothing to move`
       : mobile ? "Tap an object to select it · one finger orbits · two fingers pan and zoom" : "Click an object to select it · drag to orbit · right-drag to pan · wheel to zoom";
+  // P82: on the phone the hint is a strip under the Edit view (over the 3D view it covered handles near the top).
+  const gzInfoEl = <p className={`v2-sed-gzinfo${mobile ? " is-strip" : ""}`} role="status" data-testid="scene-gizmo-info" title={gzInfo}>{gzInfo}</p>;
   const editView = view === "edit" && (
     <div className="v2-sed-editview" data-testid="scene-edit-view">
       <SceneEditView doc={editDoc} state={viewState.current.s} sel={gzSel} opts={gzOpts} touch={mobile} onPick={onPick} onDrag={onGizmo} api={viewApi}
-        lights={editLights} aspect={aspect} />
+        lights={editLights} aspect={aspect} onScriptIssues={setScriptIssues} />
       {gzSel === SCENE_CAMERA || gzSel === GIZMO_CAMERA_TARGET ? <div className="v2-sed-chips is-modes" role="toolbar" aria-label="Camera gizmo">
         {gzChip("Move camera", "camera", camPart === "position", () => setCamPart("position"), "Move the camera (its position)", false)}
         {gzChip("Move look-at point", "track", camPart === "target", () => setCamPart("target"), "Move the point the camera looks at", false)}
@@ -638,7 +648,7 @@ export function SceneEditor(props: SceneEditorProps) {
         {gzChip("Auto-key", "key", gz.autoKey, () => setGz((g) => ({ ...g, autoKey: !g.autoKey })), "Auto-key: a drag adds or updates an event that ends at the playhead (else it changes the start value)")}
         {gzChip("Reset view", "focus", false, () => viewApi.current?.home(), "Back to the starting view: the scene camera and what it looks at")}
       </div>
-      <p className="v2-sed-gzinfo" role="status" data-testid="scene-gizmo-info">{gzInfo}</p>
+      {!mobile && gzInfoEl}
     </div>
   );
   const viewHost = !mobile && editView ? props.viewHost?.() : undefined;
@@ -656,6 +666,7 @@ export function SceneEditor(props: SceneEditorProps) {
   ] : sel.kind === "object" && selObj ? [
     ctxTool("⤧", "Properties", () => open("props"), { on: part === "props", title: "Id, shape, size, colour, position, rotation, scale, visibility" }),
     ...(typeof selObj.model === "string" ? [ctxTool("anim-loop", "Animation", () => open("model"), { on: part === "model", title: "The model's animation and parts from 0 s" })] : []),
+    ...(selObj.script ? [ctxTool("</>", "Script", () => open("script"), { on: part === "script", title: "The object's three.js code and params" })] : []),
     ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add an event at the playhead (${atNow}s)` }),
     ctxTool("🗑", "Delete", () => { const id = selObj.id; void edit("delete object", (d) => { const r = removeSceneObject(d, id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; }); }, { danger: true, title: "Delete this object and its events" }),
   ] : sel.kind === "camera" ? [
@@ -668,7 +679,7 @@ export function SceneEditor(props: SceneEditorProps) {
     ...(lightHasPosition(selLight) ? [ctxTool("move3d", "Move", () => setView("edit"), { on: view === "edit", title: "Move it in the Edit view" })] : []),
     ctxTool("🗑", "Delete", () => { const i = sel.index; void edit("delete light", (d) => removeSceneLight(d, i)); setSel({ kind: "scene" }); }, { danger: true, title: "Delete this light" }),
   ] : [
-    ctxTool("＋", "Add object", () => open("add"), { on: part === "add", title: "Add a shape or a GLB model" }),
+    ctxTool("＋", "Add object", () => open("add"), { on: part === "add", title: "Add a shape, a GLB model or a Script object" }),
     ctxTool("settings", "Scene", () => open("scene"), { on: part === "scene", title: "Name, planned length, background" }),
     ctxTool("camera", "Camera", () => setSel({ kind: "camera" }), { title: "Select the camera" }),
     ctxTool("light", "Lights", () => open("lights"), { on: part === "lights", title: "Lights" }),
@@ -720,6 +731,7 @@ export function SceneEditor(props: SceneEditorProps) {
       {header}
       {banner}
       {mobile && (editView || (mirror && <Mirror source={mirror} />))}
+      {mobile && editView && gzInfoEl}
       {!mobile && editView && (viewHost ? createPortal(editView, viewHost) : editView)}
       {toolbar}
       {mobile ? <>
@@ -751,8 +763,8 @@ const MAX_UNDO = 200;
 /** P80: autosave delay after the last edit. */
 export const DRAFT_DELAY_MS = 600;
 /** P80 (phone): the form sections the context toolbar opens in a sheet. */
-export type Part = "add" | "scene" | "camera" | "lights" | "light" | "props" | "model" | "addEvent" | "timing" | "args";
-const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", props: "Properties", model: "Animation", addEvent: "Add event", timing: "Timing", args: "Values" };
+export type Part = "add" | "scene" | "camera" | "lights" | "light" | "props" | "model" | "script" | "addEvent" | "timing" | "args";
+const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", props: "Properties", model: "Animation", script: "Script", addEvent: "Add event", timing: "Timing", args: "Values" };
 
 function draftNote(d: SceneDraft, work: Work | undefined, versions: { id: string }[]): string {
   if (!work || d.baseBlobKey === work.baseKey) return "You closed the editor without saving. Restore the draft to keep working on it, or discard it.";
@@ -873,10 +885,11 @@ function LightForm({ doc, index: i, light: l, issues, edit, part, onDeleted }: {
   </div>;
 }
 
-function ObjectForm({ doc, obj, issues, edit, atNow, part }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; edit: Edit; atNow: number; part?: Part }) {
+function ObjectForm({ doc, obj, issues, edit, atNow, part, runIssues = [] }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; edit: Edit; atNow: number; part?: Part; runIssues?: SceneScriptIssue[] }) {
   const all = !part;
   const k = doc.objects.indexOf(obj);
   const model = typeof obj.model === "string";
+  const script = !!obj.script;
   const anims = model ? modelAnimations(doc, obj.model) : undefined;
   const nodes = model ? modelNodes(doc, obj.model) : undefined;
   const calls = sceneCalls(doc, obj.id);
@@ -886,16 +899,16 @@ function ObjectForm({ doc, obj, issues, edit, atNow, part }: { doc: SceneDoc; ob
   const anim = typeof obj.animation === "string" ? { clip: obj.animation } : obj.animation;
   const scale = obj.scale === undefined ? 1 : obj.scale;
   return <div className="v2-sed-form" data-testid="object-form">
-    {all && <h4><Ic g="scene" size={16} /> {obj.name || obj.id} <small>{model ? `model ${obj.model}` : obj.shape ?? "box"}</small></h4>}
+    {all && <h4><Ic g={script ? "</>" : "scene"} size={16} /> {obj.name || obj.id} <small>{model ? `model ${obj.model}` : script ? `script ${obj.script!.file}` : obj.shape ?? "box"}</small></h4>}
     {(all || part === "props") && <>
       <TextField label="Id" value={obj.id} error={idErr} onCommit={(v) => {
         const why = objectIdProblem(doc, obj.id, v); setIdErr(why);
         if (!why && v !== obj.id) void edit("rename object", (d) => { const r = renameSceneObject(d, obj.id, v); return { doc: r.doc, sel: { kind: "object", id: v } }; });
       }} />
       <TextField label="Name" value={obj.name ?? ""} onCommit={(v) => set("object name", { name: v || undefined })} />
-      {!model && <SelectField label="Shape" value={obj.shape ?? "box"} options={[...SCENE_SHAPES]} onCommit={(v) => set("shape", { shape: v as SceneShape })} />}
-      <ListField label={model ? "Fit size" : "Size"} value={obj.size} hint={model ? "largest side, units" : "one number or a list"} onCommit={(v) => set("size", { size: v })} />
-      {!model && <ColorField label="Colour" value={obj.color ?? "#cccccc"} onCommit={(v) => set("colour", { color: v })} />}
+      {!model && <SelectField label={script ? "Shape if the script fails" : "Shape"} value={obj.shape ?? "box"} options={[...SCENE_SHAPES]} onCommit={(v) => set("shape", { shape: v as SceneShape })} />}
+      {!script && <ListField label={model ? "Fit size" : "Size"} value={obj.size} hint={model ? "largest side, units" : "one number or a list"} onCommit={(v) => set("size", { size: v })} />}
+      {!model && !script && <ColorField label="Colour" value={obj.color ?? "#cccccc"} onCommit={(v) => set("colour", { color: v })} />}
       <Vec3Field label="Position" value={obj.position ?? [0, 0, 0]} onCommit={(v) => set("position", { position: v })} />
       <Vec3Field label="Rotation (°)" value={obj.rotation ?? [0, 0, 0]} onCommit={(v) => set("rotation", { rotation: v })} />
       <ListField label="Scale" value={scale} hint="one number or x, y, z" onCommit={(v) => set("scale", { scale: v === undefined ? undefined : Array.isArray(v) ? (v.length === 3 ? v as Vec3 : v[0]) : v })} />
@@ -911,7 +924,8 @@ function ObjectForm({ doc, obj, issues, edit, atNow, part }: { doc: SceneDoc; ob
       </>}
       {nodes && nodes.length > 0 && <NodesField label="Parts shown from 0 s" nodes={nodes} value={obj.nodes ?? {}} onCommit={(v) => set("parts", { nodes: Object.keys(v).length ? v : undefined })} />}
     </>}
-    {(all || part === "props") && <Problems list={issuesAt(issues, `objects[${k}]`)} />}
+    {script && (all || part === "script") && <ScriptForm doc={doc} obj={obj} issues={issuesAt(issues, `objects[${k}].script`)} runIssues={runIssues} edit={edit} all={all} />}
+    {(all || part === "props") && <Problems list={issuesAt(issues, `objects[${k}]`).filter((i) => !script || !i.path.startsWith(`objects[${k}].script`))} />}
     {(all || part === "addEvent") && <>
       <h5>Add event at {atNow}s</h5>
       <div className="v2-sed-row">
@@ -920,6 +934,94 @@ function ObjectForm({ doc, obj, issues, edit, atNow, part }: { doc: SceneDoc; ob
       </div>
     </>}
     {all && <button type="button" className="v2-btn v2-sed-danger" onClick={() => void edit("delete object", (d) => { const r = removeSceneObject(d, obj.id); return { doc: r.doc, sel: { kind: "scene" }, note: `Deleted “${obj.id}”${r.removedEvents ? ` and ${r.removedEvents} event${r.removedEvents === 1 ? "" : "s"}` : ""}.` }; })}><Ic g="🗑" size={16} /> Delete object</button>}
+  </div>;
+}
+
+/** P82: template icons in the Add menu (monochrome line icons). */
+const SCRIPT_ICON: Record<string, string> = { particles: "effect", shape: "scene", text: "T", empty: "</>" };
+type ParamKind = "number" | "text" | "switch";
+
+/**
+ * P82: a Script object's code and params. The code is edited here and applied with Apply (Ctrl / ⌘ + Enter) as ONE
+ * undo step; static problems (syntax, imports, the build export, size) are shown as you type and block Apply; what the
+ * Edit view page reports when it runs the script (errors, time limits) is listed below. Params are applied one by one.
+ */
+function ScriptForm({ doc, obj, issues, runIssues, edit, all }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; runIssues: SceneScriptIssue[]; edit: Edit; all: boolean }) {
+  const saved = sceneScriptCode(doc, obj.id) ?? "";
+  const [code, setCode] = useState(saved);
+  const [problems, setProblems] = useState<string[]>([]);
+  const last = useRef(saved);
+  // Undo, redo or an agent changed the stored code: show it (the text typed here was applied or is replaced).
+  useEffect(() => { if (saved !== last.current) { last.current = saved; setCode(saved); } }, [saved]);
+  const changed = code !== saved;
+  useEffect(() => {
+    if (!changed) { setProblems([]); return; }
+    const t = setTimeout(() => setProblems(scriptProblems(code)), 250);
+    return () => clearTimeout(t);
+  }, [code, changed]);
+  const params: SceneScriptParams = obj.script?.params ?? {};
+  const setParams = (label: string, next: SceneScriptParams) => edit(label, (d) => setSceneScriptParams(d, obj.id, next));
+  const [pName, setPName] = useState("");
+  const [pKind, setPKind] = useState<ParamKind>("number");
+  const nameErr = pName && !SCRIPT_PARAM_RE.test(pName) ? "Letters, digits and _ (not starting with a digit)" : pName in params ? "Already a param" : undefined;
+  const [tpl, setTpl] = useState(SCENE_SCRIPT_TEMPLATES[0].id);
+  const apply = () => {
+    const why = scriptProblems(code);
+    setProblems(why);
+    if (why.length || !changed) return;
+    void edit("script code", (d) => ({ doc: setSceneScriptCode(d, obj.id, code), note: "Script applied. The Edit view rebuilds the scene to run it." }));
+  };
+  const lines = Math.min(24, Math.max(10, code.split("\n").length + 1));
+  return <div className="v2-sed-script" data-testid="script-form">
+    {all && <h5><Ic g="</>" size={14} /> Script <small>{obj.script?.file}</small></h5>}
+    <h6>Params</h6>
+    {Object.keys(params).length === 0 && <p className="v2-abnote">No params. Add one to pass a value to build and update.</p>}
+    <div className="v2-sed-params" role="list" aria-label="Params">
+      {Object.entries(params).map(([name, v]) => <div key={name} className="v2-sed-param" role="listitem">
+        {typeof v === "number" ? <NumField label={name} value={v} onCommit={(n) => { if (n !== undefined) void setParams(`param ${name}`, { ...params, [name]: n }); }} />
+          : typeof v === "boolean" ? <CheckField label={name} value={v} onCommit={(b) => void setParams(`param ${name}`, { ...params, [name]: b })} />
+            : /^#[0-9a-f]{6}$/i.test(v) ? <ColorField label={name} value={v} onCommit={(c) => void setParams(`param ${name}`, { ...params, [name]: c })} />
+              : <TextField label={name} value={v} onCommit={(t) => void setParams(`param ${name}`, { ...params, [name]: t })} />}
+        <button type="button" className="v2-icon" aria-label={`Remove param ${name}`} title={`Remove “${name}”`} onClick={() => { const { [name]: _x, ...rest } = params; void _x; void setParams(`remove param ${name}`, rest); }}><Ic g="🗑" size={16} /></button>
+      </div>)}
+    </div>
+    <div className="v2-sed-addparam">
+      <input type="text" aria-label="New param name" value={pName} placeholder="New param name" spellCheck={false} autoCapitalize="off" onChange={(e) => setPName(e.target.value.trim())}
+        onKeyDown={(e) => { if (e.key === "Enter" && pName && !nameErr) (e.currentTarget.parentElement!.querySelector("button") as HTMLButtonElement).click(); }} />
+      <select aria-label="Kind of value" value={pKind} onChange={(e) => setPKind(e.target.value as ParamKind)}><option value="number">Number</option><option value="text">Text</option><option value="switch">Switch</option></select>
+      <button type="button" className="v2-btn" disabled={!pName || !!nameErr} onClick={() => { void setParams(`add param ${pName}`, { ...params, [pName]: pKind === "number" ? 0 : pKind === "switch" ? false : "" }); setPName(""); }}><Ic g="＋" size={16} /> Add</button>
+    </div>
+    {nameErr && <em className="v2-sed-ferr" role="alert">{nameErr}</em>}
+    <h6>Code</h6>
+    <textarea className="v2-sed-code" aria-label="Script code" spellCheck={false} autoCapitalize="off" autoCorrect="off" wrap="off" rows={lines} value={code}
+      onChange={(e) => setCode(e.target.value)}
+      onKeyDown={(e) => {
+        if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); apply(); return; }
+        // Esc leaves the code box (it never closes the editor from here, so typed code isn't lost by accident).
+        if (e.key === "Escape") { e.stopPropagation(); e.currentTarget.blur(); return; }
+        if (e.key === "Tab" && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault();
+          const el = e.currentTarget, a = el.selectionStart, b = el.selectionEnd;
+          const next = code.slice(0, a) + "  " + code.slice(b);
+          setCode(next);
+          requestAnimationFrame(() => { el.selectionStart = el.selectionEnd = a + 2; });
+        }
+      }} />
+    {changed && problems.length > 0 && <ul className="v2-scene-list v2-scene-issues" aria-label="Code problems">{problems.map((m, n) => <li key={n} className="is-error">{m}</li>)}</ul>}
+    <div className="v2-sed-row">
+      <button type="button" className="v2-btn primary" disabled={!changed || problems.length > 0} onClick={apply} title="Apply the code (Ctrl / ⌘ + Enter)"><Ic g="✓" size={16} /> Apply code</button>
+      <button type="button" className="v2-btn" disabled={!changed} onClick={() => setCode(saved)} title="Put back the applied code">Revert</button>
+      {changed && <small className="v2-sed-unapplied" role="status">Not applied</small>}
+    </div>
+    <Problems list={issues} />
+    {runIssues.length > 0 && <ul className="v2-scene-list v2-scene-issues" aria-label="Script problems when it ran">{runIssues.map((x, n) => <li key={n} className="is-error">{x.message}</li>)}</ul>}
+    <p className="v2-abnote">build(THREE, params, ctx) returns a THREE.Object3D built around (0, 0, 0); update(obj, t, params, ctx) sets it from the scene time t alone. Use ctx.random() for random numbers so every frame renders the same in preview and export. Position, rotation, scale and opacity come from the object and its events.</p>
+    <h6>Start again from a template</h6>
+    <div className="v2-sed-row">
+      <select aria-label="Template" value={tpl} onChange={(e) => setTpl(e.target.value)}>{SCENE_SCRIPT_TEMPLATES.map((t) => <option key={t.id} value={t.id} title={t.description}>{t.label}</option>)}</select>
+      <button type="button" className="v2-btn" onClick={() => { const t = SCENE_SCRIPT_TEMPLATES.find((x) => x.id === tpl)!; void edit(`use ${t.label.toLowerCase()} template`, (d) => ({ doc: setSceneScriptParams(setSceneScriptCode(d, obj.id, t.code), obj.id, { ...t.params }), note: `Code and params replaced with the ${t.label} template (Undo puts them back).` })); }}>Use template</button>
+    </div>
+    <button type="button" className="v2-btn" onClick={() => void edit("turn into shape", (d) => ({ doc: removeSceneScript(d, obj.id), note: `“${obj.id}” is a plain ${obj.shape ?? "box"} now (Undo brings the script back).` }))}><Ic g="scene" size={16} /> Turn into a plain shape</button>
   </div>;
 }
 

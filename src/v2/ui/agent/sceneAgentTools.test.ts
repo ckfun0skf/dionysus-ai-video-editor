@@ -13,7 +13,7 @@ import { agentStore, ALL_AGENT_TOOLS, registerAgentTools, type ToolResponse } fr
 import { runTimelineTool } from "./timelineTools";
 import { resetSceneAgentSession } from "../../clipTypes/scene/agent";
 
-const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "apply_scene_edits"];
+const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "apply_scene_edits"];
 const READ_ONLY = new Set(["get_scene", "list_scene_objects"]);
 
 const readBlob = (b: Blob) => new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsText(b); });

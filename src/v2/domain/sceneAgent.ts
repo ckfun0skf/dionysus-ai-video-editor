@@ -17,6 +17,8 @@ import {
   roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneObject, updateSceneWorld, type SceneArgField,
 } from "./sceneEdit";
 import { moveSceneEventTo } from "./sceneRetime";
+import { addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, sceneScriptCode, setSceneScriptCode, setSceneScriptParams } from "./sceneScript";
+import { SCENE_SCRIPT_MAX, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
 import type { AssetVersion } from "./model";
 
 /** A scene version's media: the JSON blob at 1920×1080, no length (a scene's length is free, like a code clip's). */
@@ -25,7 +27,7 @@ export const sceneMediaRef = (blobKey: string): AssetVersion["media"] => ({ blob
 /** The tools that change a scene (the others read it). */
 export const SCENE_EDIT_TOOLS = [
   "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event",
-  "remove_scene_event", "set_scene_world", "set_scene_light",
+  "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script",
 ] as const;
 export type SceneEditTool = (typeof SCENE_EDIT_TOOLS)[number];
 export const isSceneEditTool = (n: string): n is SceneEditTool => (SCENE_EDIT_TOOLS as readonly string[]).includes(n);
@@ -328,6 +330,55 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       d = updateSceneLight(d, i, patch);
       return done(doc, d, { lightIndex: i, light: sceneLights(d).lights[i] }, [`world.lights[${i}]`]);
     }
+    case "set_scene_script": {
+      // P82: a Script object (three.js code in the scene's files): add one (from a template or code), change its code,
+      // params or template, or turn it back into a plain shape.
+      const tplIds = SCENE_SCRIPT_TEMPLATES.map((t) => t.id);
+      if (a.template !== undefined && !tplIds.includes(a.template as string)) return fail(`"template" must be one of ${tplIds.join(", ")}.`);
+      if (a.code !== undefined) {
+        if (typeof a.code !== "string") return fail('"code" must be the script\'s JavaScript (text).');
+        if (a.code.length > SCENE_SCRIPT_MAX) return fail(`"code" is longer than ${SCENE_SCRIPT_MAX / 1024} KB.`);
+        const why = scriptProblems(a.code);
+        if (why.length) return fail(`The code can't be used: ${why.join(" ")}`);
+      }
+      if (a.params !== undefined && a.params !== null) { const why = scriptParamsProblem(a.params); if (why) return fail(`"params" ${why}.`); }
+      const tpl = SCENE_SCRIPT_TEMPLATES.find((t) => t.id === a.template);
+      let d = doc, id: string;
+      if (a.objectId === undefined || a.objectId === null) {
+        if (a.remove === true) return fail("Name the Script object to turn back into a shape (\"objectId\").");
+        if (!tpl && typeof a.code !== "string") return fail(`Give "template" (${tplIds.join(", ")}) or "code" to add a Script object, or "objectId" to change one.`);
+        ({ doc: d, id } = addSceneScript(d, tpl ? tpl.id : { code: a.code as string, params: isObj(a.params) ? a.params as SceneScriptParams : undefined, stem: typeof a.id === "string" ? a.id : "script" }));
+        if (tpl && typeof a.code === "string") d = setSceneScriptCode(d, id, a.code);
+        if (tpl && a.params !== undefined) d = setSceneScriptParams(d, id, isObj(a.params) ? a.params as SceneScriptParams : {});
+        if (a.id !== undefined && a.id !== id) {
+          if (typeof a.id !== "string") return fail('"id" must be text.');
+          const r = renameSceneObject(d, id, a.id);
+          if (r.error) return fail(`"id": ${r.error}`);
+          d = r.doc; id = a.id;
+        }
+      } else {
+        const bad = needObject(doc, a.objectId); if (bad) return fail(bad);
+        id = a.objectId as string;
+        const cur = objectsOf(doc).find((o) => o.id === id)!;
+        if (a.remove === true) {
+          if (!cur.script) return fail(`"${id}" is not a Script object.`);
+          d = removeSceneScript(d, id);
+          const k = objectsOf(d).findIndex((o) => o.id === id);
+          return done(doc, d, { objectId: id, object: objectsOf(d)[k], note: "It is a plain shape again (its unused script file went too)." }, [`objects[${k}]`]);
+        }
+        if (!cur.script && !tpl && typeof a.code !== "string") return fail(`"${id}" is not a Script object yet: give "template" or "code" to make it one.`);
+        if (cur.model) return fail(`"${id}" is a GLB model; an object has a model or a script, not both. Add a new Script object instead (omit objectId).`);
+        if (tpl || typeof a.code === "string") d = setSceneScriptCode(d, id, typeof a.code === "string" ? a.code : tpl!.code);
+        if (a.params !== undefined) d = setSceneScriptParams(d, id, isObj(a.params) ? a.params as SceneScriptParams : {});
+        else if (tpl) d = setSceneScriptParams(d, id, { ...tpl.params });
+      }
+      if (a.position !== undefined) {
+        if (!isVec3(a.position)) return fail('"position" must be [x, y, z].');
+        d = updateSceneObject(d, id, { position: a.position });
+      }
+      const k = objectsOf(d).findIndex((o) => o.id === id);
+      return done(doc, d, { objectId: id, script: objectsOf(d)[k]?.script }, [`objects[${k}]`]);
+    }
   }
 }
 
@@ -358,13 +409,17 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
   }));
   return {
     objects: objectsOf(doc).filter((o) => isObj(o) && typeof o.id === "string").map((o) => {
-      const { functions, ...fields } = o;
-      return { ...fields, ...(functions ? { functions: Object.keys(functions) } : {}), calls: calls(o.id) };
+      const { functions, script, ...fields } = o;
+      // P82: a Script object's code comes with it (get_scene shortens files).
+      const code = script ? sceneScriptCode(doc, o.id) : undefined;
+      return { ...fields, ...(script ? { script: { ...script, ...(code !== undefined ? { code } : {}) } } : {}), ...(functions ? { functions: Object.keys(functions) } : {}), calls: calls(o.id) };
     }),
     // P81b: the camera's start values and the lights (index, optional id) as drawn.
     camera: { start: (({ background: _b, ...c }) => (void _b, c))(sceneCameraBase(doc)), calls: calls(SCENE_CAMERA) },
     lights: sceneLights(doc).lights.map((l, index) => ({ index, ...l })),
     defaultLights: sceneLights(doc).defaults,
+    // P82: the starting points set_scene_script takes as "template".
+    scriptTemplates: SCENE_SCRIPT_TEMPLATES.map((t) => ({ id: t.id, label: t.label, description: t.description, params: t.params })),
     events: sortedEvents(doc).map(({ e, i }) => ({ index: i, ...e })),
     eases: [...SCENE_EASES],
     baseCalls: Object.keys(SCENE_BASE_FUNCTIONS),

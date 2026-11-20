@@ -193,6 +193,33 @@ describe("P81a scene editor: Edit view", () => {
     expect(t.el.querySelector('[data-testid="scene-edit-view"]')).toBeTruthy();
     expect(t.lastState().opts.touch).toBe(true);
     expect(t.info()).toMatch(/one finger orbits · two fingers pan and zoom/);
+    // P82: on the phone the hint is a strip under the 3D view, never over it (it covered handles near the top).
+    const hint = t.el.querySelector('[data-testid="scene-gizmo-info"]')!;
+    expect(hint.className).toMatch(/is-strip/);
+    expect(hint.closest('[data-testid="scene-edit-view"]')).toBeNull();
+    expect(t.el.querySelector('[data-testid="scene-edit-view"]')!.nextElementSibling).toBe(hint);
+    t.done();
+  });
+});
+
+describe("P82 Edit view: Script objects", () => {
+  it("what the page reports about a Script object shows in its Script form; other ids are ignored; a rebuilt page clears it", async () => {
+    const t = await open();
+    await t.click(t.button(/^Add object$/));
+    await t.click(document.querySelector('[data-template="particles"]')!);
+    await t.editView();
+    expect(t.lastState().state.objects.some((o) => o.id === "particles")).toBe(true);
+    await t.fromPage({ type: "scene-edit:script-issues", issues: [{ id: "particles", message: "update failed (first at 0 s): boom" }, { id: "ghost", message: "x" }, { id: 3 }] });
+    const list = () => document.querySelector('[aria-label="Script problems when it ran"]');
+    expect(list()!.textContent).toBe("update failed (first at 0 s): boom");
+    // A desktop hint stays inside the view (a pill in the corner).
+    expect(document.querySelector('[data-testid="scene-gizmo-info"]')!.closest('[data-testid="scene-edit-view"]')).toBeTruthy();
+    // New code means a new page: the old report goes.
+    const ta = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Script code"]')!;
+    await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(ta, "export function build(THREE) { return new THREE.Group(); }\n"); ta.dispatchEvent(new Event("input", { bubbles: true })); });
+    await act(async () => { await new Promise((r) => setTimeout(r, 300)); }); await settle();
+    await t.click(t.button(/^Apply code$/));
+    expect(list()).toBeNull();
     t.done();
   });
 });

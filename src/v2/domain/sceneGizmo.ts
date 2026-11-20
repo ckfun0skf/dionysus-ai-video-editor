@@ -161,7 +161,9 @@ export function gizmoTargetLabel(doc: SceneDoc, obj: string, mode: GizmoMode, o:
   if (!c) return gizmoMovesOnly(obj) ? "nothing: this can only be moved (Move)" : "nothing";
   const t = targetOf(doc, c, o);
   const who = c.obj === SCENE_CAMERA ? "the camera" : c.name;
-  if (t.kind === "base") return gizmoLightIndex(obj) !== undefined ? `${who}'s position (lights don't animate)` : `${who}'s start ${c.prop}`;
+  // P82: "particles' start position", not "particles's".
+  const of = /s$/.test(who) ? `${who}'` : `${who}'s`;
+  if (t.kind === "base") return gizmoLightIndex(obj) !== undefined ? `${of} position (lights don't animate)` : `${of} start ${c.prop}`;
   if (t.kind === "newKey") return `new ${c.obj}.${t.call} ending at ${roundSec(o.at)}s`;
   const e = eventsOf(doc)[t.index];
   return `${e.obj}.${e.call} at ${e.at}s (its end)`;
