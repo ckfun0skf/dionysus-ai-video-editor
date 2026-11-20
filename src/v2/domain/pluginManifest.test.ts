@@ -42,7 +42,7 @@ describe("dionysus.cliptype/1 manifest (P83)", () => {
     const paths = errors(issues).map((i) => i.path);
     expect(paths).toEqual(expect.arrayContaining(["format", "api", "id", "name", "version", "publisher", "description", "homepage", "icon", "trackKind"]));
     expect(at(issues, "id")[0].message).toMatch(/start with "x-"/);
-    expect(at(issues, "api")[0].message).toMatch(/needs host API 2/);
+    expect(at(issues, "api")[0].message).toMatch(/needs a newer Dionysus \(host API 2; this build has 1\)/);
     expect(errors(validatePluginManifest(base({ id: "x-Acme" })))[0].path).toBe("id");
     expect(errors(validatePluginManifest(base({ id: `x-${"a".repeat(70)}` })))[0].message).toMatch(/most is 64/);
     expect(errors(validatePluginManifest(base({ id: undefined, name: undefined, version: undefined }))).map((i) => i.path)).toEqual(["id", "name", "version"]);

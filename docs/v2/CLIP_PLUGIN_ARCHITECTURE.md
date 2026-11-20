@@ -4,7 +4,7 @@
 started in P74 after decision 5 was accepted, step table in [§7 Phase 2](#phase-2--deterministic-threejs-scene-clip);
 steps 2.1 (P74), 2.2 (P75), 2.3 (P76), 2.4 (P77), 2.5 (P78) and 2.6 (P79) are done, so **Phase 2 is complete** since P79;
 the table was renumbered in P76, see the note under it. Phase 3 started in P83 after decisions 10–17 were accepted
-on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84), 3.3 (P85) and 3.4 (P86) are done).
+on 2026-11-19, step table in [§7 Phase 3](#phase-3--third-party-clip-types); steps 3.1 (P83), 3.2 (P84), 3.3 (P85), 3.4 (P86) and 3.5 (P87) are done).
 Written against `main` at `36c37b14` (after P63). Decisions: see [§0](#0-decisions). Progress: see
 [§7 Phase 1](#phase-1--registry-with-zero-behaviour-change).
 
@@ -662,6 +662,47 @@ Project → **Plugins** to manage. 44 px targets, monochrome line icons, badges 
   needs Retry (no automatic retry); a hung plugin still takes about 32 s to be stopped; the development hook
   `__dionysusDev` is still there in development builds; no "export package" from the library.
 
+**Done in P87 (step 3.5).**
+
+- Settings form: the inspector's **Plugin** tab (`ui/PluginClipPanel.tsx`) draws the clip's settings with the shared
+  `ParamControls` (slider with − / + and a number field for ranged numbers, colour well, text field, switch,
+  drop-down), grouped and ordered by the manifest's `editor.groups`, params in no group under "More". A slider drag or
+  a typing session is one undo step (`beginGesture` / `endGesture`, same-key coalescing), a switch or a pick is one,
+  and **Reset to defaults** is one. Edits are `cmd.setPluginParams(id, patch, version)` (values on
+  `placement.plugin.data.params`, `plugin.v` = the version they are written for); the preview redraws while editing
+  (the plugin host requests a new frame when params change). Then "About this plugin" (details). Without an engine
+  the values are read-only.
+- Phone: a **Params** tool (sliders icon) first on a plugin clip's toolbar opens "<Name> settings" as an undimmed
+  half-height sheet, so the preview above shows the change live; the **Plugin** tool keeps the state, Update and
+  details.
+- Timeline card: the plugin's own line icon (`manifest.icon`, puzzle when none) and name, then the clip's first
+  non-empty text setting ("Moving stripes · Under construction").
+- Versions (decision 16): installing or picking another version of a plugin the project uses is a **switch** (update
+  when newer, downgrade when older): `domain/pluginLocks.ts` `migratePluginParams` keeps values that still exist and
+  fit, clamps numbers to the new range (reported), drops removed or invalid ones (reported), and leaves new params
+  unset so their defaults apply; `switchPluginVersion` / `cmd.switchPlugin` change the lock and every clip (all
+  compositions, `plugin.v` = new version) as **one undo step**; the new hash is trusted for the project when the user
+  confirms. The consent dialog ("Update plugin" / "Use an older version") lists what happens to the clips (new
+  settings, dropped and adjusted values, by label; a downgrade is a warning); the toast says "Updated “Name” to 1.1.0
+  · 1 setting dropped · 1 value adjusted" with Undo. Same version with other contents stays a conflict.
+- "Update available": `pluginRows` gives each project plugin the other versions on this device (`versions`) and the
+  newest when it is newer (`update`): an **Update** pill on its tile, "Update available: 1.1.0" with **Update** and a
+  **Versions** list (history icon) in Project → Plugins, and an "Update available" box with **Update…** in the
+  inspector and the phone Plugin sheet.
+- A manifest with a higher `api` is refused with "This plugin needs a newer Dionysus (host API 2; this build has 1).
+  Update Dionysus to use it."; a project plugin in that state shows "Needs a newer Dionysus" and the slate NEEDS A
+  NEWER DIONYSUS.
+- Also: an Undo toast goes away once the project changes again (keyboard undo, another edit), so its Undo can't undo
+  the wrong step; Project → Plugins rows put their actions on a second line when narrow.
+- Checked in Chrome at 1440 and 390: edits with live preview, one undo per committed edit (title typing, a number,
+  a switch), update from a file with the summary, Undo back to 1.0.0 showing Update available, update from the
+  Versions list, downgrade with the warning, the api 2 error, all controls ≥ 44 px, no console errors.
+- **Gaps:** migration doesn't rename params (a renamed param is dropped and the new one starts at its default);
+  no per-clip version (a project uses one version); the phone main-track card shows the name without the icon and
+  title; the `editor` form has no conditional fields or custom controls (by design: declarative only); plugins
+  aren't updated automatically or checked for updates online; the other P86 gaps stay (icon-only tiles, manual
+  Retry, about 32 s until a hung plugin stops, the dev hook in dev builds, no "export package").
+
 Steps (one PR each, merged on green CI):
 
 | Step | PR | What | Status |
@@ -670,8 +711,8 @@ Steps (one PR each, merged on green CI):
 | 3.2 | P84 | Domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the package store and content hash, packages in project export / import, runtime registration of cores built from manifests, the not-enabled slate | **done** |
 | 3.3 | P85 | Sandbox renderer: bootstrap iframe, worker, OffscreenCanvas, watchdog and restarts, `pluginHost` in the Player and export; Chrome determinism and export checks | **done** |
 | 3.4 | P86 | Install and trust UX: file / URL install, install dialog, per-project review banner, the Plugins library at 1440 and 390, remove | **done** |
-| 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | next |
-| 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | |
+| 3.5 | P87 | Clip editing UX: the inspector Plugin tab and phone Params sheet from the declarative form, timeline icon and name, updates with param migration | **done** |
+| 3.6 | P88 | Agent tools and the host AI rule, `gen:ai`, WEB_MCP docs | next |
 
 ## 8. What this does not change
 

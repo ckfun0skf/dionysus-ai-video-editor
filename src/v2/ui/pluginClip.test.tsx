@@ -86,7 +86,7 @@ describe("plugin clips before plugins run (P84)", () => {
     expect(u).toBe(PLUGIN_CLIP_UI);
     expect(u.name(clip("pc", "x-dionysus-stripes"), project)).toBe("Moving stripes");
     expect(u.inspectorTabs).toEqual(["plugin", "transition"]);
-    expect([u.speed, u.volume, u.toolbar, u.toolbarMain]).toEqual([false, false, ["plugin", "link", "to-main"], ["plugin"]]);
+    expect([u.speed, u.volume, u.toolbar, u.toolbarMain]).toEqual([false, false, ["plugin-params", "plugin", "link", "to-main"], ["plugin-params", "plugin"]]);
     expect(clipUi(clip("lost", "x-acme-lost"))).toBe(UNKNOWN_CLIP_UI);
     expect(UNKNOWN_CLIP_UI.name(clip("lost", "x-acme-lost"), project)).toBe("Plugin “x-acme-lost” is not installed");
     expect(unknownTypeClips(project).map((p) => p.id)).toEqual(["pc", "lost"]);
@@ -116,7 +116,8 @@ describe("plugin clips before plugins run (P84)", () => {
     expect(panel.textContent).toContain("1.0.0");
     expect(panel.textContent).toContain("Dionysus samples");
     expect(panel.textContent).toContain("unverified");
-    expect(panel.textContent).toContain("Hello");
-    expect(Array.from(panel.querySelectorAll("h4")).map((h) => h.textContent?.trim())).toEqual(["Moving stripes", "Stripes", "Motion", "Title"]);
+    // P87: the settings are an editable form (values in the controls), grouped as the manifest's editor says.
+    expect((panel.querySelector('input[aria-label="Moving stripes Title"]') as HTMLInputElement).value).toBe("Hello");
+    expect(Array.from(panel.querySelectorAll("h4")).map((h) => h.textContent?.trim())).toEqual(["Moving stripes 1.0.0", "Stripes", "Motion", "Title", "About this plugin"]);
   });
 });

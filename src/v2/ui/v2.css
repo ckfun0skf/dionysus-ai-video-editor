@@ -1982,3 +1982,27 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 /* P86: five Add media tabs (with Plugins) fit a 390 px phone: icon over label. */
 .v2-picker-tabs:has(> :nth-child(5)) { gap: 0; padding: 0 4px; }
 .v2-picker-tabs:has(> :nth-child(5)) button { flex-direction: column; gap: 2px; min-height: 52px; padding: 4px 2px; font-size: 11.5px; min-width: 0; }
+
+/* ---------------------------------------------------------------- P87: plugin settings form, versions and updates */
+.v2-plugin-title { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; }
+.v2-plugin-title small { color: var(--muted); font-weight: 400; }
+.v2-plugin-form { display: grid; gap: 4px; }
+.v2-plugin-group h4 { margin: 10px 0 2px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.v2-plugin-about h4 { margin: 14px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.v2-plugin-update { display: grid; gap: 6px; padding: 8px 10px; margin: 4px 0 8px; border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent); border-radius: 8px; font-size: 13px; }
+.v2-plugin-update p { margin: 0; display: flex; gap: 6px; align-items: flex-start; }
+.v2-app .v2-plugin-update .v2-plugin-act, .v2-app.is-desktop .v2-plugin-update .v2-plugin-act { min-height: 44px; justify-self: start; padding: 0 14px; border-radius: 8px; }
+.v2-pl-upd { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--accent); }
+.v2-pl-state.is-update { border-color: var(--accent); color: var(--accent); }
+.v2-pl-switch { display: grid; gap: 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: rgba(255,255,255,.03); font-size: 13.5px; line-height: 1.45; }
+.v2-pl-switch.is-warn { border-color: #f3c969; }
+.v2-pl-switch p { margin: 0; display: flex; gap: 8px; align-items: flex-start; }
+.v2-pl-switch.is-warn p { color: #f3c969; }
+.v2-pl-switch ul { margin: 0; padding-left: 26px; display: grid; gap: 3px; color: var(--muted); }
+.v2-pl-switch li.is-drop { color: #f3c969; }
+.v2-clip-sub { opacity: .75; font-weight: 400; }
+.v2-pl-params-sheet .v2-plugin-panel { padding-bottom: 12px; }
+/* P87: a row with more actions (Update, Versions, Remove) puts them on their own line when the sheet is narrow. */
+.v2-pl-row { flex-wrap: wrap; }
+.v2-pl-row .v2-pl-main { flex: 1 1 150px; }
+.v2-pl-row .v2-pl-rowacts { margin-left: auto; }

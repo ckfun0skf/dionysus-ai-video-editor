@@ -165,6 +165,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [toast, setToast] = useState<string>();
   /** Toast with an inline Undo button (linked-clip delete). */
   const [toastUndo, setToastUndo] = useState(false);
+  // P87: a toast's Undo belongs to the step it reports; once the project changes again (an undo from the keyboard, a
+  // new edit), that toast is out of date, so it goes.
+  const toastProject = useRef<unknown>(undefined);
+  useEffect(() => { toastProject.current = project; }, [toast]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (toastUndo && toastProject.current !== project) setToast(undefined); }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
   const [syncOpen, setSyncOpen] = useState(false);
   const [projOpen, setProjOpen] = useState(false);
   const [inspOpen, setInspOpen] = useState(false);
@@ -223,6 +228,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [paramsOpen, setParamsOpen] = useState(false);
   /** P84: the phone sheet with a plugin clip's details (the inspector's Plugin tab on desktop). */
   const [pluginInfo, setPluginInfo] = useState(false);
+  const [pluginParams, setPluginParams] = useState(false);
   /** P76: the placement whose scene editor is open (desktop: in place of the timeline; phone: full screen). */
   const [sceneEdit, setSceneEdit] = useState<string>();
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
@@ -418,6 +424,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => { player.previewMute = previewMute; }, [player, previewMute]);
   // P86: plugins: install / allow / remove, the review banner, the Plugins library; a stopped clip's state and Retry.
   useSyncExternalStore(pluginStatus.subscribe, pluginStatus.revision); // re-render cards and panels when a clip stops
+  const pluginUpdateOf = (clipType: string) => plugins.rows.find((r) => r.id === clipType && r.inProject)?.update?.version;
   const plugins = usePluginCenter({
     engine, project, blobs: storage.blobs, mobile, revision: pluginRev, playhead: () => player.time,
     onAdded: (id) => { setSel([id]); setSubId(undefined); },
@@ -1065,7 +1072,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       code: A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"),
       "edit-audio": selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : undefined,
       scene: A("scene", "scene", "Scene", () => setSceneEdit(pl.id), "Edit this 3D scene: objects, models, events and the camera on its own timeline"),
-      plugin: A("plugin", "puzzle", "Plugin", () => setPluginInfo(true), "This plugin's details and the clip's settings"),
+      plugin: A("plugin", "puzzle", "Plugin", () => setPluginInfo(true), "This plugin's details, state and versions"),
+      "plugin-params": A("plugin-params", "tune", "Params", () => setPluginParams(true), "This clip's settings, with a live preview"),
     };
     const pick = (r: ToolRef) => (Array.isArray(r) ? r.map((x) => tools[x]).find((a) => !!a) : tools[r]);
     const primaryAll = (selIsMain ? u.toolbarMain : u.toolbar).map(pick).filter((a): a is BarAct => !!a);
@@ -1251,7 +1259,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         {pl.clipType.startsWith("x-") ? <p className="v2-abnote">{unknownPluginNote(pl.clipType)}</p>
           : <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p>}</section></div> },
       // P84: a clip of a registered third-party plugin type: its details and settings (read-only until P87).
-      plugin: { id: "plugin", label: "Plugin", icon: "puzzle", render: () => <PluginClipPanel project={project} placement={pl} onRetry={retryPlugin} onReview={plugins.review} /> },
+      plugin: { id: "plugin", label: "Plugin", icon: "puzzle", render: () => <PluginClipPanel project={project} placement={pl} engine={engine} onRetry={retryPlugin} onReview={plugins.review} updateTo={pluginUpdateOf(pl.clipType)} onUpdate={plugins.update} /> },
       // P74: a 3D scene clip's objects, events and problems (read-only in step 2.1).
       scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} engine={engine} onEdit={() => setSceneEdit(pl.id)} /> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
@@ -1546,7 +1554,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
           {sceneEditor}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
-          {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} onRetry={retryPlugin} onReview={(id) => { setPluginInfo(false); plugins.review(id); }} /></Sheet>}
+          {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} part="details" onRetry={retryPlugin} onReview={(id) => { setPluginInfo(false); plugins.review(id); }} updateTo={pluginUpdateOf(selected.placement.clipType)} onUpdate={(id) => { setPluginInfo(false); plugins.update(id); }} /></Sheet>}
+          {pluginParams && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label={`${pluginMetaOf(selected.placement.clipType)!.name} settings`} className="v2-msheet-insp v2-pl-params-sheet" snaps={[0.5, 0.9]} initial={0} dim={false} onClose={() => setPluginParams(false)}><PluginClipPanel project={project} placement={selected.placement} engine={engine} part="params" onRetry={retryPlugin} onReview={(id) => { setPluginParams(false); plugins.review(id); }} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (

@@ -1,7 +1,8 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import { setLink } from "../domain/links";
 import type { Command } from "./engine";
-import { removePluginLock, setPluginLock } from "../domain/pluginLocks";
+import { removePluginLock, setPluginLock, switchPluginVersion } from "../domain/pluginLocks";
+import type { HtmlClipParam } from "../domain/htmlClipPackage";
 import type { PluginLock } from "../domain/model";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, hasSound, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
@@ -876,4 +877,36 @@ export const addPluginClip = (at: number, clipType: `x-${string}`, version: stri
     if (!track) { const tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); track = comp.tracks.find((t) => t.id === tid)!; }
     return ops.insertPlacement(comp, track.id, pl);
   }),
+});
+
+// ---------------------------------------------------------------- P87: plugin clip settings and versions
+
+/**
+ * P87: set (or with `undefined`, reset to the defaults) a plugin clip's settings. `version` is the plugin version the
+ * values are written for. Same-key edits inside one gesture (a slider drag, a typing session) are one undo step.
+ */
+export const setPluginParams = (id: string, patch: Record<string, number | string | boolean> | undefined, version: string, label = patch ? "Plugin setting" : "Reset plugin settings"): Command => ({
+  label,
+  coalesceKey: patch ? `pp:${id}:${Object.keys(patch).sort().join(",")}` : undefined,
+  apply: (p) => {
+    const at = Object.entries(p.compositions).find(([, c]) => c.tracks.some((t) => t.placements.some((x) => x.id === id)));
+    if (!at) throw new Error(`clip ${id} not found`);
+    const [cid, comp] = at;
+    let changed = false;
+    const tracks = comp.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+      if (pl.id !== id) return pl;
+      if (!/^x-/.test(pl.clipType)) throw new Error("not a plugin clip");
+      const params = patch ? { ...(pl.plugin?.data?.params ?? {}), ...patch } : {};
+      if (JSON.stringify(params) === JSON.stringify(pl.plugin?.data?.params ?? {}) && pl.plugin?.v === version) return pl;
+      changed = true;
+      return { ...pl, plugin: { ...pl.plugin, data: { ...pl.plugin?.data, params }, v: version } };
+    }) }));
+    return changed ? { ...p, compositions: { ...p.compositions, [cid]: { ...comp, tracks } } } : p;
+  },
+});
+
+/** P87: switch plugin `id` to another version (update or downgrade) and migrate its clips' settings; one undo step. */
+export const switchPlugin = (id: string, lock: PluginLock, decls: Readonly<Record<string, HtmlClipParam>>): Command => ({
+  label: `Switch plugin “${lock.name}” to ${lock.version}`,
+  apply: (p) => switchPluginVersion(p, id, lock, decls),
 });
