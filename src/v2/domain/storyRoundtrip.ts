@@ -11,12 +11,15 @@ import type { Project } from "./model";
 import { storyboardFromDoc, type AssetSlot, type QaCheck, type Shot, type Storyboard } from "./storyboard";
 import { splitStateId, stateBaseNote, type StoryReference, type StoryAsset, type StoryAssetRef, type StoryAssetState, type StoryDoc, type StoryLayer, type StoryMediaLayer, type StoryShot } from "./storyJson";
 import { maskToJson, type ClipMask } from "./mask";
+import { motionPathToJson, type MotionPath } from "./motionPath";
+import { TICKS_PER_SECOND } from "./time";
 
 /** Key times are ticks in memory and seconds in the JSON. */
 const exportLayer = (l: StoryLayer): StoryLayer => {
-  if (l.type === "text" || !l.mask) return structuredClone(l);
-  const copy = structuredClone(l) as StoryMediaLayer;
-  copy.mask = maskToJson(l.mask) as unknown as ClipMask;
+  const copy = structuredClone(l);
+  if (copy.type !== "text" && copy.mask) (copy as StoryMediaLayer).mask = maskToJson(copy.mask) as unknown as ClipMask;
+  // P89: frame points and seconds in the JSON.
+  if (copy.motionPath) copy.motionPath = motionPathToJson(copy.motionPath, TICKS_PER_SECOND, true) as unknown as MotionPath;
   return copy;
 };
 

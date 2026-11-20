@@ -1,6 +1,7 @@
 /** Pure placement operations. All return new Composition objects (no mutation). */
-import { canChromaKey, CHROMA_DEFAULT, hasSound, type ChromaKey, clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
+import { canChromaKey, canMotionPath, CHROMA_DEFAULT, hasSound, type ChromaKey, clampTransform, type KeyframeProp, MAX_SPEED, MIN_SPEED, sourceAt, isStill, findPlacement, newId, trackKindFor, transformOf, type Transform, type Composition, type Placement, type Track } from "./model";
 import { shiftMaskKeys } from "./mask";
+import { shiftMotionPath } from "./motionPath";
 import { applyCaptionAfterInsert, prepareCaptionPlacement } from "./captionStyle";
 
 export const MIN_DURATION_TICKS = 1200; // 10 ms
@@ -130,7 +131,7 @@ export function trimPlacement(comp: Composition, placementId: string, edge: "lef
     const start = Math.min(Math.max(toTicks, prevEnd, Math.ceil(p.startTicks - srcRoom)), end - MIN_DURATION_TICKS);
     const delta = start - p.startTicks;
     const sourceInTicks = isStill(p) ? 0 : unbounded || rev ? p.sourceInTicks : Math.max(0, p.sourceInTicks + Math.round(delta * s));
-    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks, ...(p.keyframes ? { keyframes: shiftKeys(p.keyframes, -delta) } : {}) };
+    updated = { ...p, startTicks: start, durationTicks: end - start, sourceInTicks, ...(p.keyframes ? { keyframes: shiftKeys(p.keyframes, -delta) } : {}), ...(p.motionPath ? { motionPath: shiftMotionPath(p.motionPath, -delta) } : {}) };
   } else {
     const nextStart = Math.min(Infinity, ...others.filter((o) => o.startTicks >= end).map((o) => o.startTicks));
     const srcRoom = unbounded ? Infinity : rev ? p.sourceInTicks / s : (maxSourceTicks! - spanEnd) / s;
@@ -161,6 +162,7 @@ export function splitPlacement(comp: Composition, placementId: string, atTicks: 
   if (p.fadeInTicks) delete right.fadeInTicks;
   if (p.keyframes) right.keyframes = shiftKeys(p.keyframes, -offset);
   if (p.mask) right.mask = shiftMaskKeys(p.mask, -offset);
+  if (p.motionPath) right.motionPath = shiftMotionPath(p.motionPath, -offset);
   return mapTrack(comp, found.track.id, (t) => ({ ...t, placements: sortPlacements(t.placements.flatMap((o) => (o.id === p.id ? [left, right] : [o]))) }));
 }
 
@@ -372,6 +374,12 @@ export function setAudioFx(comp: Composition, placementId: string, fx: { preset:
 /** CapCut-style main track: the bottom-most video track. Overlay video tracks sit above it. */
 export function mainTrack(comp: Composition): Track | undefined {
   return lastVideo(comp.tracks);
+}
+
+/** P89: can clip `id` of `comp` have a motion path (a visual clip, not on the main track, not a placeholder)? */
+export function canMotionPathIn(comp: Composition, id: string): boolean {
+  const f = findPlacement(comp, id);
+  return !!f && canMotionPath(f.placement, mainTrack(comp)?.id === f.track.id);
 }
 
 /** CapCut long-press reorder: move main-track clip `id` to position `toIndex`, re-packing the track gaplessly

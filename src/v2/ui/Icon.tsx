@@ -1,4 +1,5 @@
 import type { LucideIcon } from "lucide-react";
+import { Route, PenTool, Navigation2, ChartSpline, Timer, Waypoints, Pentagon } from "lucide-react";
 import { Box, Camera, ChevronDown, Focus, KeyRound, Lightbulb, Move3d, Palette, Puzzle, Rotate3d, Scale3d } from "lucide-react";
 import { ChartLine, CircleArrowUp, History, Globe, LayoutGrid, PackagePlus, Shapes, ShieldCheck, Star, Sun, Waves } from "lucide-react";
 import { ChevronLeft, ChevronRight, MoveHorizontal, Replace, ArrowRightToLine, Library, Unlink, Bot, AudioWaveform, Headphones, Pipette, ScanSearch, Crosshair, Spline } from "lucide-react";
@@ -25,6 +26,8 @@ export const ICONS: Record<string, LucideIcon> = {
   scene: Box, camera: Camera, light: Lightbulb,
   move3d: Move3d, rotate3d: Rotate3d, scale3d: Scale3d, key: KeyRound, focus: Focus,
   puzzle: Puzzle,
+  // P89: motion path (route), add point (pen), smooth / corner point, orient along the path, ease, point time, even speed.
+  "motion-path": Route, "mp-add": PenTool, "mp-smooth": Spline, "mp-corner": Pentagon, "mp-orient": Navigation2, "mp-ease": ChartSpline, "mp-time": Timer, "mp-even": Waypoints,
   // P86: plugins (install, trust, URL) and the manifest's `icon` names (domain/pluginManifest.ts PLUGIN_ICONS) as "pi-<name>".
   "plugin-add": PackagePlus, shield: ShieldCheck, globe: Globe, history: History, "plugin-update": CircleArrowUp, tune: SlidersHorizontal,
   "pi-puzzle": Puzzle, "pi-sparkles": Sparkles, "pi-shapes": Shapes, "pi-type": Type, "pi-chart": ChartLine, "pi-waves": Waves, "pi-grid": LayoutGrid, "pi-box": Box, "pi-star": Star, "pi-sun": Sun,

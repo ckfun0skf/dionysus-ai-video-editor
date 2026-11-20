@@ -178,6 +178,7 @@ function mediaLayer(p: Project, b: Storyboard, shot: Shot, l: StoryMediaLayer, s
     ...(st.params && l.params && Object.keys(l.params).length ? { htmlParams: { ...l.params } } : {}),
     ...(l.chromaKey ? { chromaKey: { ...CHROMA_DEFAULT, ...l.chromaKey } } : {}),
     ...(l.mask ? { mask: structuredClone(l.mask) } : {}),
+    ...(l.motionPath ? { motionPath: structuredClone(l.motionPath) } : {}),
   };
 }
 
@@ -226,7 +227,7 @@ function addLinked(p: Project, b: Storyboard, comp: Composition, shot: Shot, cli
       const t = l.opacity !== undefined ? { ...t0, opacity: l.opacity } : t0;
       const keyframes = follow(l, r, t);
       const td = textLayerData(b, l);
-      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: td, ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
+      const pl: Placement = { id: newId("plc"), startTicks: start, durationTicks: r.duration, sourceInTicks: 0, source: TEXT_SOURCE, clipType: "text", text: td, ...(t ? { transform: t as Transform } : {}), ...(keyframes ? { keyframes } : {}), ...(l.motionPath ? { motionPath: structuredClone(l.motionPath) } : {}), ...blendOf(l), storyLink: { anchor }, storyLayer: l.id, ...(l.link === false ? {} : { link: { parent: anchor } }) };
       c = placeOnFreeTrack(c, pl, plainText());
       if (td.animIn === "word-pop") {
         const entrance = typeof td.animInParams?.entrance === "string" ? String(td.animInParams.entrance) : "pop";

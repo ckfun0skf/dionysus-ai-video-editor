@@ -1,6 +1,8 @@
 export * from "./model";
 export * from "./time";
 export * as ops from "./ops";
+export * as motion from "./motionPath";
+export type { MotionPath, MotionNode, MotionEase, MotionHandle } from "./motionPath";
 export * as clipRange from "./clipRange";
 export * as slip from "./slip";
 export * as links from "./links";

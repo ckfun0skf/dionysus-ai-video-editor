@@ -66,6 +66,7 @@ import { sceneAsset } from "./sceneAsset";
 import { CleanupDialog } from "./CleanupDialog";
 import { TrackSheet } from "./TrackSheet";
 import { MaskSheet } from "./MaskSheet";
+import { MotionPathBar, MotionPathOverlay, MotionPathPhoneBar, MotionPathSection, shownPath, useMotionKeys, useMotionSession } from "./MotionPathEditor";
 import type { TrackRangeChange } from "./TracksLane";
 import { makeTrackAnalyse, rangeTrack } from "./trackAnalyse";
 import { EffectPicker } from "./EffectPicker";
@@ -368,6 +369,18 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const styledText = !!(selTrack?.layerStyle && selected?.placement.clipType === "text");
   const scope = styledText ? gizmoScope ?? (selTrack!.layerStyle!.subtitle ? "layer" : "clip") : "clip";
   useEffect(() => { setGizmoScope(undefined); }, [selectedId]);
+  // P89: Motion path mode (a draft session; ✓ commits one undo step, ✕ / Esc discards it).
+  const mpApi = useMotionSession(engine, (s) => { player.motionPreview = s; player.draw(); }, setToast);
+  useMotionKeys(mpApi);
+  const mpSession = mpApi.session;
+  const mpClip = mpSession ? findPlacement(comp, mpSession.id)?.placement : undefined;
+  const aspectNow = project.settings.width / project.settings.height;
+  const canPath = !!selected && ops.canMotionPathIn(comp, selected.placement.id);
+  const startMotionPath = () => { if (!selected || !canPath) return; player.pause(); mpApi.start(selected.placement); if (!mobile) setItab("basic"); };
+  // Selecting another clip keeps the edits (like After Effects); a clip that is gone ends the session.
+  useEffect(() => { if (mpSession && selectedId !== mpSession.id) mpApi.commit(); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (mpSession && !mpClip) mpApi.cancel(); }, [mpSession, mpClip]); // eslint-disable-line react-hooks/exhaustive-deps
+  const mpShown = !mpSession && visual && canPath ? shownPath(visual) : undefined;
   useEffect(() => { if (selectedId) setLayerEdit(undefined); }, [selectedId]);
   const layerTrack = layerEdit ? comp.tracks.find((t) => t.id === layerEdit) : undefined;
   useEffect(() => { if (layerEdit && !layerTrack) setLayerEdit(undefined); }, [layerEdit, layerTrack]);
@@ -1096,6 +1109,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         inPointable && A("in-point", "⇤", "In point", () => setInOpen(true), "Where the clip starts in its video (slip)"),
         tracking.canTrack(pl) && A("track", "track", "Track", () => { player.pause(); setTrackOpen({}); }, "Add a tracker to this clip so text, overlays or code can follow it"),
         masking.canMask(pl) && A("mask", "mask", "Mask", () => { player.pause(); setMaskOpen(true); }, "Hide part of this picture with a shape or a freeform path"),
+        canPath && A("motion-path", "motion-path", "Motion path", startMotionPath, "Draw a route on the preview for this clip to move along", !!pl.motionPath),
         canChromaKey(pl) && A("chroma", "chroma", "Chroma", () => setCkOpen(true), "Remove a green or blue screen colour"),
         u.extraTools.includes("adjust") && adjust,
         // An audio clip already shows "Edit" (same key) among its primary tools, so this one is skipped there.
@@ -1226,8 +1240,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <ClipVersionPicker engine={engine} project={project} clipId={pl.id} onToast={setToast} /></section> : null;
     const transform: InspectorTab = { id: "basic", label: "Basic", icon: "⤧", render: () => pl.placeholder ? rangeSec : u.inOutFrames && !pl.freeze && !linkSec ? <>{rangeSec}{versionSec}
       <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>
-      <TransformInspector engine={engine} placement={pl} time={time} />
-    </> : <>{rangeSec}{versionSec}{linkSec}{u.inOutFrames && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} /></> };
+      <TransformInspector engine={engine} placement={pl} time={time} aspect={aspectNow} />{canPath && <MotionPathSection engine={engine} placement={pl} api={mpApi} aspect={aspectNow} onStart={startMotionPath} />}
+    </> : <>{rangeSec}{versionSec}{linkSec}{u.inOutFrames && !pl.freeze && <section className="v2-psettings v2-frames-sec" aria-label="In and out frames"><h4>In / out frames</h4><ClipFrames engine={engine} project={project} placement={pl} /></section>}<TransformInspector engine={engine} placement={pl} time={time} aspect={aspectNow} />{canPath && <MotionPathSection engine={engine} placement={pl} api={mpApi} aspect={aspectNow} onStart={startMotionPath} />}</> };
     const speedTab: InspectorTab = { id: "speed", label: "Speed", icon: "⏩", render: () => <div className="v2-psettings">
       <section aria-label="Speed"><h4>Speed</h4>
         <div className="v2-seg" role="radiogroup" aria-label="Speed">{SPEEDS.map((x) => <button key={x} role="radio" aria-checked={(pl.speed ?? 1) === x} className={`v2-seg-btn ${(pl.speed ?? 1) === x ? "is-active" : ""}`} title={x === 1 ? "Normal speed" : `${x}× — changes the clip's length`} onClick={() => engine.dispatch(cmd.setSpeed(pl.id, x))}>{x}×</button>)}</div>
@@ -1242,7 +1256,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <VolumeCurve engine={engine} placement={pl} time={time} peaks={peaks[mediaKey(pl.source.assetId, pl.source.versionId)]} />
       <AudioFxPanel engine={engine} placement={pl} />
       <SpatialPad engine={engine} project={project} placement={pl} track={selected.track} time={time} />
-      {u.transformInAudioTab && <TransformInspector engine={engine} placement={pl} time={time} />}
+      {u.transformInAudioTab && <TransformInspector engine={engine} placement={pl} time={time} aspect={aspectNow} />}
       {linkedAudioActions.length > 0 && <section aria-label="Clip audio"><h4>Clip audio</h4>{actionList(linkedAudioActions)}</section>}
       <section aria-label="Track"><h4>Track</h4>{actionList([{ icon: selected.track.muted ? "🔈" : "🔇", label: selected.track.muted ? "Unmute track" : "Mute track", title: "Silence the whole track", run: () => engine.dispatch(cmd.toggleTrackMute(selected.track.id)) }])}</section>
     </div> };
@@ -1293,6 +1307,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       <button className="v2-dtool v2-dtool-text" title="Trim end to playhead (W)" aria-label="Trim end to playhead" onClick={() => trimToPlayhead("right")}><Ic g="trim-end" size={16} /><span>Trim end</span></button>
       <button className="v2-dtool v2-dtool-text" title={tracking.canTrack(sp) ? "Track a region of this clip (text, overlays and code can follow it)" : "Select a video clip to track"} disabled={!tracking.canTrack(sp)} onClick={() => { player.pause(); setTrackOpen({}); }}><Ic g="track" size={16} /><span>Track</span></button>
       <button className="v2-dtool v2-dtool-text" title={sp && masking.canMask(sp) ? "Mask this picture: shapes or an editable freeform path" : "Select an image, video or HTML clip to mask"} disabled={!(sp && masking.canMask(sp))} onClick={() => { player.pause(); setMaskOpen(true); }}><Ic g="mask" size={16} /><span>Mask</span></button>
+      <button className={`v2-dtool v2-dtool-text${mpSession ? " is-active" : ""}`} data-testid="motion-path-tool" aria-pressed={!!mpSession} title={canPath ? "Motion path: draw a route on the preview for this clip to move along (After Effects style)" : "Select an overlay, text or code clip (not on the main track) to give it a motion path"} disabled={!canPath} onClick={() => (mpSession ? mpApi.commit() : startMotionPath())}><Ic g="motion-path" size={16} /><span>Motion path</span></button>
       <button className="v2-dtool v2-dtool-text" title={pair ? "Match frames across the cut between these two clips" : "Select a video clip that touches another video clip"} disabled={!pair} onClick={() => setMatchOpen(true)}><Ic g="match" size={16} /><span>Match frames</span></button>
       <span className="v2-dsep" aria-hidden />
       <button className="v2-dtool v2-dtool-text" title="Add an empty video (overlay) track" onClick={() => engine.dispatch(cmd.addTrack("video"))}><Ic g="▭" size={16} /><span>Video track</span></button>
@@ -1382,7 +1397,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const preview = (
     <section className="v2-preview" aria-label="Preview" style={mobile ? { height: `${previewVh}dvh` } : undefined}>
       <div className={`v2-canvas-wrap${mobile && fsActive && previewOrientFallback() === "css-rotate" && needsCssRotate(fsOrient, vp.w, vp.h) ? " is-fs-rotate" : ""}`}>{mediaLoading && <div className="v2-buffering" role="status" aria-live="polite" data-testid="preview-loading"><span className="v2-buffering-spin" aria-hidden="true" />Loading…</div>}<canvas ref={canvasRef} width={canvasSize.width} height={canvasSize.height} onClick={onCanvasTap} title={mobile ? "Tap an element to select it · tap empty space to play/pause" : "Click an element to select it · click empty space to play/pause"} />
-        {visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
+        {mpShown && canvasRef.current && <MotionPathOverlay canvas={canvasRef.current} placement={visual!} path={mpShown.path} fromKeys={mpShown.fromKeys} offset={time - visual!.startTicks} aspect={aspectNow} />}
+        {mpSession && mpClip && canvasRef.current && <MotionPathOverlay canvas={canvasRef.current} placement={mpClip} path={mpSession.draft} offset={time - mpClip.startTicks} aspect={aspectNow} api={mpApi} onSeekOffset={(t) => seek(mpClip.startTicks + t)} />}
+        {!mpSession && visual && player.boxes.get(visual.id) && canvasRef.current && <TransformHandles engine={engine} placement={visual} time={time} box={player.boxes.get(visual.id)!} canvas={canvasRef.current} actions={gizmo} route={layerRoute} snapping={snapOn} others={[...player.boxes].filter(([id]) => id !== visual.id).map(([, b]) => b)} />}
         {inlineEditor}
         {!mobile && visual && scopeChip}
         {mobile && fsActive && (
@@ -1395,6 +1412,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
             }} />
         )}
       </div>
+      {!mobile && mpSession && mpClip && <MotionPathBar api={mpApi} placement={mpClip} aspect={aspectNow} offset={time - mpClip.startTicks} onSeekOffset={(t) => seek(mpClip.startTicks + t)} name={clipName(mpClip)} />}
       {!mobile && desktopTransport}
     </section>
   );
@@ -1514,10 +1532,10 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
               {firstVideoTrack && <button className="v2-side-btn" onClick={() => engine.dispatch(cmd.toggleTrackMute(firstVideoTrack.id))}><b aria-hidden><Ic g={firstVideoTrack.muted ? "🔇" : "🔊"} /></b><span>{firstVideoTrack.muted ? "Unmute clip audio" : "Mute clip audio"}</span></button>}
               <button className="v2-side-btn v2-cover" onClick={() => seek(0)} style={firstClip && thumbs[firstClip.source.assetId] ? { backgroundImage: `url(${thumbs[firstClip.source.assetId]})` } : undefined}><span>Cover</span></button>
             </>} />
-          <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
+          {mpSession && mpClip ? <MotionPathPhoneBar api={mpApi} placement={mpClip} aspect={aspectNow} offset={time - mpClip.startTicks} onSeekOffset={(t) => seek(mpClip.startTicks + t)} /> : <nav className="v2-toolbar" aria-label={selected ? "Clip actions" : "Timeline actions"}>
             {(activeMenu !== "root" || expanded) && <button className="v2-tool v2-tool-back" aria-label={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} title={activeMenu === "root" && expanded ? `Collapse ${ops.GROUP_LABEL[expanded]}` : "Back"} onClick={back}>‹</button>}
             <div ref={toolbarFade} className="v2-toolbar-scroll" data-testid="toolbar-scroll">{mobileTools[activeMenu]}</div>
-          </nav>
+          </nav>}
           {pickerEl}
           {barSheet && selected && <Sheet label={barSheet === "trim" ? "Trim" : barSheet === "colour" ? "Colour" : "Audio"} className="v2-msheet-insp v2-bar-sheet" snaps={[0.3, 0.42, 0.9]} onClose={() => setBarSheet(undefined)}>
             {barSheet === "colour" ? (selected.placement.blank ? <BlankColorPicker value={selected.placement.blank.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(selected.placement.id, c))} /> : null)

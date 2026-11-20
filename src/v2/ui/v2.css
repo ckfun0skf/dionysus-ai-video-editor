@@ -2009,3 +2009,63 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 /* P88: a consent dialog opened for an AI agent's request says so. */
 .v2-pl-asked{display:flex;gap:8px;align-items:flex-start;margin:0 0 12px;padding:10px 12px;border:1px solid var(--line,#3a3a40);border-radius:10px;font-size:13px;line-height:1.4;color:inherit}
 .v2-pl-asked .v2-ic{flex:none;margin-top:1px}
+
+/* P89: Motion path. The path is drawn in black + white (readable on any picture); points are squares (corner) or
+   circles (smooth); every point, handle and time marker has a 44px target. */
+.v2-mp-overlay { position: absolute; inset: 0; z-index: 4; pointer-events: none; overflow: visible; }
+.v2-mp-overlay:not(.is-editing) * { pointer-events: none; }
+.v2-mp-overlay.is-editing { pointer-events: auto; touch-action: none; cursor: crosshair; z-index: 6; }
+.v2-mp-line-under { fill: none; stroke: rgba(0, 0, 0, .6); stroke-width: 4; }
+.v2-mp-line { fill: none; stroke: #fff; stroke-width: 1.5; }
+.v2-mp-overlay.is-keys .v2-mp-line { stroke-dasharray: 6 4; }
+.v2-mp-overlay:not(.is-editing) { opacity: .85; }
+.v2-mp-node { fill: #111; stroke: #fff; stroke-width: 1.5; }
+.v2-mp-node.is-sel { fill: #fff; stroke: #111; stroke-width: 2; }
+.v2-mp-hline { stroke: #fff; stroke-width: 1; opacity: .85; }
+.v2-mp-handle { fill: #fff; stroke: #111; stroke-width: 1.5; }
+.v2-mp-hit { fill: transparent; pointer-events: all; cursor: grab; }
+.v2-mp-hit:active { cursor: grabbing; }
+.v2-mp-now { fill: none; stroke: #fff; stroke-width: 2; stroke-dasharray: 3 3; }
+.v2-mp-bar { flex: none; display: grid; gap: 2px; padding: 6px 10px 4px; border-top: 1px solid var(--line); background: var(--panel); }
+.v2-mp-bar-row { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.v2-mp-bar-row > * { flex: none; }
+.v2-mp-bar-row > .v2-spacer { flex: 1; }
+.v2-mp-keys { color: var(--muted); font-size: 11px; margin-right: 6px; }
+@media (max-width: 1500px) { .v2-mp-keys { display: none; } }
+.v2-mp-title { display: inline-flex; align-items: center; gap: 6px; margin-right: 8px; font-size: 13px; }
+.v2-mp-sub { color: var(--muted); font-size: 12px; }
+.v2-mp-bar .v2-tool { min-height: 44px; min-width: 44px; padding: 0 10px; color: var(--text); font-size: 13px; cursor: pointer; }
+.v2-mp-bar .v2-tool:disabled { opacity: .4; cursor: default; }
+.v2-mp-bar .v2-tool.is-on, .v2-mp-ctx .v2-tool.is-on { background: #ffffff1c; box-shadow: inset 0 0 0 1px #ffffff55; }
+.v2-app .v2-mp-bar .v2-btn, .v2-app .v2-mp-sec .v2-btn { min-height: 44px; display: inline-flex; align-items: center; gap: 6px; color: var(--text); cursor: pointer; }
+.v2-mp-strip { position: relative; height: 44px; touch-action: none; cursor: pointer; margin: 0 22px; }
+.v2-mp-strip-line { position: absolute; left: 0; right: 0; top: 50%; height: 2px; margin-top: -1px; background: #ffffff33; border-radius: 1px; }
+.v2-mp-strip-head { position: absolute; top: 8px; bottom: 8px; width: 2px; margin-left: -1px; background: #fff; pointer-events: none; }
+.v2-mp-mark { position: absolute; top: 0; width: 44px; height: 44px; margin-left: -22px; padding: 0; border: 0; background: none; display: grid; place-items: center; cursor: ew-resize; touch-action: none; }
+.v2-mp-mark i { width: 10px; height: 10px; transform: rotate(45deg); background: #111; border: 1.5px solid #fff; }
+.v2-mp-mark.is-sel i { background: #fff; border-color: #111; width: 12px; height: 12px; }
+.v2-mp-mark:focus-visible { outline: 2px solid #fff; outline-offset: -6px; border-radius: 8px; }
+.v2-mp-phone-strip { flex: none; padding: 0 6px; background: #161616; border-top: 1px solid #ffffff14; }
+.v2-mp-ctx .v2-tool:disabled { opacity: .4; }
+.v2-mp-sec h4 { display: flex; align-items: center; gap: 6px; }
+.v2-mp-sec .v2-insp-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 6px; }
+.v2-mp-fields { display: grid; gap: 4px; }
+.v2-mp-opts { display: grid; gap: 6px; margin-top: 8px; }
+.v2-mp-toggle { justify-content: flex-start; }
+.v2-app .v2-mp-toggle.is-active { border-color: #ffffffaa; background: #ffffff1c; }
+.v2-mp-state { margin-left: auto; padding-left: 12px; font-size: 12px; color: var(--muted); }
+.v2-mp-toggle.is-active .v2-mp-state { color: var(--text); font-weight: 600; }
+.v2-app .v2-mp-toggle { width: 100%; }
+.v2-mp-sec > .v2-mp-toggle { width: 100%; margin-top: 6px; }
+.v2-mp-ease { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; margin-top: 6px; }
+.v2-mp-ease .v2-seg-btn { min-height: 44px; padding: 0 4px; border: 1px solid var(--line); border-radius: 8px; background: #ffffff08; color: var(--text); font-size: 12px; cursor: pointer; }
+.v2-mp-ease .v2-seg-btn.is-active { border-color: #fff; background: #ffffff1c; }
+.v2-mp-ease .v2-seg-btn:disabled { opacity: .4; cursor: default; }
+.v2-mp-fields.is-compact .v2-mp-ease, .v2-mp-sheet .v2-mp-ease { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.v2-mp-hint { margin: 4px 0; }
+.v2-app.is-mobile .v2-mp-overlay.is-editing { z-index: 6; }
+/* P89: the mode's sheets open above its timing strip and context toolbar, which stay usable. */
+.v2-sheet-backdrop:has(> .v2-mp-sheet) { bottom: calc(110px + env(safe-area-inset-bottom)); }
+.v2-sheet-backdrop:has(> .v2-mp-sheet) .v2-mp-sheet { padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+/* P89: a zoomed preview stays inside its own area while the path is edited. */
+.v2-canvas-wrap:has(> .v2-mp-overlay.is-editing) { overflow: hidden; }
