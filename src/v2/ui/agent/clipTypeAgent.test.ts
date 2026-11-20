@@ -10,7 +10,7 @@ const pl = (extra: Partial<Placement>): Placement => ({ id: "p", startTicks: 0, 
 
 describe("P72 clip type agent surface", () => {
   it("only the scene type contributes tools and a rule (P78), after the built-ins; clip tools are existing timeline tools", () => {
-    expect(clipTypeAgentTools().map((t) => t.name)).toEqual(["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "apply_scene_edits"]);
+    expect(clipTypeAgentTools().map((t) => t.name)).toEqual(["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "apply_scene_edits"]);
     for (const t of clipTypeAgentTools()) expect(agentToolOwner(t.name)?.id).toBe("scene");
     expect(clipTypeAgentRules().map((r) => r.key)).toEqual(["scene-clips"]);
     expect(RULE_LIST.at(-1)!.key).toBe("scene-clips");

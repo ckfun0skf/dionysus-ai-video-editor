@@ -65,3 +65,5 @@ export * from "./sceneEdit";
 export * from "./sceneRetime";
 export * from "./sceneGizmo";
 export * from "./sceneAgent";
+export * from "./sceneScriptCode";
+export * from "./sceneScript";

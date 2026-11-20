@@ -469,8 +469,14 @@ track (the Scene track keeps scene-wide settings) and, with the lights (optional
 each, static: no light events), is selected from its track or in the Edit view, which draws the camera's frustum and
 look-at point and each directional / point light's helper; their gizmos only move (camera position or look-at point by
 the same event / Auto-key / start-value rules; a light's position), and rotate drags keep whole turns. Agents get
-`set_scene_light` and the camera start and lights in `list_scene_objects`. **P82** (next): Script objects (raw three.js
-code, with templates as starting points).
+`set_scene_light` and the camera start and lights in `list_scene_objects`. **P82** (done): Script objects
+(`script: { file, params }` in `dionysus.scene/1`): an object drawn by raw three.js code in the scene's `files`
+(`build(THREE, params, ctx)` returns an Object3D, `update(obj, t, …)` sets it from time alone; seeded `ctx.random`), from
+four templates (particles, procedural shape, text, empty) or written by hand or by an agent (`set_scene_script`); it
+runs only in the sandboxed scene page, first in a check worker with a 3 s limit so an endless loop can't freeze the
+page or an export; a failing script draws its shape and is reported. The editor gets a Script section (params, code
+with live static checks, Apply as one undo step, templates) and the phone Edit view's hint moved under the view. That
+closes the owner's follow-ups; the next work is Phase 3.
 
 ### Phase 3 — third-party clip types
 

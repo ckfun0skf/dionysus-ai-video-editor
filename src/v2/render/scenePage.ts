@@ -11,6 +11,51 @@ import { writeManifest } from "../domain/htmlClipPackage";
  * (the P38 inputs field of `dionysus:frame`), and the page applies it and renders. So a frame depends only on the
  * document and `t`.
  */
+/**
+ * P82: the Script objects' context (`ctx` of build / update), shared by the page and the check worker: the object's id,
+ * `random(seed?)` (a new seeded generator, the same numbers for one object and seed every time) and
+ * `makeCanvas(w, h)` (an OffscreenCanvas, up to 4096 px a side).
+ */
+export const SCRIPT_CTX_JS = `function scriptHash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+function scriptCtx(id) {
+  return Object.freeze({
+    id,
+    random(seed) {
+      let a = (scriptHash(String(id)) ^ Math.imul(scriptHash(String(seed === undefined ? 0 : seed)), 0x9e3779b1)) >>> 0;
+      return () => { a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    },
+    makeCanvas(w, h) { return new OffscreenCanvas(Math.max(1, Math.min(4096, w | 0)), Math.max(1, Math.min(4096, h | 0))); },
+  });
+}
+`;
+
+/**
+ * P82: the check worker. Before the page runs a script it runs it once in a worker (build, then update at a few
+ * times) under a time limit, so a script that never ends is stopped (the worker is terminated) instead of freezing
+ * the page; errors there are ignored (the page reports them when it runs the script, with the DOM it may need). It is
+ * a classic worker from a blob: URL (a module worker can't start from the sandboxed page's opaque origin in Chrome)
+ * that loads three.js and the script with dynamic import(). A script that can't be checked is not run.
+ */
+export const SCRIPT_WORKER_JS = `${SCRIPT_CTX_JS}
+let THREE = null;
+onmessage = async (e) => {
+  const d = e.data;
+  if (d.type === "three") {
+    try { THREE = await import(d.url); postMessage({ type: "ready" }); } catch (err) { postMessage({ type: "ready", error: String((err && err.message) || err) }); }
+    return;
+  }
+  try {
+    const mod = await import(d.url);
+    if (typeof mod.build === "function") {
+      const ctx = scriptCtx(d.id), params = Object.freeze(Object.assign({}, d.params));
+      const obj = await mod.build(THREE, params, ctx);
+      if (typeof mod.update === "function") for (const t of d.times) mod.update(obj, t, params, ctx);
+    }
+  } catch (_) { /* reported by the page */ }
+  postMessage({ type: "done", seq: d.seq });
+};
+`;
+
 /** P81a: the part shared with the Edit view page: renderer, world, lights, objects, models and poses (no frame loop). */
 export const SCENE_BUILD_JS = `import * as THREE from "three";
 const doc = JSON.parse(document.getElementById("dionysus-scene").textContent);
@@ -112,10 +157,124 @@ function pose(n, anims) {
   n.mixer.setTime(1);
 }
 const D = Math.PI / 180;
+// P82: Script objects. Each script is first run in a worker under a time limit (an endless loop is stopped there), then
+// built in the page; a script that fails keeps the object's shape and is reported (once per problem): to the player as
+// an asset problem, and in the Edit view to the editor's Problems.
+${SCRIPT_CTX_JS}const SCRIPT_LIMIT_MS = 3000, UPDATE_WARN_MS = 250;
+const scriptIssues = [], scriptSeen = new Set();
+let reportScript = (x) => { try { parent.postMessage({ type: "dionysus:asset-error", messages: ["Script object \\"" + x.id + "\\": " + x.message] }, "*"); } catch (_) {} };
+function scriptNote(id, message, key) {
+  const k = id + "\\n" + (key || message);
+  if (scriptSeen.has(k)) return;
+  scriptSeen.add(k); const x = { id, message }; scriptIssues.push(x); reportScript(x);
+}
+const errText = (e) => String((e && e.message) || e);
+const realNow = () => { const m = performance.mark("dionysus-script"); performance.clearMarks("dionysus-script"); return m.startTime; };
+const scriptWorkerUrl = URL.createObjectURL(new Blob([${JSON.stringify(SCRIPT_WORKER_JS)}], { type: "text/javascript" }));
+function scriptChecker() {
+  let w = null, ready = null, seq = 0;
+  const start = () => {
+    try { w = new Worker(scriptWorkerUrl); } catch (err) { console.error(err); ready = Promise.resolve(false); return; }
+    ready = new Promise((ok) => {
+      const to = setTimeout(() => ok(false), 15000);
+      w.onmessage = (e) => { if (e.data && e.data.type === "ready") { clearTimeout(to); ok(!e.data.error); } };
+      w.onerror = () => { clearTimeout(to); ok(false); };
+    });
+    w.postMessage({ type: "three", url: import.meta.resolve("three") });
+  };
+  return {
+    async check(job) {
+      if (!ready) start();
+      if (!(await ready) || !w) return "unchecked";
+      const n = ++seq;
+      return new Promise((ok) => {
+        const to = setTimeout(() => { w.terminate(); w = null; ready = null; ok("slow"); }, SCRIPT_LIMIT_MS);
+        w.onmessage = (e) => { if (e.data && e.data.type === "done" && e.data.seq === n) { clearTimeout(to); ok("ok"); } };
+        w.postMessage(Object.assign({ type: "job", seq: n }, job));
+      });
+    },
+    stop() { if (w) w.terminate(); w = null; },
+  };
+}
+async function loadScripts(ctx) {
+  const list = objects.filter((o) => o.script && typeof o.script === "object" && typeof o.script.file === "string" && !(typeof o.model === "string" && o.model));
+  if (!list.length) return;
+  const dur = typeof doc.durationSec === "number" && doc.durationSec > 0 ? doc.durationSec : 5;
+  const checker = scriptChecker();
+  try {
+    for (const o of list) {
+      const shape = o.shape || "box", src = ctx.asset(o.script.file);
+      if (!src) { scriptNote(o.id, "\\"" + o.script.file + "\\" is not in the scene's files; a " + shape + " is drawn instead."); continue; }
+      let url;
+      try { url = URL.createObjectURL(new Blob([await (await fetch(src)).text()], { type: "text/javascript" })); }
+      catch (err) { scriptNote(o.id, "couldn't read \\"" + o.script.file + "\\"; a " + shape + " is drawn instead."); continue; }
+      const params = Object.freeze(Object.assign({}, o.script.params && typeof o.script.params === "object" ? o.script.params : {}));
+      const verdict = await checker.check({ id: o.id, url, params, times: [0, 0.5, dur / 2, dur] });
+      // Without the check a script could freeze the page (and an export), so it isn't run.
+      if (verdict === "unchecked") { scriptNote(o.id, "couldn't be checked (no worker in this browser), so it wasn't run; a " + shape + " is drawn instead."); continue; }
+      if (verdict === "slow") { scriptNote(o.id, "build and update took longer than " + SCRIPT_LIMIT_MS / 1000 + " s (an endless loop?) and were stopped; a " + shape + " is drawn instead."); continue; }
+      let mod, obj;
+      const sctx = scriptCtx(o.id);
+      try { mod = await import(url); } catch (err) { scriptNote(o.id, "couldn't load: " + errText(err) + "; a " + shape + " is drawn instead."); continue; }
+      if (typeof mod.build !== "function") { scriptNote(o.id, "doesn't export build(THREE, params, ctx); a " + shape + " is drawn instead."); continue; }
+      try { obj = await mod.build(THREE, params, sctx); } catch (err) { scriptNote(o.id, "build failed: " + errText(err) + "; a " + shape + " is drawn instead."); continue; }
+      if (!obj || !obj.isObject3D) { scriptNote(o.id, "build must return a THREE.Object3D (a Mesh, Points, Group…); a " + shape + " is drawn instead."); continue; }
+      const group = new THREE.Group(); group.rotation.order = "XYZ"; group.add(obj);
+      const old = nodes.get(o.id);
+      scene.remove(old.node); old.node.geometry.dispose(); old.node.material.dispose();
+      scene.add(group);
+      nodes.set(o.id, { node: group, tint: false, mats: [], script: { id: o.id, obj, update: typeof mod.update === "function" ? mod.update : null, params, ctx: sctx } });
+    }
+  } finally { checker.stop(); }
+}
+// update(obj, t, params, ctx) for this frame; an error or a slow frame is reported (the object keeps what it has).
+function runScript(n, t) {
+  const s = n.script; if (!s || !s.update) return;
+  try {
+    const a = realNow();
+    s.update(s.obj, t, s.params, s.ctx);
+    const ms = realNow() - a;
+    if (ms > UPDATE_WARN_MS) scriptNote(s.id, "update took " + Math.round(ms) + " ms for one frame (keep it under " + UPDATE_WARN_MS + " ms: export waits for every frame).", "slow");
+  } catch (err) { scriptNote(s.id, "update failed (first at " + +t.toFixed(3) + " s): " + errText(err), "update"); }
+}
+// The object's opacity on every material of a script's object: each material's own opacity (as the script left it)
+// times the object's, so a script that sets opacity itself keeps working and nothing compounds between frames.
+const fadeBase = new WeakMap();
+function fadeTree(root, k) {
+  root.traverse((node) => {
+    if (!node.material) return;
+    for (const m of Array.isArray(node.material) ? node.material : [node.material]) {
+      let b = fadeBase.get(m);
+      if (!b || m.opacity !== b.applied || m.transparent !== b.appliedTr) b = { opacity: m.opacity, transparent: m.transparent, depthWrite: m.depthWrite };
+      const tr = b.transparent || k < 1;
+      if (m.transparent !== tr) { m.transparent = tr; m.depthWrite = tr && !b.transparent ? false : b.depthWrite; m.needsUpdate = true; }
+      m.opacity = b.opacity * k;
+      b.applied = m.opacity; b.appliedTr = m.transparent; fadeBase.set(m, b);
+    }
+  });
+}
+// One object's state at scene time t: transform, visibility, tint, opacity, model pose and parts, script update.
+function applyObject(n, o, t) {
+  const m = n.node;
+  m.position.set(o.position[0], o.position[1], o.position[2]);
+  m.rotation.set(o.rotation[0] * D, o.rotation[1] * D, o.rotation[2] * D);
+  m.scale.set(o.scale[0], o.scale[1], o.scale[2]);
+  m.visible = o.visible && o.opacity > 0;
+  if (n.tint) n.mats[0].m.color.set(o.color);
+  for (const x of n.mats) {
+    // Switching transparent changes the shader (OPAQUE define): recompile so a frame never depends on the previous one.
+    const tr = x.transparent || o.opacity < 1;
+    if (x.m.transparent !== tr) { x.m.transparent = tr; x.m.depthWrite = !tr; x.m.needsUpdate = true; }
+    x.m.opacity = x.opacity * o.opacity;
+  }
+  pose(n, o.animation);
+  if (n.parts) for (const [name, x] of n.parts) x.n.visible = o.nodes && name in o.nodes ? !!o.nodes[name] : x.visible;
+  if (n.script) { runScript(n, t); fadeTree(n.script.obj, o.opacity); }
+}
 `;
 /** The frame part: draw the state the editor sends for each time, from the scene's camera. */
 const SCENE_CLIP_JS = `dionysus.clip({
-  init: loadModels,
+  init: async (ctx) => { await loadModels(ctx); await loadScripts(ctx); },
   render(t, ctx) {
     const s = ctx.inputs && ctx.inputs.scene;
     if (!s) return;
@@ -126,23 +285,7 @@ const SCENE_CLIP_JS = `dionysus.clip({
     camera.position.set(s.camera.position[0], s.camera.position[1], s.camera.position[2]);
     camera.lookAt(s.camera.target[0], s.camera.target[1], s.camera.target[2]);
     camera.updateProjectionMatrix();
-    for (const o of s.objects) {
-      const n = nodes.get(o.id); if (!n) continue;
-      const m = n.node;
-      m.position.set(o.position[0], o.position[1], o.position[2]);
-      m.rotation.set(o.rotation[0] * D, o.rotation[1] * D, o.rotation[2] * D);
-      m.scale.set(o.scale[0], o.scale[1], o.scale[2]);
-      m.visible = o.visible && o.opacity > 0;
-      if (n.tint) n.mats[0].m.color.set(o.color);
-      for (const x of n.mats) {
-        // Switching transparent changes the shader (OPAQUE define): recompile so a frame never depends on the previous one.
-        const tr = x.transparent || o.opacity < 1;
-        if (x.m.transparent !== tr) { x.m.transparent = tr; x.m.depthWrite = !tr; x.m.needsUpdate = true; }
-        x.m.opacity = x.opacity * o.opacity;
-      }
-      pose(n, o.animation);
-      if (n.parts) for (const [name, x] of n.parts) x.n.visible = o.nodes && name in o.nodes ? !!o.nodes[name] : x.visible;
-    }
+    for (const o of s.objects) { const n = nodes.get(o.id); if (n) applyObject(n, o, typeof s.t === "number" ? s.t : t); }
     renderer.render(scene, camera);
   },
 });
@@ -165,15 +308,25 @@ export function scenePage(doc: SceneDoc | undefined): string {
 <script type="module">
 ${SCENE_RUNTIME_JS}</script></body></html>
 `;
-  const models = (Array.isArray(rest.objects) ? rest.objects : []).some((o) => o && typeof o.model === "string" && o.model);
-  if (!models) return page;
+  const { models, scripts } = sceneFileUse(rest);
+  if (!models && !scripts) return page;
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: ["three", "three-gltf"], files: used });
+  return writeManifest(page, { libs: models ? ["three", "three-gltf"] : ["three"], files: used });
+}
+
+/** Whether a scene has model objects (GLTFLoader and the files) or Script objects (P82: the files). */
+export function sceneFileUse(doc: Pick<SceneDoc, "objects">): { models: boolean; scripts: boolean } {
+  const list = Array.isArray(doc.objects) ? doc.objects : [];
+  return {
+    models: list.some((o) => o && typeof o.model === "string" && o.model),
+    scripts: list.some((o) => o && o.script && typeof o.script === "object" && typeof o.script.file === "string"),
+  };
 }
 
 /**
  * P76: what the page is built from. The page reads only the lights and each object's id, shape, size and model from
- * the embedded scene (everything else arrives per frame as state), plus the model files; two scenes with the same key
+ * the embedded scene (everything else arrives per frame as state), plus the model files (P82: and each object's
+ * script: its file and params); two scenes with the same key
  * get the same page, so the player keeps a scene clip's page across edits of events and properties and just draws
  * the frame again (no reload). Files are keyed by name, length and a hash of their text.
  */
@@ -183,7 +336,7 @@ export function scenePageKey(doc: SceneDoc | undefined): string {
   const hit = pageKeys.get(doc);
   if (hit !== undefined) return hit;
   const lights = doc.world && typeof doc.world === "object" ? doc.world.lights : undefined;
-  const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model] : null));
+  const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model, o.script ?? null] : null));
   const files = doc.files && typeof doc.files === "object" ? Object.entries(doc.files).map(([n, d]) => [n, typeof d === "string" ? `${d.length}:${hashText(d)}` : null]) : [];
   const key = JSON.stringify([lights ?? null, objects, files]);
   pageKeys.set(doc, key);

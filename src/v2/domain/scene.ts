@@ -18,9 +18,15 @@
  * `play` / `stop`, or `animation` in a custom function's row. The evaluator gives, per model object, the clips that
  * play at `t` with their local time (`(t - at) × speed + from`, unwrapped: the page loops or clamps it with the clip's
  * length) and weight (a cross-fade over `fade` seconds is computed from `t` too). Nothing is carried between frames.
+ *
+ * Script objects (P82): an object with `script: { file, params? }` is built by JavaScript in the document's `files`
+ * (domain/sceneScriptCode.ts: `build(THREE, params, ctx)` returns a THREE.Object3D, an optional `update(obj, t, …)`
+ * sets it from scene time alone). Its base properties (position, rotation, scale, visible, opacity) and events work as
+ * for any object; the script runs only in the sandboxed scene page, and a script that fails draws the object's shape.
  */
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValue } from "./htmlClipPackage";
 import { glbInfoOfDataUrl } from "./glb";
+import { scriptCodeOf, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
 
 export const SCENE_FORMAT = "dionysus.scene/1" as const;
 /** MIME type of a scene asset version's blob. */
@@ -83,6 +89,11 @@ export interface SceneObject {
   animation?: string | SceneAnimation;
   /** Parts of the model shown (true) or hidden (false) from 0 s, by node name; unnamed parts keep the file's setting. */
   nodes?: Record<string, boolean>;
+  /**
+   * P82: a Script object: `file` names a JavaScript file in `files` (see domain/sceneScriptCode.ts) and `params` are
+   * the values its build / update get. Not with `model`. A missing or failing script draws the object's shape.
+   */
+  script?: SceneScript;
   name?: string;
   color?: string;
   position?: Vec3;
@@ -93,6 +104,9 @@ export interface SceneObject {
   opacity?: number;
   functions?: Record<string, SceneFunction>;
 }
+
+/** P82: a Script object's code file and param values. */
+export interface SceneScript { file: string; params?: SceneScriptParams }
 
 export const SCENE_EASES = ["linear", "in", "out", "inOut", "inCubic", "outCubic", "inOutCubic", "inQuad", "outQuad", "inOutQuad", "inOutSine", "outBack"] as const;
 export type SceneEase = (typeof SCENE_EASES)[number];
@@ -305,6 +319,22 @@ export function validateScene(raw: unknown): SceneIssue[] {
       if (why) err(`${p}.nodes`, `${why}.`);
       else if (typeof o.model !== "string") err(`${p}.nodes`, "only a model object (with \"model\") has nodes.");
       else nodeWarnings(raw as unknown as SceneDoc, o.model, o.nodes, `${p}.nodes`, warn);
+    }
+    if (o.script !== undefined) {
+      const sc = o.script;
+      if (!isObj(sc) || typeof sc.file !== "string" || !sc.file) err(`${p}.script`, "must be { \"file\": \"<name>.js\", \"params\"?: { name: value } }.");
+      else {
+        if (o.model !== undefined) err(`${p}.script`, "An object has a model or a script, not both.");
+        const data = files[sc.file];
+        if (typeof data !== "string") warn(`${p}.script.file`, `"${sc.file}" is not in "files"; the object is drawn as a ${fallback}.`);
+        else {
+          const code = scriptCodeOf(data);
+          if (code === undefined) err(`${p}.script.file`, `"${sc.file}" can't be read as text (a data: URL of UTF-8 JavaScript).`);
+          else for (const m of scriptProblems(code)) err(`${p}.script.file`, m);
+        }
+        if (sc.params !== undefined) { const why = scriptParamsProblem(sc.params); if (why) err(`${p}.script.params`, `${why}.`); }
+        for (const k of Object.keys(sc)) if (k !== "file" && k !== "params") err(`${p}.script.${k}`, "is not a script field (file, params).");
+      }
     }
     if (o.name !== undefined && typeof o.name !== "string") err(`${p}.name`, "must be a string.");
     for (const prop of SCENE_PROPS) if (o[prop] !== undefined) { const why = propProblem(prop, o[prop]); if (why) err(`${p}.${prop}`, `${why}.`); }

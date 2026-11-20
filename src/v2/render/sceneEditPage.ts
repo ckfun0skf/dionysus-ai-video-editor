@@ -1,6 +1,6 @@
 import type { SceneDoc } from "../domain/scene";
 import { writeManifest } from "../domain/htmlClipPackage";
-import { SCENE_BUILD_JS, scenePageKey } from "./scenePage";
+import { SCENE_BUILD_JS, sceneFileUse, scenePageKey } from "./scenePage";
 
 /**
  * P81a: the scene editor's Edit view page. A second instance of the scene clip's page (render/scenePage.ts: the same
@@ -22,6 +22,8 @@ import { SCENE_BUILD_JS, scenePageKey } from "./scenePage";
  *   editor → page  {type:"scene-edit:home"}                                  (back to the scene camera's view)
  *   editor → page  {type:"scene-edit:cancel"}                                (Esc in the editor: cancel the drag)
  *   page → editor  {type:"scene-edit:pick", id}                              (tapped id, or null for empty space)
+ *   page → editor  {type:"scene-edit:script-issues", issues}                 (P82: [{id, message}] so far: Script objects that
+ *                                                                              failed, were stopped or are slow)
  *   page → editor  {type:"scene-edit:drag", phase, id, value}                (phase start | move | end | cancel; value
  *                                                                              {position, rotation (deg, XYZ), scale})
  */
@@ -103,20 +105,8 @@ function apply(s) {
   shot.fov = s.camera.fov; shot.aspect = opts.aspect || 16 / 9; syncRig();
   for (const o of s.objects) {
     const n = nodes.get(o.id); if (!n) continue;
-    const m = n.node;
-    if (dragging && m === tc.object) continue;
-    m.position.set(o.position[0], o.position[1], o.position[2]);
-    m.rotation.set(o.rotation[0] * D, o.rotation[1] * D, o.rotation[2] * D);
-    m.scale.set(o.scale[0], o.scale[1], o.scale[2]);
-    m.visible = o.visible && o.opacity > 0;
-    if (n.tint) n.mats[0].m.color.set(o.color);
-    for (const x of n.mats) {
-      const tr = x.transparent || o.opacity < 1;
-      if (x.m.transparent !== tr) { x.m.transparent = tr; x.m.depthWrite = !tr; x.m.needsUpdate = true; }
-      x.m.opacity = x.opacity * o.opacity;
-    }
-    pose(n, o.animation);
-    if (n.parts) for (const [name, x] of n.parts) x.n.visible = o.nodes && name in o.nodes ? !!o.nodes[name] : x.visible;
+    if (dragging && n.node === tc.object) continue;
+    applyObject(n, o, s.t);
   }
 }
 function setOpts() {
@@ -178,7 +168,10 @@ addEventListener("message", (e) => {
   } else if (d.type === "scene-edit:home") { home(); draw(); }
   else if (d.type === "scene-edit:cancel") cancel();
 });
+// P82: script problems go to the editor (shown with the object's Problems).
+reportScript = () => post({ type: "scene-edit:script-issues", issues: scriptIssues.slice() });
 try { await loadModels(dionysus.ctx); } catch (err) { console.error(err); }
+try { await loadScripts(dionysus.ctx); } catch (err) { console.error(err); }
 for (const [id, n] of nodes) n.node.userData.sceneId = id;
 setOpts(); size();
 post({ type: "scene-edit:ready" });
@@ -211,7 +204,7 @@ export function sceneEditPage(doc: SceneDoc | undefined): string {
 <script type="module">
 ${SCENE_BUILD_JS}${SCENE_EDIT_JS}</script></body></html>
 `;
-  const models = (Array.isArray(rest.objects) ? rest.objects : []).some((o) => o && typeof o.model === "string" && o.model);
+  const { models, scripts } = sceneFileUse(rest);
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models ? ["three-gltf"] : [])], files: models ? used : {} });
+  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models ? ["three-gltf"] : [])], files: models || scripts ? used : {} });
 }

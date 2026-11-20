@@ -98,8 +98,8 @@ export function renameSceneObject(doc: SceneDoc, id: string, next: string): { do
 }
 
 /**
- * Delete an object with its events and the lookAt events that target it; its model file goes too when no other
- * object uses it. Returns how many events were removed.
+ * Delete an object with its events and the lookAt events that target it; its model or script file goes too when no
+ * other object uses it. Returns how many events were removed.
  */
 export function removeSceneObject(doc: SceneDoc, id: string): { doc: SceneDoc; removedEvents: number } {
   const objects = objectsOf(doc);
@@ -111,6 +111,13 @@ export function removeSceneObject(doc: SceneDoc, id: string): { doc: SceneDoc; r
   let out: SceneDoc = { ...doc, objects: keep, ...(doc.events ? { events } : {}) };
   if (typeof gone.model === "string" && isObj(doc.files) && !keep.some((o) => isObj(o) && o.model === gone.model)) {
     const { [gone.model]: _drop, ...files } = doc.files;
+    void _drop;
+    out = Object.keys(files).length ? { ...out, files } : (({ files: _f, ...rest }) => (void _f, rest as SceneDoc))(out);
+  }
+  // P82: a Script object's code file goes too when no other object uses it.
+  const sf = isObj(gone.script) ? gone.script.file : undefined;
+  if (typeof sf === "string" && isObj(out.files) && sf in out.files && !keep.some((o) => isObj(o) && (o.model === sf || (isObj(o.script) && o.script.file === sf)))) {
+    const { [sf]: _drop, ...files } = out.files;
     void _drop;
     out = Object.keys(files).length ? { ...out, files } : (({ files: _f, ...rest }) => (void _f, rest as SceneDoc))(out);
   }
@@ -357,7 +364,7 @@ export function duplicateSceneEvent(doc: SceneDoc, i: number): { doc: SceneDoc; 
 export interface SceneBlock { index: number; at: number; dur: number; end: number; call: string; row: number }
 export interface SceneTrack {
   /** The object id (`camera` for the camera; "#scene", "#light-<i>" and "" (unknown objects) never take events). */
-  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "light" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
+  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "light" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
   /** P81b: a light track's index in the drawn lights. */
   light?: number;
 }
@@ -377,7 +384,9 @@ export function sceneTracks(doc: SceneDoc, minSec = 0.4): SceneTrack[] {
   ];
   for (const o of objectsOf(doc)) {
     if (!isObj(o) || typeof o.id !== "string") continue;
-    tracks.push({ id: o.id, label: typeof o.name === "string" && o.name ? o.name : o.id, kind: typeof o.model === "string" ? "model" : "shape", detail: typeof o.model === "string" ? o.model : o.shape ?? "box", rows: 1, blocks: [] });
+    const script = isObj(o.script) && typeof o.script.file === "string" ? o.script.file : undefined;
+    tracks.push({ id: o.id, label: typeof o.name === "string" && o.name ? o.name : o.id, kind: script ? "script" : typeof o.model === "string" ? "model" : "shape",
+      detail: script ? `script ${script}` : typeof o.model === "string" ? o.model : o.shape ?? "box", rows: 1, blocks: [] });
   }
   const byId = new Map(tracks.map((t) => [t.id, t]));
   const { lights, defaults } = sceneLights(doc);

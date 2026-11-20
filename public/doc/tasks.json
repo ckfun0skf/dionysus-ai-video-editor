@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-16",
+  "updatedAt": "2026-11-19",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3382,6 +3382,12 @@
         {
           "id": "P81B-SCENE-CAMERA-LIGHTS",
           "title": "Scene editor: the camera and lights as objects (owner feedback item 4, second half; docs/v2/SCENE_FORMAT.md Editing and Edit view): the camera gets its own Camera track and form (field of view, position and look-at point at 0 s, add a camera move) while the Scene track keeps only scene-wide settings (name, length, background, the lights list); lights get an optional id in dionysus.scene/1 (unique among objects and lights, not \"camera\"; events can't name a light because lights are static), one track each and a form (id, type, colour, intensity, position). In the Edit view the scene camera is drawn with its frustum (clip aspect, to the look-at distance) and a yellow look-at point, each directional / point light as a handle with its three.js helper; all are tap-selectable and move-only: the camera's position or look-at point (chips Move camera / Move look-at point) writes the selected camera moveTo / lookAt event, an Auto-key camera key ending at the playhead, or world.camera.position / lookAt; a light's drag sets its position (light values arrive with the state, so the page is not rebuilt). Phone context toolbar: camera (Start, Add event, Move, Aim) and light (Light, Move, Delete). Rotate drags are unwrapped next to the drag's start, so 360° plus a 15° turn is 375° instead of 15°. Agents: new set_scene_light edit tool (by id or index; add, change, remove; also in apply_scene_edits) and the camera start and lights in list_scene_objects; rule 79 text updated, gen:ai regenerated. Tests: domain/sceneGizmo, sceneEdit, sceneAgent, render/sceneEditPage, ui/sceneEditView and sceneEditor.",
+          "status": "done",
+          "progress": 100
+        },
+        {
+          "id": "P82-SCENE-SCRIPT-OBJECTS",
+          "title": "Scene Script objects (owner follow-up, last of four; docs/v2/SCENE_FORMAT.md Script objects): an object with script { file, params } in dionysus.scene/1 is drawn by raw three.js code kept in the scene's files (build(THREE, params, ctx) returns an Object3D; update(obj, t, params, ctx) sets it from scene time alone; ctx.random is seeded so preview, export and any seek order match). Four templates to start from (particles, procedural shape, text, empty). The code is checked statically (size, no imports, a build export, syntax) and the page runs each script first in a check worker with a 3 s limit, so an endless loop never freezes the page or an export; a failing script draws its fallback shape and is reported to the player and the editor. The scene editor gets Script objects in Add object (two columns), a Script section (params, a code box with live checks, Apply as one undo step, Revert, templates, Turn into a plain shape) and a Script tool on the phone; agents get set_scene_script and each Script object's code in list_scene_objects (rule 79 text updated). Also fixes the phone Edit view's 'Drag writes…' hint covering handles: it is now a strip under the view (a small pill on desktop).",
           "status": "done",
           "progress": 100
         }

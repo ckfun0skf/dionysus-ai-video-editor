@@ -124,7 +124,10 @@ describe("P74 scene clip type", () => {
     expect(doc).toContain('"three":"https://example.test/three.js"');
     expect(doc).toContain("ctx.inputs && ctx.inputs.scene");
     // The page never keeps its own clock: no timers, random numbers or animation loops (the frame is a function of the sent state).
-    expect(SCENE_RUNTIME_JS).not.toMatch(/Math\.random|performance\.now|Date\.now|requestAnimationFrame|setTimeout|setInterval/);
+    // P82: the only timers are the Script object check's time limits while the page loads (scriptChecker), never in a frame.
+    const checker = /function scriptChecker\(\) \{[\s\S]*?\n\}\n/;
+    expect(SCENE_RUNTIME_JS).toMatch(checker);
+    expect(SCENE_RUNTIME_JS.replace(checker, "")).not.toMatch(/Math\.random|performance\.now|Date\.now|requestAnimationFrame|setTimeout|setInterval/);
   });
 
   it("the timeline and inspector entry: cube icon, Scene tab first, no speed or volume", async () => {
