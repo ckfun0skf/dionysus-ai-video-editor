@@ -11,6 +11,8 @@ import { FONTS, getFont, getPreset, listPresets, parsePresetRef, type PresetDesc
 import { positionErrors } from "./spatial";
 import { normalizeSchema, toSchema31 } from "./storySchema";
 import { parseMask, type ClipMask } from "./mask";
+import { parseMotionPath, type MotionPath } from "./motionPath";
+import { TICKS_PER_SECOND } from "./time";
 import { SCENE_FORMAT, validateScene, type SceneDoc } from "./scene";
 
 export const STORYBOARD_FORMAT = "dionysus.storyboard/1" as const;
@@ -166,6 +168,11 @@ interface StoryLayerBase {
   blend?: string;
   /** V2-SB-128: 0 (invisible) to 1 (solid, the default). */
   opacity?: number;
+  /**
+   * P89: the layer moves along this path (docs/v2/MOTION_PATH.md). In memory: centre offsets and ticks from the layer
+   * start, like Placement.motionPath; in the JSON: frame points (0–1 from the top-left, the layer centre) and seconds.
+   */
+  motionPath?: MotionPath;
 }
 export interface StoryTextLayer extends StoryLayerBase {
   type: "text"; text: string; position?: StoryPoint; box?: StoryBox;
@@ -1034,6 +1041,14 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
     return parsed.mask;
   };
 
+  /** P89: a layer's motion path (frame points, seconds from the layer start). A bad path is dropped with a warning. */
+  const motionPathOf = (v: unknown, path: string, durSec: number): MotionPath | undefined => {
+    if (v === undefined) return undefined;
+    const parsed = parseMotionPath(v, { path, durationSec: durSec, aspect: aspectRatio(aspect), ticksPerSecond: TICKS_PER_SECOND, frame: true });
+    for (const issue of parsed.issues) warn(issue.path, issue.level === "error" ? `${issue.message} The motion path is ignored.` : issue.message);
+    return parsed.path;
+  };
+
   const layersOf = (v: unknown, path: string, dur: number): StoryLayer[] | undefined => {
     if (v === undefined) return undefined;
     if (!Array.isArray(v)) { err(path, '"layers" must be a list.'); return undefined; }
@@ -1067,6 +1082,9 @@ export function validateStoryboard(raw: unknown, opts: StoryValidateOptions = {}
         if (l.follow === "shot") follow = "shot";
         else warn(`${lp}.follow`, `follow ${JSON.stringify(l.follow)} is ignored: use "frame" (stays put, the default) or "shot" (moves with the shot's zoom and pan).`);
       }
+      const motionPath = motionPathOf(l.motionPath, `${lp}.motionPath`, endSec - startSec);
+      if (motionPath && follow) { warn(`${lp}.follow`, '"follow": "shot" is ignored: the layer moves along its motionPath.'); follow = undefined; }
+      if (motionPath) Object.assign(look, { motionPath });
       if (type === "text" && l.chromaKey !== undefined) warn(`${lp}.chromaKey`, "Only image, video and html layers can be chroma keyed; it is ignored on a text layer.");
       if (type === "text" && l.mask !== undefined) warn(`${lp}.mask`, "A mask hides part of a picture. Text layers cannot be masked; it is ignored.");
       if (type === "text") {

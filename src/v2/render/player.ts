@@ -11,7 +11,8 @@ import { trackSignal, type TrackSignal } from "../domain/tracking";
 import { audioFxData, buildFxChain, fxKey, type FxChain } from "./audioFx";
 import { buildSpatial, type SpatialStage } from "./spatial";
 import type { AudioEnvironment, AudioOutputMode } from "../domain/spatial";
-import { compositionDuration, fadeAt, findPlacement, versionOfPlacement, type Placement, type Project } from "../domain/model";
+import { compositionDuration, fadeAt, findPlacement, versionOfPlacement, withMotionPath, type Placement, type Project } from "../domain/model";
+import type { MotionPath } from "../domain/motionPath";
 import type { BlobStore } from "../ports/storage";
 import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
@@ -138,6 +139,8 @@ export class Player {
    * Export builds its own Player and never sets this, so editing chrome and uncommitted drafts are not exported.
    */
   maskPreview: { id: string; mask?: ClipMask } | null = null;
+  /** P89: the Motion path editor's draft for one clip (drawn as if committed; null path = no path). */
+  motionPreview: { id: string; path: MotionPath | null } | null = null;
   private maskFor(p: Placement): ClipMask | undefined { return this.maskPreview?.id === p.id ? this.maskPreview.mask : p.mask; }
   private blit(g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D, placement: Placement, srcW: number, srcH: number, r: Placed, sourceTicks: number, draw: (g: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D) => void) {
     paintClip(g, placement, this.maskFor(placement), srcW, srcH, r, sourceTicks, this.time - placement.startTicks, draw);
@@ -526,7 +529,8 @@ export class Player {
     for (const { track, placement: raw, sourceTicks, mix, tfx } of layers) {
       if (raw.clipType === "effect") continue;
       // V2-103: text clips render with their layer style merged under their own overrides (preview and export alike).
-      const placement = effectivePlacement(track, raw);
+      const eff = effectivePlacement(track, raw);
+      const placement = this.motionPreview?.id === raw.id ? withMotionPath(eff, this.motionPreview.path) : eff;
       if (!fxDone && track.id !== mainId && track.kind !== "audio") applyFx();
       if (this.skipIds?.has(raw.id) || this.skipIds?.has(placement.id)) continue;
       // Overlay-scope effects: draw the clip on a transparent layer, apply the effect there, then composite it.

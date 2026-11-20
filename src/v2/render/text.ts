@@ -142,7 +142,7 @@ export function lineStartOffsets(fullText: string, lines: string[]): number[] {
 /** Draw a text clip at time `t`; returns its on-canvas box (for selection and handles). */
 export function drawTextClip(ctx: CanvasRenderingContext2D, p: Placement, w: number, h: number, t: number, mix = 1, track?: Track): Placed {
   const d = textOf(p.text);
-  const tr = transformAt(p, t);
+  const tr = transformAt(p, t, w / h);
   const resolved = resolveCaption(track, p);
   const captionWords = resolved.mode === "word-highlight" ? wordsForCaption(p) : d.words;
   const drawAsHighlight = resolved.mode === "word-highlight" && !!captionWords?.length;

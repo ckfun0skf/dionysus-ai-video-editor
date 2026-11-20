@@ -1,6 +1,7 @@
 /** Schema 3.0 domain model (MVP subset). Pure data; see docs/v2/MODULE_DESIGN.md §5. */
 import type { TextData } from "./text";
 import type { ClipMask } from "./mask";
+import { motionPathAt, type MotionPath } from "./motionPath";
 import type { Storyboard } from "./storyboard";
 import { clipTypeOf, coreOf, isKnownClipType } from "../clipTypes";
 /** 3.1 (V2-CUT-01): optional `storyboard`. Older schemas upgrade via persistence/schema MIGRATIONS. */
@@ -165,6 +166,11 @@ export interface Placement {
    */
   mask?: ClipMask;
   /**
+   * P89: a hand-drawn motion path (see domain/motionPath and docs/v2/MOTION_PATH.md). While set, it alone gives the
+   * clip's x / y (x / y keyframes are removed when it is set) and, with `orient`, its rotation. Overlay and text clips.
+   */
+  motionPath?: MotionPath;
+  /**
    * Storyboard linked item (V2-SB-113): a layer, caption or effect clip sent with a shot. It follows the shot clip
    * `anchor` on version swaps (see domain/storyLinks). `want` remembers the offset/length before a clamp.
    */
@@ -219,6 +225,27 @@ export interface ChromaKey { color: string; range: number; spill: number; off?: 
 export const CHROMA_DEFAULT: ChromaKey = { color: "#00ff00", range: 0.4, spill: 0.5 };
 /** Clips a chroma key can apply to (video, image, html). P66: `caps.keyable`. */
 export const canChromaKey = (p: Pick<Placement, "clipType">) => clipTypeOf(p).caps.keyable;
+/**
+ * P89: `p` with motion path `path` (null = none). Setting one removes the x / y keyframes (the path gives x / y) and,
+ * when it orients the clip, the rotation keyframes; scale and opacity keys stay. The engine command and the editor's
+ * live preview both use this, so a draft looks exactly like the committed path.
+ */
+export function withMotionPath(p: Placement, path: MotionPath | null): Placement {
+  if (!path) { if (!p.motionPath) return p; const { motionPath: _m, ...rest } = p; return rest; }
+  const keys = { ...p.keyframes };
+  delete keys.x; delete keys.y;
+  if (path.orient) delete keys.rotation;
+  const next: Placement = { ...p, motionPath: path, keyframes: keys };
+  if (!Object.keys(keys).length) delete next.keyframes;
+  return next;
+}
+
+/**
+ * P89: clips that can have a motion path: visual clips with a position (video, image, html, text, scene, plugins) that
+ * are not on the main track (the base picture fills the frame; put moving things on an overlay) and not placeholders.
+ */
+export const canMotionPath = (p: Pick<Placement, "clipType" | "placeholder"> | undefined, onMain: boolean): boolean =>
+  !!p && !onMain && !p.placeholder && clipTypeOf(p as Pick<Placement, "clipType">).caps.visual;
 /** Clips with sound a volume curve and audio effects can apply to (audio, video). P66: `caps.sound`. */
 export const hasSound = (p: Pick<Placement, "clipType">) => clipTypeOf(p).caps.sound;
 /** 0..2 volume-envelope multiplier at absolute time `t` (1 without keys). */
@@ -245,12 +272,20 @@ export function fadeAt(p: Placement, t: number): number {
   return g;
 }
 
-/** Effective transform at absolute time `t`: static transform overridden by keyframes, opacity × fade. */
-export function transformAt(p: Placement, t: number): Transform {
+/**
+ * Effective transform at absolute time `t`: static transform overridden by keyframes, then (P89) by the motion path
+ * (x / y, and rotation when it orients the clip), opacity × fade. `aspect` = frame width / height (the path measures
+ * lengths and angles on the frame); renderers pass the frame's, others may omit it (16:9).
+ */
+export function transformAt(p: Placement, t: number, aspect?: number): Transform {
   const base = transformOf(p);
   const o = t - p.startTicks;
   const out = { ...base };
   for (const k of ["x", "y", "scale", "rotation", "opacity"] as const) { const v = evalKeys(p.keyframes?.[k], o); if (v !== undefined) out[k] = v; }
+  if (p.motionPath?.nodes.length) {
+    const at = motionPathAt(p.motionPath, o, aspect);
+    if (at) { out.x = at.x; out.y = at.y; if (p.motionPath.orient) out.rotation = (at.angle ?? 0) + p.motionPath.orient.offset; }
+  }
   out.opacity *= fadeAt(p, t);
   return out;
 }

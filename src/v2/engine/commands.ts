@@ -4,7 +4,7 @@ import type { Command } from "./engine";
 import { removePluginLock, setPluginLock, switchPluginVersion } from "../domain/pluginLocks";
 import type { HtmlClipParam } from "../domain/htmlClipPackage";
 import type { PluginLock } from "../domain/model";
-import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, hasSound, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
+import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, hasSound, newId, sourceInMax, trackKindFor, withMotionPath, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as clipRange from "../domain/clipRange";
 import * as slipOps from "../domain/slip";
@@ -22,6 +22,7 @@ import * as cleanupOps from "../domain/cleanup";
 import * as clipVersion from "../domain/clipVersion";
 import * as tracking from "../domain/tracking";
 import { canMask, maskErrors, type ClipMask } from "../domain/mask";
+import { motionPathErrors, type MotionPath } from "../domain/motionPath";
 /** P38: throw when a "code:<assetId>" preset/kind names an asset of another role. */
 const needRole = (p: Project, preset: string | undefined, want: "effect" | "transition") => { const a = codeAssetOf(preset); const e = a ? codeRoleIssue(p, a, want) : undefined; if (e) throw new Error(e); };
 import type { ChromaKey, Keyframe, Subtitle } from "../domain/model";
@@ -788,7 +789,32 @@ export const attachTrack = (followerId: string, targetId: string, at: number, op
     if (typeof tr === "string") throw new Error(tr);
     const keys = tracking.followKeys(p, target, tr, f, at, opts);
     // Re-attaching replaces earlier follow keys (position, scale, rotation) instead of mixing two tracks.
-    return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; return { ...pl, keyframes: { ...rest, ...keys } }; });
+    // P89: following a tracker replaces a motion path (the tracker's x / y keys move the clip; "Edit as path" turns them back into one).
+    return editPlacement(p, followerId, (pl) => { const { x: _x, y: _y, scale: _s, rotation: _r, ...rest } = pl.keyframes ?? {}; const { motionPath: _m, ...pl2 } = pl; return { ...pl2, keyframes: { ...rest, ...keys } }; });
+  },
+});
+/**
+ * P89: set or clear a clip's motion path. Setting one removes the clip's x / y keyframes (the path gives x / y now);
+ * a path that orients the clip also removes its rotation keyframes. `null` removes the path (the clip keeps its static
+ * position). Throws on an invalid path. One undo step (with `coalesceKey`, one per gesture).
+ */
+export const setMotionPath = (id: string, path: MotionPath | null, label = path ? "Motion path" : "Remove motion path"): Command => ({
+  label, coalesceKey: `mp:${id}`,
+  apply: (p) => {
+    const problems = motionPathErrors(path ?? undefined);
+    if (problems.length) throw new Error(problems.join(" "));
+    const at = Object.entries(p.compositions).find(([, c]) => c.tracks.some((t) => t.placements.some((x) => x.id === id)));
+    if (!at) throw new Error(`clip ${id} not found`);
+    const [cid, comp] = at;
+    let changed = false;
+    const tracks = comp.tracks.map((t) => ({ ...t, placements: t.placements.map((pl) => {
+      if (pl.id !== id) return pl;
+      const next = withMotionPath(pl, path);
+      if (next === pl || JSON.stringify(next) === JSON.stringify(pl)) return pl;
+      changed = true;
+      return next;
+    }) }));
+    return changed ? { ...p, compositions: { ...p.compositions, [cid]: { ...comp, tracks } } } : p;
   },
 });
 /** P49: set or clear a clip visibility mask. One undo step. `null` removes it. */

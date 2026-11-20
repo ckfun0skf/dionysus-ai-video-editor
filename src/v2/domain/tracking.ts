@@ -65,7 +65,7 @@ export function sampleAt(tr: Pick<NamedTrack, "samples"> & Partial<Pick<NamedTra
 
 /** Map a source-normalised point of `p` to canvas offsets (fraction of the frame from its centre) at absolute time `t`. */
 export function toCanvas(project: Project, p: Placement, tr: MotionTrack, nx: number, ny: number, t: number) {
-  const { width: dw, height: dh } = project.settings, tf = transformAt(p, t);
+  const { width: dw, height: dh } = project.settings, tf = transformAt(p, t, dw / dh);
   const s = Math.min(dw / tr.srcW, dh / tr.srcH) * tf.scale, fullW = tr.srcW * s, fullH = tr.srcH * s;
   const cx = dw / 2 + tf.x * dw, cy = dh / 2 + tf.y * dh;
   const lx = (nx - 0.5) * fullW, ly = (ny - 0.5) * fullH, a = (tf.rotation * Math.PI) / 180;

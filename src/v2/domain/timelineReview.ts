@@ -12,6 +12,7 @@ import { missingTrackers } from "./codeInputs";
 import { TICKS_PER_SECOND } from "./time";
 import { textOf } from "./text";
 import { maskToJson } from "./mask";
+import { motionPathToJson } from "./motionPath";
 import { STORY_ASSET_TYPES } from "./storyJson";
 import { clipTypeAgentTools, clipTypeDescribe, isKnownClipType } from "../clipTypes";
 
@@ -24,7 +25,7 @@ const obj = (properties: Record<string, Schema>, required: string[] = []): Schem
 
 export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "get_timeline", title: "Read the timeline", readOnly: true,
-    description: "The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot, version, pinnedVersion, mask). Times are seconds. version is the take showing now; pinnedVersion is set when this clip stays on that take instead of following the storyboard. mask, when present, is a clip visibility mask (source-picture fractions; key times in seconds) — not an effect limit and not a tracker box mask (that stays on tracks[].mask).",
+    description: "The timeline as JSON: settings (size, fps), duration, and every track (id, kind, group, main) with its clips (id, start/duration/in in seconds, asset, type, volume, effect, transform, text, link parent, storyShot, version, pinnedVersion, mask, motionPath). Times are seconds. version is the take showing now; pinnedVersion is set when this clip stays on that take instead of following the storyboard. mask, when present, is a clip visibility mask (source-picture fractions; key times in seconds) — not an effect limit and not a tracker box mask (that stays on tracks[].mask). motionPath, when present, moves the clip (nodes with t in seconds from the clip start; see set_clip_motion_path).",
     inputSchema: obj({}) },
   { name: "capture_frame", title: "Capture a frame", readOnly: true,
     description: "Render the composited frame at timeSec exactly as export would and return it as a JPEG image (maxWidth px wide, default 640, at most 1280).",
@@ -134,6 +135,12 @@ export const TIMELINE_TOOLS: TimelineToolDef[] = [
   { name: "clear_clip_mask", title: "Remove a clip's visibility mask", readOnly: false,
     description: "P49: remove the visibility mask from a clip (the tracker box mask, if any, stays). One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("Clip id.") }, ["clipId"]) },
+  { name: "set_clip_motion_path", title: "Set a clip's motion path", readOnly: false,
+    description: "P89: move an overlay clip (video, image, HTML code, text or another picture clip — not on the main track, not a placeholder) along an After Effects style motion path. Coordinates are the clip transform's: x / y = offset of the clip centre from the frame centre as fractions of the frame width / height (0,0 = centred, -0.5 = left / top edge). nodes [{ id?, t?, x, y, in?: {x,y}, out?: {x,y}, ease? }] (at least 2 for movement; ids are kept so later edits can refer to a point): t = seconds from the clip start, on every point or none (none = spread along the clip by distance at constant speed); in / out are Bezier handle offsets (omit both for a corner / straight line); ease \"linear\" | \"in\" | \"out\" | \"inOut\" shapes the segment that starts at that point. constantSpeed true = one even speed over the whole path (inner times follow the distance). orient true or { offset: degrees } turns the clip along the path (rotation = direction + offset, replacing its rotation). While a path is set it alone gives x / y: the clip's x / y keyframes (and rotation keyframes when orient) are removed; scale and opacity keys stay. Following a tracker replaces the path. A bad path is rejected and nothing changes. One undo step; returns the clip.",
+    inputSchema: obj({ clipId: str("Overlay / text / code clip id."), path: { type: "object", description: "{ nodes: [{ id?, t?, x, y, in?, out?, ease? }], constantSpeed?, orient? }. See the description." } }, ["clipId", "path"]) },
+  { name: "clear_clip_motion_path", title: "Remove a clip's motion path", readOnly: false,
+    description: "P89: remove a clip's motion path. The clip stays at its static transform position (it does not keep the path's motion as keyframes). One undo step; returns the clip.",
+    inputSchema: obj({ clipId: str("Clip id.") }, ["clipId"]) },
   { name: "set_clip_version", title: "Set a clip's version pin", readOnly: false,
     description: "Pin one timeline clip to a version of its asset, or pass versionId null to follow the storyboard's current version (asset.selectedVersionId). Split halves and pasted copies of the same shot pick independently. One undo step; returns the clip.",
     inputSchema: obj({ clipId: str("Clip id."), versionId: { type: ["string", "null"], description: "Asset version id, or null to follow the storyboard." } }, ["clipId", "versionId"]) },
@@ -204,6 +211,7 @@ export function clipJson(p: Project, pl: Placement, track?: Track): Record<strin
     ...(pl.plugin && !isKnownClipType(pl.clipType) ? { plugin: { version: pl.plugin.v, loaded: false }, params: { ...(pl.plugin.data?.params ?? {}) } } : {}),
     ...(pl.motionTracks?.length ? { tracks: pl.motionTracks.map((t) => ({ id: t.id, name: t.name, sourceInSec: sec(t.inS), sourceOutSec: sec(t.outS), frames: t.samples.length, lost: t.samples.filter((x) => x.lost).length, ...(t.mask ? { mask: t.mask } : {}) })) } : {}),
     ...(pl.mask ? { mask: maskToJson(pl.mask) } : {}),
+    ...(pl.motionPath ? { motionPath: motionPathToJson(pl.motionPath, TICKS_PER_SECOND) } : {}),
     ...(pl.htmlInputs ? { inputs: pl.htmlInputs } : {}),
     ...(pl.storyLayer ? { storyLayer: pl.storyLayer } : {}),
     ...(pl.storyCue ? { storyCue: pl.storyCue } : {}),

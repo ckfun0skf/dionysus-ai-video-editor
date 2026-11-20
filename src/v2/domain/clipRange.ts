@@ -8,6 +8,7 @@
 import { TICKS_PER_SECOND } from "./time";
 import { findPlacement, versionOf } from "./model";
 import { MIN_DURATION_TICKS, mapTrack, shiftKeys } from "./ops";
+import { shiftMotionPath } from "./motionPath";
 import type { Composition, Placement, Project } from "./model";
 import { clipTypeOf } from "../clipTypes";
 
@@ -43,7 +44,7 @@ export function setSourceRange(comp: Composition, id: string, inTicks: number, o
   const durationTicks = Math.max(MIN_DURATION_TICKS, Math.round((b - a) / s));
   if (a === p.sourceInTicks && durationTicks === p.durationTicks) return comp;
   const shift = -Math.round((a - p.sourceInTicks) / s);
-  const next: Placement = { ...p, sourceInTicks: a, durationTicks, ...(p.keyframes && shift ? { keyframes: shiftKeys(p.keyframes, shift) } : {}) };
+  const next: Placement = { ...p, sourceInTicks: a, durationTicks, ...(p.keyframes && shift ? { keyframes: shiftKeys(p.keyframes, shift) } : {}), ...(p.motionPath && shift ? { motionPath: shiftMotionPath(p.motionPath, shift) } : {}) };
   return mapTrack(comp, f.track.id, (t) => ({ ...t, placements: t.placements.map((o) => (o.id === id ? next : o)) }));
 }
 
@@ -90,7 +91,7 @@ export function matchJoin(comp: Composition, aId: string, bId: string, aOut: num
   const oldBEnd = B.startTicks + B.durationTicks, delta = bStart + bDur - oldBEnd;
   const shift = -Math.round((newIn - B.sourceInTicks) / sb);
   const nA: Placement = { ...A, durationTicks: aDur };
-  const nB: Placement = { ...B, startTicks: bStart, sourceInTicks: newIn, durationTicks: bDur, ...(B.keyframes && shift ? { keyframes: shiftKeys(B.keyframes, shift) } : {}) };
+  const nB: Placement = { ...B, startTicks: bStart, sourceInTicks: newIn, durationTicks: bDur, ...(B.keyframes && shift ? { keyframes: shiftKeys(B.keyframes, shift) } : {}), ...(B.motionPath && shift ? { motionPath: shiftMotionPath(B.motionPath, shift) } : {}) };
   return mapTrack(comp, fa.track.id, (t) => ({
     ...t,
     placements: t.placements.map((o) => (o.id === aId ? nA : o.id === bId ? nB : o.startTicks >= oldBEnd ? { ...o, startTicks: o.startTicks + delta } : o)),

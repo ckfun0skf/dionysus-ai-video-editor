@@ -245,6 +245,8 @@ export function syncPlan(p: Project): SyncPlan {
       if (next.type !== "text") {
         if (pl.mask) (next as StoryMediaLayer).mask = structuredClone(pl.mask); else delete (next as StoryMediaLayer).mask;
       }
+      // P89: the clip's motion path (times from the clip start = the layer start); a path replaces "follow": "shot".
+      if (pl.motionPath) { next.motionPath = structuredClone(pl.motionPath); delete next.follow; } else delete next.motionPath;
       delete next.removedFromTimeline;
       pl.storyLayer = l.id;
       if (!eq(next, l)) { Object.assign(l, next); if (!next.opacity) delete l.opacity; delete l.removedFromTimeline; changes.push({ kind: "layer", id: `${shotId}/${l.id}`, label: `Layer "${l.id}" of "${s.title}": ${startSec}s–${endSec}s${eq(l.box, (next as StoryMediaLayer).box) && eq((l as StoryTextLayer).position, (next as StoryTextLayer).position) ? "" : ", moved"}` }); }
@@ -253,6 +255,7 @@ export function syncPlan(p: Project): SyncPlan {
     const id = uniqueId("tl-layer-", (x) => layers.some((y) => y.id === x));
     const base = { id, startSec, endSec, needsPrompt: true as const, ...(opacity !== undefined && opacity !== 1 ? { opacity } : {}) };
     let nl: StoryLayer;
+    if (pl.motionPath) Object.assign(base, { motionPath: structuredClone(pl.motionPath) });
     if (pl.clipType === "text") nl = { ...base, type: "text", text: pl.text?.text ?? "" } as StoryTextLayer;
     else nl = { ...base, type: storyOf(pl.clipType).layerType, asset: slotFor(b, p, pl.source.assetId), box: boxOf(p, pl), ...(pl.mask ? { mask: structuredClone(pl.mask) } : {}) } as StoryMediaLayer;
     layers.push(nl); layerSeen.add(`${shotId}/${id}`); pl.storyLayer = id;

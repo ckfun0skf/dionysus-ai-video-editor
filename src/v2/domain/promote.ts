@@ -15,6 +15,7 @@
  */
 import { isStill, newId, transformOf, IDENTITY_TRANSFORM, type Composition, type Placement, type Track } from "./model";
 import { mainTrack } from "./ops";
+import { shiftMotionPath } from "./motionPath";
 
 export type PromoteMode = "replace" | "insert";
 export type InsertPosition = "before" | "after";
@@ -51,6 +52,7 @@ export function cutPart(p: Placement, s: number, e: number, id = p.id): Placemen
   if (left > 0) { delete q.fadeInTicks; delete q.transitionIn; }
   if (right > 0) delete q.fadeOutTicks;
   if (left > 0 && p.keyframes) q.keyframes = Object.fromEntries(Object.entries(p.keyframes).map(([k, ks]) => [k, ks!.map((x) => ({ ...x, t: Math.max(0, x.t - left) }))]));
+  if (left > 0 && p.motionPath) q.motionPath = shiftMotionPath(p.motionPath, -left);
   if (id !== p.id) delete q.storyTrim;
   return q;
 }
@@ -105,7 +107,7 @@ export function promoteOverlay(comp: Composition, clipId: string, opts: PromoteO
   // The promoted clip: overlay-only props dropped, link removed, storyboard layer mapping cleared.
   const promoted: Placement = { ...ov };
   delete promoted.link; delete promoted.storyLayer; delete promoted.storyLink; delete promoted.blend; delete promoted.chromaKey;
-  if (!keepTransform) { delete promoted.transform; if (promoted.keyframes) { const k = Object.fromEntries(Object.entries(promoted.keyframes).filter(([key]) => key === "volume")); if (Object.keys(k).length) promoted.keyframes = k; else delete promoted.keyframes; } }
+  if (!keepTransform) { delete promoted.transform; delete promoted.motionPath; if (promoted.keyframes) { const k = Object.fromEntries(Object.entries(promoted.keyframes).filter(([key]) => key === "volume")); if (Object.keys(k).length) promoted.keyframes = k; else delete promoted.keyframes; } }
   else if (promoted.transform && JSON.stringify(transformOf(promoted)) === JSON.stringify(IDENTITY_TRANSFORM)) delete promoted.transform;
 
   let newMains: Placement[];

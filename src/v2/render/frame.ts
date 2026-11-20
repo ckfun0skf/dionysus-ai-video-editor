@@ -49,7 +49,7 @@ export function fitRect(sw: number, sh: number, dw: number, dh: number) {
 /** Where a visual placement lands on the canvas: centre, size, rotation (rad), alpha, and the source crop rect. */
 export interface Placed { cx: number; cy: number; w: number; h: number; rot: number; alpha: number; sx: number; sy: number; sw: number; sh: number }
 export function placeRect(p: Placement, srcW: number, srcH: number, dw: number, dh: number, at?: number): Placed {
-  const t = at === undefined ? transformOf(p) : transformAt(p, at);
+  const t = at === undefined ? transformOf(p) : transformAt(p, at, dw / dh);
   const sw = srcW * (1 - t.crop.l - t.crop.r), sh = srcH * (1 - t.crop.t - t.crop.b);
   // Fit the uncropped frame so cropping does not zoom the remaining picture.
   const s = Math.min(dw / srcW, dh / srcH) * t.scale;

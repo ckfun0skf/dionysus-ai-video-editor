@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as RPE } from "react";
 import { cmd, type Engine } from "../engine";
-import { evalKeys, transformOf, ticksToSeconds, secondsToTicks, type TransformKeyProp, type Placement } from "../domain";
+import { evalKeys, motion, transformOf, ticksToSeconds, secondsToTicks, type TransformKeyProp, type Placement } from "../domain";
 import type { Placed } from "../render";
 import { listPresets } from "../registry";
 import { Ic } from "./Icon";
@@ -11,17 +11,30 @@ import { SliderField } from "./SliderField";
 type Patch = Parameters<typeof cmd.setTransform>[1];
 const KEYED: TransformKeyProp[] = ["x", "y", "scale", "rotation", "opacity"];
 
-/** Transform value at absolute time (keyframes applied, fades not). */
-export function valuesAt(p: Placement, time: number) {
+/** Transform value at absolute time (keyframes and a P89 motion path applied, fades not). `aspect` = frame w / h. */
+export function valuesAt(p: Placement, time: number, aspect = 16 / 9) {
   const t = transformOf(p);
   for (const k of KEYED) { const v = evalKeys(p.keyframes?.[k], time - p.startTicks); if (v !== undefined) t[k] = v; }
+  const at = p.motionPath?.nodes.length ? motion.motionPathAt(p.motionPath, time - p.startTicks, aspect) : undefined;
+  if (at) { t.x = at.x; t.y = at.y; if (p.motionPath!.orient) t.rotation = (at.angle ?? 0) + p.motionPath!.orient.offset; }
   return t;
 }
 
-/** Route a patch: keyframed props get a key at the playhead, the rest go to the static transform. */
-export function applyPatch(engine: Engine, p: Placement, time: number, patch: Patch) {
+/**
+ * Route a patch: keyframed props get a key at the playhead, the rest go to the static transform. P89: on a clip with a
+ * motion path, x / y set (or add) the path point at the playhead, and rotation (when it orients) sets the orient offset.
+ */
+export function applyPatch(engine: Engine, p: Placement, time: number, patch: Patch, aspect = 16 / 9) {
   if (patch === null) { engine.dispatch(cmd.setTransform(p.id, null)); return; }
   const rest: Exclude<Patch, null> = { ...patch };
+  if (p.motionPath?.nodes.length && (patch.x !== undefined || patch.y !== undefined || (patch.rotation !== undefined && p.motionPath.orient))) {
+    const off = time - p.startTicks, now = valuesAt(p, time, aspect);
+    let mp = p.motionPath;
+    if (patch.x !== undefined || patch.y !== undefined) mp = motion.setPointAt(mp, Math.max(0, Math.min(p.durationTicks, off)), { x: patch.x, y: patch.y }, { x: now.x, y: now.y }, aspect);
+    if (patch.rotation !== undefined && mp.orient) mp = motion.setOrient(mp, { offset: mp.orient.offset + patch.rotation - now.rotation });
+    engine.dispatch(cmd.setMotionPath(p.id, mp));
+    delete rest.x; delete rest.y; if (p.motionPath.orient) delete rest.rotation;
+  }
   for (const k of KEYED) {
     if (patch[k] !== undefined && p.keyframes?.[k]?.length) { engine.dispatch(cmd.setKeyframe(p.id, k, time - p.startTicks, patch[k]!)); delete rest[k]; }
   }
@@ -29,20 +42,30 @@ export function applyPatch(engine: Engine, p: Placement, time: number, patch: Pa
 }
 
 /** Slider inspector for a visual clip's transform. Each drag is one undo step. */
-export function TransformInspector({ engine, placement, time }: { engine: Engine; placement: Placement; time: number }) {
-  const t = valuesAt(placement, time);
+export function TransformInspector({ engine, placement, time, aspect = 16 / 9 }: { engine: Engine; placement: Placement; time: number; aspect?: number }) {
+  const t = valuesAt(placement, time, aspect);
   const offset = time - placement.startTicks;
   const inside = offset >= 0 && offset <= placement.durationTicks;
-  const set = (patch: Patch) => applyPatch(engine, placement, time, patch);
+  const set = (patch: Patch) => applyPatch(engine, placement, time, patch, aspect);
+  const mp = placement.motionPath?.nodes.length ? placement.motionPath : undefined;
   const row = (label: string, value: number, min: number, max: number, step: number, fmt: { unit: string; scale?: number }, patch: (v: number) => Patch, prop?: TransformKeyProp) => {
-    const keys = prop ? placement.keyframes?.[prop] : undefined;
-    const onKey = !!keys?.some((k) => Math.abs(k.t - offset) <= 600);
+    // P89: X / Y of a clip with a motion path: the diamond is a path point at the playhead (add / remove).
+    const onPath = !!mp && (prop === "x" || prop === "y");
+    const pathTimes = onPath ? motion.motionPathTimes(mp!, aspect) : [];
+    const pathHit = onPath ? mp!.nodes.find((_, i) => Math.abs(pathTimes[i] - offset) <= 600) : undefined;
+    const keys = prop && !onPath ? placement.keyframes?.[prop] : undefined;
+    const onKey = onPath ? !!pathHit : !!keys?.some((k) => Math.abs(k.t - offset) <= 600);
+    const what = onPath ? "motion path point" : `${label} keyframe`;
     return (
     <SliderField key={label} className="v2-insp-sf" label={label} value={value} min={min} max={max} step={step} unit={fmt.unit} scale={fmt.scale}
       onBegin={() => engine.beginGesture()} onEnd={() => engine.endGesture()} onChange={(v) => set(patch(v))}
-      extra={prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length ? "is-keyed" : ""}`} disabled={!inside} aria-pressed={onKey}
-        title={onKey ? `Remove ${label} keyframe at playhead` : `Add ${label} keyframe at playhead`} aria-label={`${label} keyframe`}
-        onClick={(e) => { e.preventDefault(); engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value)); }}><Ic g="◆" /></button> : undefined} />
+      extra={prop ? <button type="button" className={`v2-kf ${onKey ? "is-on" : keys?.length || onPath ? "is-keyed" : ""}`} disabled={!inside || (onPath && !!pathHit && mp!.nodes.length <= 1)} aria-pressed={onKey}
+        title={onKey ? `Remove ${what} at playhead` : `Add ${what} at playhead`} aria-label={onPath ? `${label} motion path point` : `${label} keyframe`}
+        onClick={(e) => {
+          e.preventDefault();
+          if (onPath) engine.dispatch(cmd.setMotionPath(placement.id, pathHit ? motion.deleteNode(mp!, pathHit.id) : motion.setPointAt(mp!, offset, {}, { x: t.x, y: t.y }, aspect)));
+          else engine.dispatch(cmd.setKeyframe(placement.id, prop, offset, onKey ? null : value));
+        }}><Ic g="◆" /></button> : undefined} />
     );
   };
   const pct = { unit: "%", scale: 100 };
@@ -127,7 +150,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     startGesture();
     drag.current = undefined;
     if (press.current) press.current.state = "ignore";
-    pinch.current = { a0, b0, t0: valuesAt(placement, time), box };
+    pinch.current = { a0, b0, t0: valuesAt(placement, time, canvas.width / canvas.height), box };
   };
   const start = (mode: "move" | "spin") => (e: RPE) => {
     e.stopPropagation(); e.preventDefault();
@@ -141,7 +164,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
       press.current = { id: e.pointerId, x0: e.clientX, y0: e.clientY, onOther: false, state: "move", gizmo: true };
     }
     startGesture();
-    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
+    drag.current = { mode, x0: e.clientX, y0: e.clientY, t0: valuesAt(placement, time, canvas.width / canvas.height), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
   };
   /** V2-113: press anywhere else on the preview — tap selects/deselects, drag moves the selection, two fingers pinch it. */
   const startOutside = (e: RPE) => {
@@ -175,7 +198,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
     if (now && (!was || g.x !== guides.x || g.y !== guides.y)) navigator.vibrate?.(8); // light haptic tick on snap
     void snapped;
     setGuides(g);
-    (route ?? ((pt: Patch) => applyPatch(engine, placement, time, pt)))({ x: t0.x + cdx / W, y: t0.y + cdy / H, scale: t0.scale * r, rotation: deg });
+    (route ?? ((pt: Patch) => applyPatch(engine, placement, time, pt, canvas.width / canvas.height)))({ x: t0.x + cdx / W, y: t0.y + cdy / H, scale: t0.scale * r, rotation: deg });
   };
   const move = (e: RPE) => {
     if (!pts.current.has(e.pointerId)) return;
@@ -189,7 +212,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
         if (g === "move") {
           pr.state = "move";
           startGesture();
-          drag.current = { mode: "move", x0: pr.x0, y0: pr.y0, t0: valuesAt(placement, time), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
+          drag.current = { mode: "move", x0: pr.x0, y0: pr.y0, t0: valuesAt(placement, time, canvas.width / canvas.height), cx: rect.left + box.cx * k, cy: rect.top + box.cy * k, b0: box };
         } else if (g === "ignore") pr.state = "ignore";
       }
     }
@@ -247,7 +270,7 @@ export function TransformHandles({ engine, placement, box, canvas, time, actions
       {btn("nw", "Delete", "🗑", actions?.onDelete)}
       {btn("ne", "Edit", "✎", actions?.onEdit)}
       {btn("sw", "Duplicate", "⧉", actions?.onDuplicate)}
-      <span className="v2-giz se" role="slider" aria-label="Rotate and scale" aria-valuenow={Math.round(valuesAt(placement, time).rotation)} onPointerDown={start("spin")} {...handlers}><Ic g="⟳" size={14} /></span>
+      <span className="v2-giz se" role="slider" aria-label="Rotate and scale" aria-valuenow={Math.round(valuesAt(placement, time, canvas.width / canvas.height).rotation)} onPointerDown={start("spin")} {...handlers}><Ic g="⟳" size={14} /></span>
     </div>
     </>
   );

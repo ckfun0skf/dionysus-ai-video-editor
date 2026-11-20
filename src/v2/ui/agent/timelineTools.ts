@@ -11,7 +11,7 @@ import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
 import { captions, cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 
 import { getPreset, listPresets } from "../../registry";
-import { tracking, sourceAt, ticksToSeconds, masking, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
+import { tracking, sourceAt, ticksToSeconds, masking, motion, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
 import { makeTrackAnalyse, nearestIndex, rangeTrack, trackTicks } from "../trackAnalyse";
 
 /** P39: the analyser track_clip uses (tests swap it; jsdom can't decode video). */
@@ -659,6 +659,22 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
       const id = needClip(); if (typeof id !== "string") return id;
       if (!findPlacement(rootOf(project()), id)!.placement.mask) return fail(`Clip ${id} has no visibility mask.`);
       return edit(cmd.setClipMask(id, null), id);
+    }
+    case "set_clip_motion_path": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      const root = rootOf(project()), pl = findPlacement(root, id)!.placement;
+      if (!ops.canMotionPathIn(root, id)) return fail(`Clip ${id} cannot have a motion path (only overlay, text and code clips off the main track; not placeholders).`);
+      const { width, height } = project().settings;
+      const parsed = motion.parseMotionPath(a.path, { path: "path", durationSec: pl.durationTicks / TICKS_PER_SECOND, aspect: width / height, ticksPerSecond: TICKS_PER_SECOND });
+      if (!parsed.path) return fail(parsed.issues.map((i) => `${i.path}: ${i.message}`).join(" ") || "The motion path is not valid.");
+      const warn = parsed.issues.filter((i) => i.level === "warning").map((i) => `${i.path}: ${i.message}`);
+      const res = edit(cmd.setMotionPath(id, parsed.path), id);
+      return res.ok ? { ...res, text: warn.length ? `${res.text}\n${warn.join(" ")}` : res.text } : res;
+    }
+    case "clear_clip_motion_path": {
+      const id = needClip(); if (typeof id !== "string") return id;
+      if (!findPlacement(rootOf(project()), id)!.placement.motionPath) return fail(`Clip ${id} has no motion path.`);
+      return edit(cmd.setMotionPath(id, null), id);
     }
     case "set_clip_version": {
       const id = needClip(); if (typeof id !== "string") return id;

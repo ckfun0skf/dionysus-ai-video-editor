@@ -94,17 +94,17 @@ required checks.
    larger, but split refactors).
 3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P89-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P88-PLUGIN-AGENT-TOOLS`; the next is **P89**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P89-MOTION-PATH`; the next is **P90**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
-4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
-   the latest built-in is **78** `story-order-insert`). Clip types append their own rules after the built-ins
-   (`core.agent.rules`, P72): since P78 the scene type's `scene-clips` is **79**. A new built-in rule therefore takes
-   79 and moves `scene-clips` to 80 (move its copy in `STORYBOARD_FORMAT.md` and the key lists in `aiGuide.test.ts`
-   with it, and say so in the PR); a rule about one clip type belongs in that type's `core.agent.rules`. Then:
-   - add the same text as `79. …` after rule 78 in `docs/v2/STORYBOARD_FORMAT.md` (the test checks it verbatim);
-   - update `src/v2/domain/aiGuide.test.ts`: rule count, the `slice(-10)` and `slice(30)` key lists, `ruleNumber(…)`,
-     `full` contains `79. ${RULES[78]}`, and a few key phrases.
+4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions).
+   Built-ins 1–78 come first, then the clip type rules (`core.agent.rules`, P72: **79** `scene-clips`) and the plugin
+   host's **80** `plugin-clips` (P88). **Since P89 a new built-in rule is appended at the very end** (after
+   `...clipTypeAgentRules()`; **81** `motion-path` is the latest), so published numbers never move. A rule about one
+   clip type belongs in that type's `core.agent.rules` (that would renumber 81+; say so in the PR). Then:
+   - add the same text as `N. …` after the last rule in `docs/v2/STORYBOARD_FORMAT.md` (the test checks it verbatim);
+   - update `src/v2/domain/aiGuide.test.ts`: rule count, the `slice(-10)` and `slice(30)` key lists, `ruleNumber(…)`
+     and a few key phrases; `ui/agent/clipTypeAgent.test.ts` checks the clip type rules' positions.
 5. **WebMCP:** storyboard tools in `domain/storyAgent.ts` (`STORY_TOOLS`, sync, run by `ui/agent/webMcp.ts`
    `callAgentTool`); timeline/media tools: schema in `domain/timelineReview.ts` `TIMELINE_TOOLS`, runtime in
    `ui/agent/timelineTools.ts` `runTimelineTool` (async, gets blobs). Every edit is one `engine.dispatch` (one undo
@@ -138,6 +138,7 @@ required checks.
 | `docs/v2/AUDIO_CLIP_FORMAT.md` | `dionysus.audioclip/1` (Audio editor) |
 | `docs/v2/ADDING_EFFECTS.md` | adding presets (effects, transitions, text animations, …) |
 | `docs/v2/MASKING.md`, `docs/v2/TRACKING.md` | clip masks (P49), motion tracking (P39/P40) |
+| `docs/v2/MOTION_PATH.md` | motion paths (P89): data, evaluator, editor mode, storyboard field, tools |
 | `docs/v2/DEPLOYMENT.md` | hosting, `DIONYSUS_SITE_URL`, base path |
 | `docs/v2/CLIP_PLUGIN_ARCHITECTURE.md` | clip type plugins: accepted design, decisions, Phase 1 (done) and the Phase 2 step table |
 | `docs/v2/ADDING_CLIP_TYPES.md` | adding a clip type step by step, with a worked example (P73) |
@@ -538,6 +539,15 @@ updated with param migration, and used by agents through the host tools. Next wo
 32 s until a hung plugin stops, the dev hook in dev builds, no "Export package", no param renames on update), or the
 backlog below.
 New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
+
+**P89 (done): motion paths, After Effects style** (MOTION_PATH.md). `Placement.motionPath` (`domain/motionPath.ts`:
+nodes with ids, times, Bezier handles and per-segment ease; constant speed; orient along the path) evaluated inside
+`transformAt` with the frame aspect, so preview and export match. `cmd.setMotionPath` is one undo step and replaces
+x / y keys; Follow replaces a path; the gizmo / X / Y fields edit the point at the playhead. Editor:
+`ui/MotionPathEditor.tsx` (preview overlay, draft session ✕ / ✓, desktop toolbar + timing strip + inspector section,
+phone bottom context bar + sheets, pinch zoom). Storyboard layer `motionPath` (frame points), Send / Sync / export.
+WebMCP `set_clip_motion_path`, `clear_clip_motion_path`; `get_timeline` lists it; AI rule **81**. The named, reusable
+storyboard paths and their guide step are the next PR (P89b).
 
 **Backlog and known limits after Phase 2** (still open after Phase 3; candidates for small PRs):
 

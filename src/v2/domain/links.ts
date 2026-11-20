@@ -14,6 +14,7 @@
 import type { Composition, Placement, Project, Track } from "./model";
 import { isStill } from "./model";
 import { groupOf, isFree, mainTrack } from "./ops";
+import { shiftMotionPath } from "./motionPath";
 import { placeOnFreeTrack } from "./storyLinks";
 
 const end = (p: Placement) => p.startTicks + p.durationTicks;
@@ -94,7 +95,7 @@ export function applyLinks(before: Composition, after: Composition, opts: { auto
       changed = true;
       if (e - s < Math.min(MIN_LINK_TICKS, pl.durationTicks)) return []; // nothing of it is left inside the parent
       const keys = s !== start && pl.keyframes ? shift(pl.keyframes, start - s) : pl.keyframes;
-      const next: Placement = { ...pl, startTicks: s, durationTicks: e - s, ...(keys ? { keyframes: keys } : {}) };
+      const next: Placement = { ...pl, startTicks: s, durationTicks: e - s, ...(keys ? { keyframes: keys } : {}), ...(s !== start && pl.motionPath ? { motionPath: shiftMotionPath(pl.motionPath, start - s) } : {}) };
       if (next.fadeInTicks && next.fadeInTicks > next.durationTicks) next.fadeInTicks = next.durationTicks;
       if (next.fadeOutTicks && next.fadeOutTicks > next.durationTicks) next.fadeOutTicks = next.durationTicks;
       if (next.startTicks !== pl.startTicks || next.durationTicks !== pl.durationTicks) moved.push(next);
