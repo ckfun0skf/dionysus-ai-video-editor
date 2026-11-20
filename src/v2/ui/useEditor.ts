@@ -4,6 +4,7 @@ import { createProject, type Project } from "../domain";
 import { attachAutosave, collectUnusedBlobs, createIndexedDbStorage, createMemoryStorage } from "../persistence";
 import type { Storage } from "../ports";
 import { seriesStore } from "./series/seriesStore";
+import { syncPlugins } from "./pluginRuntime";
 
 /** Set when the last project failed to load; the stored record is kept untouched for recovery. */
 export interface LoadFailure { projectId: string; error: string }
@@ -41,6 +42,8 @@ export function useEditorBoot(open: () => Promise<Storage> = openStorage, key = 
         }
       }
       if (!project) { project = createProject(recovery ? "Recovered session" : "My first v2 project"); await storage.projects.save(project); }
+      // P84: register the project's plugin types before the first render, so its plugin clips show by name.
+      await syncPlugins(project, storage.blobs);
       if (cancelled) return;
       storage.lastProjectId.set(project.id);
       const engine = new Engine(project);

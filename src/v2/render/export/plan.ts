@@ -2,7 +2,7 @@
 import { versionOf, compositionDuration, type Composition, type Placement, type Project, type Track } from "../../domain/model";
 import { spatialAt, spatialOf, type PositionKey, type SpatialPos } from "../../domain/spatial";
 import { TICKS_PER_SECOND } from "../../domain/time";
-import { clipTypeOf, isKnownClipType } from "../../clipTypes";
+import { clipTypeOf, isKnownClipType, pluginIssueOf, pluginMetaOf } from "../../clipTypes";
 
 export const RESOLUTIONS = { "720p": 720, "1080p": 1080, "2K": 1440, "4K": 2160 } as const;
 export type Resolution = keyof typeof RESOLUTIONS;
@@ -178,10 +178,14 @@ export function exportPlaceholderWarning(project: Project): { title: string; bod
   return { title, body: bits.join(" ") };
 }
 
-/** P73 (§6 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): clips of a type this build does not register, on visible tracks. */
+/**
+ * P73 (§6 of docs/v2/CLIP_PLUGIN_ARCHITECTURE.md): clips of a type this build does not register, on visible tracks.
+ * P84: also clips of a registered plugin type, which draw the "not enabled" slate (black in export) until the plugin
+ * runs (P85, with the user's trust).
+ */
 export function unknownTypeClips(project: Project): Placement[] {
   const comp = project.compositions[project.rootCompositionId];
-  return comp?.tracks.filter((t) => !t.hidden).flatMap((t) => t.placements.filter((pl) => !isKnownClipType(pl.clipType))) ?? [];
+  return comp?.tracks.filter((t) => !t.hidden).flatMap((t) => t.placements.filter((pl) => !isKnownClipType(pl.clipType) || !!pluginMetaOf(pl.clipType))) ?? [];
 }
 
 /** Export-dialog copy when the timeline has clips of an unknown type: they export as black frames and silence. */
@@ -189,10 +193,23 @@ export function exportUnknownTypeWarning(project: Project): { title: string; bod
   const list = unknownTypeClips(project);
   if (!list.length) return undefined;
   const types = [...new Set(list.map((p) => p.clipType))];
-  const named = types.slice(0, 3).map((t) => `“${t}”`).join(", ") + (types.length > 3 ? ` and ${types.length - 3} more` : "");
+  const pluginName = (t: string) => pluginMetaOf(t)?.name ?? pluginIssueOf(t)?.name ?? project.plugins?.[t]?.name ?? t;
+  const shown = types.slice(0, 3);
+  const builtIn = shown.filter((t) => !t.startsWith("x-")), plug = shown.filter((t) => t.startsWith("x-"));
+  const named = [
+    ...(builtIn.length ? [`clip type ${builtIn.map((t) => `“${t}”`).join(", ")}`] : []),
+    ...(plug.length ? [`plugin ${plug.map((t) => `“${pluginName(t)}”`).join(", ")}`] : []),
+  ].join("; ") + (types.length > 3 ? ` and ${types.length - 3} more` : "");
+  const plugins = types.every((t) => t.startsWith("x-"));
+  if (plugins) {
+    return {
+      title: `${list.length} clip${list.length === 1 ? " uses a plugin" : "s use plugins"} that can't play here`,
+      body: `${list.length === 1 ? "It exports" : "They export"} as black frames: ${named}. ${types.length === 1 ? "The plugin isn't" : "The plugins aren't"} enabled or available in this project, so ${list.length === 1 ? "its" : "their"} settings are kept but not drawn. Export anyway, or remove ${list.length === 1 ? "the clip" : "those clips"} first.`,
+    };
+  }
   return {
     title: `${list.length} clip${list.length === 1 ? " has a type" : "s have types"} this version can't play`,
-    body: `${list.length === 1 ? "It exports" : "They export"} as black frames without sound: clip type ${named}. Their data is kept; open the project in a version that has ${types.length === 1 ? "this type" : "these types"}, or export anyway.`,
+    body: `${list.length === 1 ? "It exports" : "They export"} as black frames without sound: ${named}. Their data is kept; open the project in a version that has ${types.length === 1 ? "this type" : "these types"}, or export anyway.`,
   };
 }
 

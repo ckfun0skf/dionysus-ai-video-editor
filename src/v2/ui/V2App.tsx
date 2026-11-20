@@ -54,6 +54,9 @@ import { projectMediaList } from "./projectMedia";
 import { stickerFile, stickers } from "./libraryItems";
 import { newCodeClipHtml } from "./codeSamples";
 import { ScenePanel } from "./ScenePanel";
+import { PluginClipPanel, unknownPluginNote } from "./PluginClipPanel";
+import { usePluginRegistry, usePluginSync } from "./pluginRuntime";
+import { pluginMetaOf } from "../clipTypes";
 import { SceneEditor } from "./SceneEditor";
 /** P77: the desktop scene editor gets at least this much height (the timeline splitter's own size is kept). */
 const SCENE_EDITOR_MIN_H = 440;
@@ -113,6 +116,9 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   useEffect(() => connectAgentBridge(engine, storage.blobs), [engine, storage.blobs]);
   const [notice, setNotice] = useState(recovery);
   const { project, canUndo, canRedo } = useEngineState(engine);
+  // P84: plugin types of this project (registered at boot; re-synced when its locks change).
+  const pluginRev = usePluginRegistry();
+  usePluginSync(project, storage.blobs);
   // P5: keep the project and its Series in step (both directions).
   useSeriesSync(engine, project);
   const [seriesLib, setSeriesLib] = useState(false);
@@ -213,6 +219,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [maskOpen, setMaskOpen] = useState(false);
   /** V2-HTML-PARAMS: the mobile sheet with the selected HTML clip's param values. */
   const [paramsOpen, setParamsOpen] = useState(false);
+  /** P84: the phone sheet with a plugin clip's details (the inspector's Plugin tab on desktop). */
+  const [pluginInfo, setPluginInfo] = useState(false);
   /** P76: the placement whose scene editor is open (desktop: in place of the timeline; phone: full screen). */
   const [sceneEdit, setSceneEdit] = useState<string>();
   /** V2-TL-TRANS: incoming clip of the cut whose transition picker sheet is open (mobile). */
@@ -431,7 +439,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const [mergeDraft, setMergeDraft] = useState<Composition>();
   useEffect(() => {
     player.setProject(mixDraft ?? (mergeDraft ? { ...project, compositions: { ...project.compositions, [project.rootCompositionId]: mergeDraft } } : project));
-  }, [player, project, mixDraft, mergeDraft]);
+  }, [player, project, mixDraft, mergeDraft, pluginRev]);
   useEffect(() => { const live = sel.filter((id) => allIds.includes(id)); if (live.length !== sel.length) setSel(live); });
   useEffect(() => { if (subId && !cue) setSubId(undefined); }, [subId, cue]);
 
@@ -1047,6 +1055,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       code: A("code", "</>", "Code", () => void openCode(), "Edit HTML, CSS and JS with live preview"),
       "edit-audio": selAudioSpec ? A("edit-audio", "♫", "Edit", () => void openAudio(), "Open this clip in the Audio editor; saving makes a new version") : undefined,
       scene: A("scene", "scene", "Scene", () => setSceneEdit(pl.id), "Edit this 3D scene: objects, models, events and the camera on its own timeline"),
+      plugin: A("plugin", "puzzle", "Plugin", () => setPluginInfo(true), "This plugin's details and the clip's settings"),
     };
     const pick = (r: ToolRef) => (Array.isArray(r) ? r.map((x) => tools[x]).find((a) => !!a) : tools[r]);
     const primaryAll = (selIsMain ? u.toolbarMain : u.toolbar).map(pick).filter((a): a is BarAct => !!a);
@@ -1227,8 +1236,11 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       effect: { id: "effect", label: "Effect", icon: "effect", render: () => <>{linkSec}<EffectPicker engine={engine} at={time} placement={pl} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></> },
       params: { id: "params", label: "Params", icon: "settings", render: () => <HtmlParamsPanel engine={engine} project={project} placement={pl} blobs={storage.blobs} onEditCode={() => void openCode()} /> },
       // P73 (§6): a clip type this build does not register: say so, keep its data; no editors that could misread it.
-      unknown: { id: "unknown", label: "Clip", icon: "⚠", render: () => <div className="v2-psettings"><section aria-label="Unknown clip type" data-testid="unknown-clip-type"><h4>Unknown clip type</h4>
-        <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p></section></div> },
+      unknown: { id: "unknown", label: "Clip", icon: "⚠", render: () => <div className="v2-psettings"><section aria-label="Unknown clip type" data-testid="unknown-clip-type"><h4>{pl.clipType.startsWith("x-") ? "Plugin not available" : "Unknown clip type"}</h4>
+        {pl.clipType.startsWith("x-") ? <p className="v2-abnote">{unknownPluginNote(pl.clipType)}</p>
+          : <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p>}</section></div> },
+      // P84: a clip of a registered third-party plugin type: its details and settings (read-only until P87).
+      plugin: { id: "plugin", label: "Plugin", icon: "puzzle", render: () => <PluginClipPanel project={project} placement={pl} /> },
       // P74: a 3D scene clip's objects, events and problems (read-only in step 2.1).
       scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} engine={engine} onEdit={() => setSceneEdit(pl.id)} /> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
@@ -1521,6 +1533,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
           {sceneEditor}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
+          {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (

@@ -1,8 +1,10 @@
 # Clip type plugins: package format and author guide
 
-**Format:** `dionysus.cliptype/1`, host API **1**. **Status:** the format and its validator are done (P83); the editor
-loads, runs and installs plugins from P84 on (see [CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3](CLIP_PLUGIN_ARCHITECTURE.md#phase-3--third-party-clip-types)
-for the steps). Design and decisions: [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md) §0, decisions 10–17.
+**Format:** `dionysus.cliptype/1`, host API **1**. **Status:** the format and its validator are done (P83); a project
+stores, carries and loads its plugin packages since P84 (their clips show by name with "Not enabled"); plugins run
+from P85, and the install and trust screens come in P86 (see
+[CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3](CLIP_PLUGIN_ARCHITECTURE.md#phase-3--third-party-clip-types) for the steps).
+Design and decisions: [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md) §0, decisions 10–17.
 
 A plugin adds a new **clip type** to Dionysus: a picture that a user (or an agent) places on a video track, sets up with
 a few settings, and moves, trims, fades, masks and exports like any other clip. You write one function that draws
@@ -28,10 +30,12 @@ x-acme-confetti/
 
 It reaches the editor in one of two ways:
 
-- **A zip file** named `<anything>.dionysus-cliptype.zip`, with `manifest.json` at the root of the zip.
+- **A zip file** named `<anything>.dionysus-cliptype.zip`, with `manifest.json` at the root of the zip, or inside one
+  top-level folder (zipping the package folder itself works; `__MACOSX` and `.DS_Store` entries are ignored).
 - **A URL** to its `manifest.json` (https only). The editor fetches the manifest, then each listed file relative to
-  it, without cookies or credentials, so the server must allow CORS (`Access-Control-Allow-Origin: *`). The samples in
-  this repo are served this way by the app itself, at `plugins/samples/<id>/manifest.json` under the app's address.
+  it, without cookies or credentials, so the server must allow CORS (`Access-Control-Allow-Origin: *`). A URL ending in
+  `.zip` is read as a zip. For development, `http://localhost` (and `127.0.0.1`) also work. The samples in this repo
+  are served this way by the app itself, at `plugins/samples/<id>/manifest.json` under the app's address.
 
 Limits: at most 64 files, 10 MB per file, 20 MB per package. Files not listed in `"files"` are ignored.
 
@@ -163,8 +167,11 @@ three restarts the clip shows "Plugin stopped" and export reports the frames. Ke
 - **Trust is per project, per package hash and per device.** A project that uses a plugin this device has not allowed
   for it shows a banner; until the user allows it, the plugin's clips show a slate "Plugin “Name” not enabled" and
   export black after a warning.
-- **Missing plugin:** a build without plugin support, or a project whose package is gone, shows the existing
-  unknown-type slate ("Unknown clip type “x-…”"). The clips keep all their data; nothing is lost.
+- **Missing plugin:** a build without plugin support shows the existing unknown-type slate ("Unknown clip type
+  “x-…”"). This build names the problem instead: "Plugin “Name” is missing" (PACKAGE NOT FOUND), "can't be loaded"
+  (PACKAGE DAMAGED: the stored bytes don't match the lock), "NEEDS A NEWER VERSION" (a higher `api`), or "Plugin “x-…”
+  is not installed" (NOT IN THIS PROJECT: a clip whose plugin the project doesn't lock). The clips keep all their data;
+  nothing is lost.
 - **Editing:** the inspector's **Plugin** tab (a sheet on phones) shows your `editor` form; move, trim, split, fades,
   transitions, masks, blend modes and chroma key (when `keyable`) come from the editor.
 

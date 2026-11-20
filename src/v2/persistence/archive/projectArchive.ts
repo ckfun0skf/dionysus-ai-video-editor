@@ -13,6 +13,7 @@
  */
 import { SCHEMA, newId, type Asset, type Project } from "../../domain/model";
 import { parseSeries, type Series } from "../../domain/series";
+import { pluginBlobKeys, pluginLocks } from "../../domain/pluginLocks";
 import type { BlobStore, Storage } from "../../ports/storage";
 import { SchemaError, migrateProject } from "../schema";
 import { Sha256, crc32 } from "./sha256";
@@ -64,8 +65,12 @@ function extOf(mime: string) {
   return ({ quicktime: "mov", jpeg: "jpg", mpeg: "mp3", xwav: "wav", svgxml: "svg" } as Record<string, string>)[sub] ?? (sub.slice(0, 8) || "bin");
 }
 
-/** Every stored blob the project references (all versions, plus thumbnails), with its mime type. */
-export function projectMediaKeys(p: Project): Map<string, string> { return assetMediaKeys(Object.values(p.assets)); }
+/** Every stored blob the project references (all versions, plus thumbnails, plus P84 plugin packages), with its mime type. */
+export function projectMediaKeys(p: Project): Map<string, string> {
+  const out = assetMediaKeys(Object.values(p.assets));
+  for (const k of pluginBlobKeys(p)) if (!out.has(k)) out.set(k, "application/zip");
+  return out;
+}
 /** P5: every blob a Series' versions use. */
 export function seriesArchiveKeys(s: Series): Map<string, string> { return assetMediaKeys(Object.values(s.assets).flatMap((a) => Object.values(a.media).map((m) => m.asset))); }
 function assetMediaKeys(assets: Asset[], out = new Map<string, string>()): Map<string, string> {
@@ -240,9 +245,11 @@ export type ImportMode = "new" | "copy" | "replace";
  * written are removed on failure or cancel. Returns the saved project.
  */
 export async function importProjectArchive(storage: Storage, a: ArchivePreview, mode: ImportMode, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal; now?: string; onSeries?: (s: Series) => void } = {}): Promise<Project> {
-  return storeMedia(storage, a, opts, async (remap) => {
+  return storeMedia(storage, a, opts, async (remap, keyOf) => {
     const p = structuredClone(a.project);
     for (const asset of Object.values(p.assets)) remap(asset);
+    // P84: plugin packages travel like media; a lock whose package was missing at export keeps a key that resolves to nothing.
+    for (const [, lock] of pluginLocks(p)) lock.blobKey = keyOf(lock.blobKey);
     const now = opts.now ?? new Date().toISOString();
     if (mode === "copy") { p.id = newId("proj"); p.name = `${p.name} (copy)`; p.meta = { ...p.meta, createdAt: now }; }
     p.meta = { ...p.meta, updatedAt: now };
@@ -269,7 +276,7 @@ function remapSeries(s: Series, remap: (asset: Asset) => void): Series {
  * versions at them. Nothing is kept unless every media file verifies and `finish` succeeds; blobs already written
  * are removed on failure or cancel.
  */
-async function storeMedia<T>(storage: Storage, a: { file: Blob; index: Map<string, ZipEntry>; manifest: { media: ArchiveMedia[] }; mediaBytes: number }, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal }, finish: (remap: (asset: Asset) => void) => Promise<T>): Promise<T> {
+async function storeMedia<T>(storage: Storage, a: { file: Blob; index: Map<string, ZipEntry>; manifest: { media: ArchiveMedia[] }; mediaBytes: number }, opts: { onProgress?: (p: ArchiveProgress) => void; signal?: AbortSignal }, finish: (remap: (asset: Asset) => void, keyOf: (oldKey: string) => string) => Promise<T>): Promise<T> {
   const tag = newId("imp");
   const byPath = new Map<string, ArchiveMedia>();
   for (const x of a.manifest.media) if (!byPath.has(x.path)) byPath.set(x.path, x);
@@ -302,7 +309,7 @@ async function storeMedia<T>(storage: Storage, a: { file: Blob; index: Map<strin
         if (v.media.specKey) { const t = keyMap.get(v.media.specKey); if (t) v.media.specKey = t; else delete v.media.specKey; }
       }
     };
-    const out = await finish(remap);
+    const out = await finish(remap, (k) => keyMap.get(k) ?? `${tag}/missing/${k}`);
     opts.onProgress?.({ done: total, total });
     return out;
   } catch (e) {

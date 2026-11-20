@@ -92,9 +92,9 @@ required checks.
 1. `git fetch` and branch from the latest `origin/main` (e.g. `p66-short-name`).
 2. Implement with tests. Keep PRs small (MODULE_DESIGN §14 targets < 400 changed lines; feature PRs here are often
    larger, but split refactors).
-3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P84-SHORT-NAME", "title":
+3. **`public/doc/tasks.json`:** add one entry per PR with the next free P-number: `{ "id": "P85-SHORT-NAME", "title":
    "<what and why, one paragraph>", "status": "done", "progress": 100 }` appended after the latest entry (the latest is
-   `P83-PLUGIN-MANIFEST`; the next is **P84**). Bump `updatedAt`. Edit the file surgically (insert text); do not
+   `P84-PLUGIN-STORE`; the next is **P85**). Bump `updatedAt`. Edit the file surgically (insert text); do not
    re-serialise the whole JSON. `scripts/check-tasks-updated.mjs` fails a PR that changes `src/` without it. If an id
    is already taken, use the next number and say so in the PR.
 4. **AI guide rule:** append to `RULE_LIST` in `src/v2/domain/storyPrompt.ts` (append-only; numbers are positions;
@@ -113,7 +113,7 @@ required checks.
 6. Run `npm run gen:ai` after changing rules, tools or presets, and commit the regenerated files (tests fail if they are
    stale).
 7. `npx tsc -b && npx vitest run && npx vite build`.
-8. Commit in English; PR title `P84: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
+8. Commit in English; PR title `P85: …`; body says what, why, tests, and `Fixes #N` (or `Refs #N` if partial), plus
    what was not verified. Push, open the PR, wait for `build` on the head SHA. Do not merge.
 
 ## 7. UI conventions
@@ -473,10 +473,23 @@ allowed library ids are passed in, because `domain` can't import `render/htmlLib
 (also loads the sample's `render.js` the way the host will and checks it draws the same calls for the same `t`). No
 editor behaviour changed; the editor doesn't load plugins yet.
 
-**Next: P84 (step 3.2),** domain and persistence: `Placement.plugin`, `PluginClipType`, the `Project.plugins` lock, the
-package store and content hash, packages in project export / import, runtime registration of cores built from
-manifests, and the not-enabled slate. Then P85 sandbox renderer, P86 install and trust UX, P87 clip editing UX, P88
-agent tools (see the step table). New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
+**P84 (step 3.2, done):** plugin packages are stored, carried and loaded. A project locks each plugin in the
+optional `Project.plugins` (id → version, content hash, name, publisher, blob key) and keeps its package as one zip blob
+`plugin/<hex>`; plugin clips have `clipType: "x-…"` (`PluginClipType`) and `Placement.plugin { data: { params }, v }`.
+`persistence/plugins.ts` reads packages from a zip or a URL, computes the content hash, stores packages in projects,
+verifies and registers the open project's plugins as runtime clip types (`CLIP_TYPES.setRuntime`, with a change
+signal) and holds the device library and trust store (IndexedDB `dionysus-plugins`). Archives carry the packages and
+GC keeps them. In the editor a registered plugin clip shows by name with "Not enabled" (card, slate, black in export,
+export warning, inspector Plugin tab, phone Plugin sheet); a locked plugin that can't load shows why on the unknown
+slate. Tests: `persistence/plugins.test.ts`, `ui/pluginClip.test.tsx`. Not yet: running plugin code (P85), install and
+trust screens (P86), editing settings (P87), agent tools (P88).
+
+**Next: P85 (step 3.3),** the sandbox renderer: a host-written bootstrap in the sandboxed opaque-origin iframe starts a
+classic worker per placement that draws on an `OffscreenCanvas` (the clip CSP, the determinism shim, `init` 15 s and
+frame 4 s limits, restarts), `host.media.pluginHost` in the Player and export, and the renderer replacing the
+not-enabled slate for trusted plugins (`PluginLibrary.isTrusted`). The pinned three.js is an ES module, so the worker
+needs the host to provide it (decide in P85). Then P86 install and trust UX, P87 clip editing UX, P88 agent tools.
+New built-in clip types still follow `docs/v2/ADDING_CLIP_TYPES.md`.
 
 **Backlog and known limits after Phase 2** (candidates for small PRs before or during Phase 3):
 
