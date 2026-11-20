@@ -12,6 +12,6 @@ export {
 export { readBlobBytes, readZipIndex, zipEntryBlob, ZipError, ZipWriter, type ZipEntry, type ZipSink } from "./archive/zip";
 export {
   PLUGIN_BLOB_PREFIX, PLUGIN_DB_NAME, PluginConflictError, PluginPackageError, addPluginToProject, createIndexedDbPluginLibrary, createMemoryPluginLibrary,
-  fetchPluginPackage, loadProjectPlugins, pluginBlobKey, pluginContentHash, pluginPackageFrom, pluginUrlProblem, pluginZipBlob, readPluginZip, syncProjectPlugins,
+  fetchPluginPackage, loadProjectPlugins, pluginBlobKey, pluginContentHash, pluginLockOf, pluginPackageFrom, pluginProjectProblem, pluginUrlProblem, pluginZipBlob, readPluginZip, storePluginPackage, syncProjectPlugins,
   type PluginLibrary, type PluginLibraryEntry, type PluginLoadResult, type PluginPackage, type PluginReadOptions,
 } from "./plugins";

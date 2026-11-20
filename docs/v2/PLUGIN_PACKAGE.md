@@ -2,8 +2,8 @@
 
 **Format:** `dionysus.cliptype/1`, host API **1**. **Status:** the format and its validator are done (P83); a project
 stores, carries and loads its plugin packages since P84 (their clips show by name with "Not enabled"); since P85 an
-enabled plugin draws in the sandbox described in §3, in preview and export; the install and trust screens that enable
-it come in P86 (until then only a development hook enables one, see §7) (see
+enabled plugin draws in the sandbox described in §3, in preview and export; since P86 users install plugins and allow
+them per project with the screens in §4 (see
 [CLIP_PLUGIN_ARCHITECTURE.md §7 Phase 3](CLIP_PLUGIN_ARCHITECTURE.md#phase-3--third-party-clip-types) for the steps).
 Design and decisions: [CLIP_PLUGIN_ARCHITECTURE.md](CLIP_PLUGIN_ARCHITECTURE.md) §0, decisions 10–17.
 
@@ -169,18 +169,26 @@ the reason and the frame count in its warnings. Keep frames fast: preview wants 
 
 ## 4. What users see
 
-- **Installing:** from the plugin library, **Add plugin** → **File** (pick the zip) or **URL** (paste the manifest
-  URL). The install dialog shows the name, the unverified publisher, version, size, a short content hash, where it
+- **Installing:** **Add plugin** (in the desktop left rail's **Plugins** tab, the phone's Add media → **Plugins**, or
+  **Project → Plugins**) → **From a file** (pick the zip) or **From a web address** (paste the manifest URL; the
+  server must allow cross-origin downloads). The install dialog shows the name, the unverified publisher, version, size, a short content hash, where it
   came from, the libraries it uses and its settings, and says what it can't do: "It draws frames from its settings. It
-  can't use the network or read your projects, files or accounts."
+  can't use the network or read your projects, files or accounts." **Install** keeps it on this device, adds it to the
+  open project and allows it there (one undo step). Its tile then adds clips: click or tap adds one at the playhead,
+  and on a desktop a tile can be dragged onto the timeline.
 - **Trust is per project, per package hash and per device.** A project that uses a plugin this device has not allowed
-  for it shows a banner; until the user allows it, the plugin's clips show a slate "Plugin “Name” not enabled" and
+  for it shows a banner ("This project uses N plugins that aren't enabled on this device · Review"); until the user
+  allows it, the plugin's clips show a slate "Plugin “Name” not enabled" and
   export black after a warning.
 - **Missing plugin:** a build without plugin support shows the existing unknown-type slate ("Unknown clip type
   “x-…”"). This build names the problem instead: "Plugin “Name” is missing" (PACKAGE NOT FOUND), "can't be loaded"
   (PACKAGE DAMAGED: the stored bytes don't match the lock), "NEEDS A NEWER VERSION" (a higher `api`), or "Plugin “x-…”
   is not installed" (NOT IN THIS PROJECT: a clip whose plugin the project doesn't lock). The clips keep all their data;
   nothing is lost.
+- **Removing:** Project → Plugins → the bin. With clips, the user chooses to keep them (they keep their settings and
+  show a slate) or remove them too; Undo brings everything back. "Delete from this device" removes a package that no
+  open project uses from the library; projects keep their own copy.
+- **Stopped:** a clip whose plugin hung or failed repeatedly shows "Stopped" with the last problem and **Retry**.
 - **Editing:** the inspector's **Plugin** tab (a sheet on phones) shows your `editor` form; move, trim, split, fades,
   transitions, masks, blend modes and chroma key (when `keyable`) come from the editor.
 
@@ -217,7 +225,8 @@ the same frame for the same `t`. A three.js sample is in
 [`public/plugins/samples/x-dionysus-orbit/`](../../public/plugins/samples/x-dionysus-orbit/) ("3D knot": a lit torus
 knot with orbiting dots, `libs: ["three"]`, WebGL, a seeded dot table built in `init`).
 
-**Trying a plugin before P86.** The install and trust screens come in P86. In a development build (`npm run dev`)
-the browser console has `__dionysusDev.trustPlugin("x-…")`, which allows a plugin that the open project already uses,
+**Trying your plugin.** Zip `manifest.json` and your files (at the root or in one folder) as
+`your-id.dionysus-cliptype.zip` and use **Add plugin → From a file**, or serve the folder over https with CORS and use
+**From a web address**. In a development build (`npm run dev`) the browser console also has `__dionysusDev.trustPlugin("x-…")`, which allows a plugin that the open project already uses,
 for that project on this device, and `__dionysusDev.untrustPlugin("x-…")`. The hook does not exist in production
 builds.

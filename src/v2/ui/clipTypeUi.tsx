@@ -16,6 +16,7 @@ import type { CSSProperties, ReactNode } from "react";
 import type { MediaKind, Placement, Project } from "../domain";
 import { CLIP_TYPES, coreOf, isKnownClipType, isPlaceholder, isPluginEnabled, pluginIssueOf, pluginMetaOf, unknownSlateText, variantOf } from "../clipTypes";
 import { Ic } from "./Icon";
+import { pluginStatus } from "../render";
 
 export type WaveKind = "audio" | "video";
 
@@ -229,7 +230,13 @@ export const PLUGIN_CLIP_UI: ResolvedClipTypeUi = {
   body: (p) => {
     const name = pluginMetaOf(p.clipType)?.name ?? p.clipType;
     // P85: an enabled plugin draws in its sandbox, so its card is a plain named card.
-    if (isPluginEnabled(p.clipType)) return <span className="v2-clip-name" title={`Plugin “${name}”`}><Ic g="puzzle" size={12} /> {name}</span>;
+    if (isPluginEnabled(p.clipType)) {
+      // P86: a clip whose plugin stopped in the preview says so on its card too.
+      const stop = pluginStatus.stopped(p.id);
+      return stop
+        ? <span className="v2-clip-name v2-ph" title={`Plugin “${name}” stopped: it hung or failed. Select the clip and choose Retry.`}><Ic g="puzzle" size={12} /><span className="v2-ph-label">{name}</span><span className="v2-ph-state is-stopped">Stopped</span></span>
+        : <span className="v2-clip-name" title={`Plugin “${name}”`}><Ic g="puzzle" size={12} /> {name}</span>;
+    }
     return (
       <span className="v2-clip-name v2-ph" title={`Plugin “${name}” is not enabled. Its settings are kept; it shows as a slate and exports as a black frame.`}>
         <Ic g="puzzle" size={12} /><span className="v2-ph-label">{name}</span><span className="v2-ph-state">Not enabled</span>

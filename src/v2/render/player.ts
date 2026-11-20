@@ -17,6 +17,7 @@ import { subtitleAt } from "../domain/subtitles";
 import { loadBundledFonts } from "./fonts";
 import { clipRendererFor, type ClipDrawHost, type ClipFrameState, type ClipMediaHost, type PluginFrames } from "./clipRenderers";
 import { PluginClipHost, PluginSandbox, pluginInitFor } from "./pluginHost";
+import { clearPluginStopped, markPluginStopped, pluginStatus } from "./pluginStatus";
 import { isPluginEnabled, pluginMetaOf } from "../clipTypes";
 import { effectivePlacement } from "../domain/layerStyle";
 import { applyEffectFrame, codeEffectsAt, effectFrameAt } from "./effects";
@@ -66,7 +67,7 @@ export class Player {
   private probe?: CanvasRenderingContext2D | null;
   private html = new Map<string, { key: string; host: HtmlClipHost }>();
   /** P85: plugin clip workers by placement (keyed by package hash and output size) and their bootstrap iframes by hash. */
-  private pluginHosts = new Map<string, { key: string; hash: string; host: PluginClipHost }>();
+  private pluginHosts = new Map<string, { key: string; hash: string; gen: number; host: PluginClipHost }>();
   private sandboxes = new Map<string, PluginSandbox>();
   /** P59: local fullscreen mute (does not edit the project). */
   previewMute = false;
@@ -414,13 +415,19 @@ export class Player {
     const meta = pluginMetaOf(clipType);
     if (!meta || !isPluginEnabled(clipType)) return undefined;
     const key = `${meta.hash}@${w}x${h}`;
+    const gen = pluginStatus.generation(placementId);
     const hit = this.pluginHosts.get(placementId);
-    if (hit?.key === key) return hit.host;
+    // A stopped clip stays stopped at any size until Retry (a new generation) or the project is opened again.
+    if (hit && hit.gen === gen && (hit.key === key || hit.host.stopped)) return hit.host;
     hit?.host.dispose();
     let sb = this.sandboxes.get(meta.hash);
     if (!sb) { sb = new PluginSandbox(); this.sandboxes.set(meta.hash, sb); }
-    const host = new PluginClipHost(sb, (params, duration) => pluginInitFor(meta, w, h, params, duration), () => { if (!this.playing) this.draw(); });
-    this.pluginHosts.set(placementId, { key, hash: meta.hash, host });
+    const host: PluginClipHost = new PluginClipHost(sb, (params, duration) => pluginInitFor(meta, w, h, params, duration), () => {
+      // P86: the preview publishes a stopped clip for the inspector's Stopped state and Retry.
+      if (host.stopped && !this.offline && this.pluginHosts.get(placementId)?.host === host) markPluginStopped(placementId, { clipType, reason: host.errors.at(-1) });
+      if (!this.playing) this.draw();
+    });
+    this.pluginHosts.set(placementId, { key, hash: meta.hash, gen, host });
     return host;
   }
   private pluginFrames?: PluginFrames;
@@ -431,7 +438,10 @@ export class Player {
   private prunePlugins() {
     for (const [id, e] of this.pluginHosts) {
       const p = placementIn(this.project, id);
-      if (!p || !isPluginEnabled(p.clipType) || pluginMetaOf(p.clipType)?.hash !== e.hash) { e.host.dispose(); this.pluginHosts.delete(id); }
+      if (!p || !isPluginEnabled(p.clipType) || pluginMetaOf(p.clipType)?.hash !== e.hash) {
+        if (e.host.stopped && !this.offline) clearPluginStopped(id);
+        e.host.dispose(); this.pluginHosts.delete(id);
+      }
     }
     const used = new Set([...this.pluginHosts.values()].map((e) => e.hash));
     for (const [hash, sb] of this.sandboxes) if (!used.has(hash)) { sb.dispose(); this.sandboxes.delete(hash); }

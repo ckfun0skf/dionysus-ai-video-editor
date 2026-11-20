@@ -249,7 +249,7 @@ describe("V2App", () => {
       await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
       await act(async () => { (el.querySelector('[aria-label="Add media to main track"]') as HTMLElement).click(); });
       const picker = el.querySelector('.v2-picker[aria-label="Add media"]')!;
-      expect([...picker.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Sticker"]);
+      expect([...picker.querySelectorAll('[role="tab"]')].map((t) => t.textContent)).toEqual(["Video", "Photo", "Code", "Sticker", "Plugins"]);
       await act(async () => { ([...picker.querySelectorAll('[role="tab"]')].find((t) => t.textContent === "Code") as HTMLElement).click(); });
       await act(async () => { ([...picker.querySelectorAll("button")].find((b) => b.textContent?.startsWith("Create")) as HTMLElement).click(); });
       expect(el.querySelector(".v2-picker")).toBeNull();

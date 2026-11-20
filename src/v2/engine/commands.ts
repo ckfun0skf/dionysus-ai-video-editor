@@ -1,6 +1,8 @@
 /** Command factories for the MVP timeline. Each wraps a pure domain op. */
 import { setLink } from "../domain/links";
 import type { Command } from "./engine";
+import { removePluginLock, setPluginLock } from "../domain/pluginLocks";
+import type { PluginLock } from "../domain/model";
 import { DEFAULT_EFFECT_TICKS, DEFAULT_IMAGE_TICKS, findPlacement, hasSound, newId, sourceInMax, trackKindFor, type Asset, type AssetVersion, type Composition, type MediaRef, type Placement, type Project, type TrackKind, transformOf } from "../domain/model";
 import * as ops from "../domain/ops";
 import * as clipRange from "../domain/clipRange";
@@ -819,4 +821,59 @@ const editTracker = (p: Project, id: string, trackId: string | undefined, fn: (t
   const tr = tracking.pickTrack(pl, trackId);
   if (typeof tr === "string") throw new Error(tr);
   return { ...pl, motionTracks: tracking.tracksOf(pl).map((t) => (t.id === tr.id ? fn(t) : t)) };
+});
+
+// ---------------------------------------------------------------- P86: plugins in a project (install, add, remove)
+
+/** P86: lock plugin `id` in the project (install or add from the device library). Its package blob is stored first. */
+export const lockPlugin = (id: string, lock: PluginLock): Command => ({
+  label: `Add plugin “${lock.name}”`,
+  apply: (p) => setPluginLock(p, id, lock),
+});
+
+/**
+ * P86: remove plugin `id` from the project (one undo step). Without `withClips` its clips keep their settings and show
+ * the "not in this project" slate; with it they are deleted too (root composition).
+ */
+export const removePlugin = (id: string, withClips = false): Command => ({
+  label: withClips ? "Remove plugin and its clips" : "Remove plugin",
+  apply: (p) => {
+    if (!p.plugins || !(id in p.plugins)) throw new Error(`plugin ${id} is not in this project`);
+    const next = removePluginLock(p, id);
+    if (!withClips) return next;
+    const ids = (next.compositions[next.rootCompositionId]?.tracks ?? []).flatMap((t) => t.placements.filter((x) => x.clipType === id).map((x) => x.id));
+    return ids.length ? withRoot(next, (c) => edit.deleteMany(c, ids, false)) : next;
+  },
+});
+
+/**
+ * P86: add a clip of plugin `clipType` at `at` with the plugin's default length: on the main track, on video track
+ * `trackId`, or (default) on the first overlay video layer with room, else a new layer above. Params start empty (the
+ * manifest's defaults apply); `version` is the plugin version they were written for.
+ */
+export const addPluginClip = (at: number, clipType: `x-${string}`, version: string, durationTicks: number, where: "main" | "overlay" | { trackId: string } = "overlay", id = newId("plc")): Command => ({
+  label: "Add plugin clip", autoLink: where !== "main",
+  apply: (p) => withRoot(p, (c) => {
+    if (!/^x-/.test(clipType)) throw new Error("not a plugin clip type");
+    const start = Math.max(0, Math.round(at)), len = Math.max(1, Math.round(durationTicks));
+    const pl: Placement = { id, startTicks: start, durationTicks: len, sourceInTicks: 0, source: TEXT_SOURCE, clipType, plugin: { data: { params: {} }, v: version } };
+    let comp = c;
+    const main = ops.mainTrack(comp);
+    const fits = (t: Composition["tracks"][number]) => t.placements.every((o) => o.startTicks >= start + len || o.startTicks + o.durationTicks <= start);
+    let w = where;
+    if (typeof w === "object") {
+      const tid = w.trackId;
+      const t = comp.tracks.find((x) => x.id === tid);
+      if (t?.kind === "video" && (t.id === main?.id || fits(t))) return ops.insertPlacement(comp, t.id, pl);
+      w = t && t.id === main?.id ? "main" : "overlay";
+    }
+    if (w === "main") {
+      let tid = main?.id;
+      if (!tid) { tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); }
+      return ops.insertPlacement(comp, tid, pl);
+    }
+    let track = comp.tracks.find((t) => t.kind === "video" && t.id !== main?.id && fits(t));
+    if (!track) { const tid = newId("trk"); comp = ops.addTrack(comp, "video", tid); track = comp.tracks.find((t) => t.id === tid)!; }
+    return ops.insertPlacement(comp, track.id, pl);
+  }),
 });

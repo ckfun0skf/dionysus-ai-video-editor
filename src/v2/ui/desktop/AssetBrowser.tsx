@@ -16,6 +16,7 @@ export const BROWSER_TABS = [
   { id: "audio", label: "Audio", icon: "♫" },
   { id: "text", label: "Text", icon: "T" },
   { id: "effects", label: "Effects", icon: "effect" },
+  { id: "plugins", label: "Plugins", icon: "puzzle" },
 ] as const;
 export type BrowserTab = (typeof BROWSER_TABS)[number]["id"];
 /** A saved tab id (older builds had "media" and "templates") → a current tab. */
@@ -46,6 +47,8 @@ export interface BrowserActions {
   onCreateAudio?: () => void;
   /** P18: Audio → From video: open Add audio on its From Video tab. */
   onAudioFromVideo?: () => void;
+  /** P86: the Plugins tab's body (tiles, Add plugin), from usePluginCenter. */
+  pluginsTab?: React.ReactNode;
 }
 
 /**
@@ -166,6 +169,7 @@ export function AssetBrowser({ project, thumbs, busy, tab, onTab, ...a }: Browse
             </li>
           ))}
         </ul>}
+        {tab === "plugins" && (a.pluginsTab ?? <p className="v2-abnote">Plugins aren&apos;t available here.</p>)}
         {tab === "effects" && <>
           <div className="v2-abhead"><strong>Video effects</strong></div>
           <ul className="v2-tiles" aria-label="Effects">

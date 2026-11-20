@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import { Box, Camera, ChevronDown, Focus, KeyRound, Lightbulb, Move3d, Palette, Puzzle, Rotate3d, Scale3d } from "lucide-react";
+import { ChartLine, Globe, LayoutGrid, PackagePlus, Shapes, ShieldCheck, Star, Sun, Waves } from "lucide-react";
 import { ChevronLeft, ChevronRight, MoveHorizontal, Replace, ArrowRightToLine, Library, Unlink, Bot, AudioWaveform, Headphones, Pipette, ScanSearch, Crosshair, Spline } from "lucide-react";
 import {
   Clapperboard, Ellipsis, FileJson, Link2, CircleCheck, CircleAlert, ListTodo, ImageUp, RefreshCw,
@@ -24,7 +25,13 @@ export const ICONS: Record<string, LucideIcon> = {
   scene: Box, camera: Camera, light: Lightbulb,
   move3d: Move3d, rotate3d: Rotate3d, scale3d: Scale3d, key: KeyRound, focus: Focus,
   puzzle: Puzzle,
+  // P86: plugins (install, trust, URL) and the manifest's `icon` names (domain/pluginManifest.ts PLUGIN_ICONS) as "pi-<name>".
+  "plugin-add": PackagePlus, shield: ShieldCheck, globe: Globe,
+  "pi-puzzle": Puzzle, "pi-sparkles": Sparkles, "pi-shapes": Shapes, "pi-type": Type, "pi-chart": ChartLine, "pi-waves": Waves, "pi-grid": LayoutGrid, "pi-box": Box, "pi-star": Star, "pi-sun": Sun,
 };
+
+/** P86: the icon key of a plugin's manifest `icon` (absent or unknown = the puzzle piece). */
+export const pluginIconKey = (icon?: string) => (icon && ICONS[`pi-${icon}`] ? `pi-${icon}` : "puzzle");
 
 /**
  * P32 "Merge up": an up arrow whose stem splits at the base into two curves that come in from the

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { hitCandidates, isBackdrop, pickAt, Player, readClipConfig } from "../render";
 import { cmd } from "../engine";
 import { htmlRoleOf, importFile } from "../persistence";
@@ -56,6 +56,8 @@ import { newCodeClipHtml } from "./codeSamples";
 import { ScenePanel } from "./ScenePanel";
 import { PluginClipPanel, unknownPluginNote } from "./PluginClipPanel";
 import { usePluginRegistry, usePluginSync } from "./pluginRuntime";
+import { usePluginCenter } from "./PluginLibrary";
+import { pluginStatus, retryPluginClip } from "../render";
 import { pluginMetaOf } from "../clipTypes";
 import { SceneEditor } from "./SceneEditor";
 /** P77: the desktop scene editor gets at least this much height (the timeline splitter's own size is kept). */
@@ -414,6 +416,14 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
   const player = playerRef.current;
   useEffect(() => { player.onTime = (t, p) => { if (p && stopAt.current !== undefined && t >= stopAt.current) { stopAt.current = undefined; player.pause(); return; } setTime(t); setPlaying(p); setFrame((f) => f + 1); }; return () => player.dispose(); }, [player]);
   useEffect(() => { player.previewMute = previewMute; }, [player, previewMute]);
+  // P86: plugins: install / allow / remove, the review banner, the Plugins library; a stopped clip's state and Retry.
+  useSyncExternalStore(pluginStatus.subscribe, pluginStatus.revision); // re-render cards and panels when a clip stops
+  const plugins = usePluginCenter({
+    engine, project, blobs: storage.blobs, mobile, revision: pluginRev, playhead: () => player.time,
+    onAdded: (id) => { setSel([id]); setSubId(undefined); },
+    onToast: (m, undo) => { setToast(m); setToastUndo(!!undo); },
+  });
+  const retryPlugin = (id: string) => { retryPluginClip(id); player.draw(); };
   useEffect(() => {
     const onFs = () => {
       const on = !!document.fullscreenElement;
@@ -1157,16 +1167,17 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (it?.kind === "text") addTextAt(at, it.template);
     else if (it?.kind === "effect") addEffectAt(it.id, at);
     else if (it?.kind === "sticker") { const st = stickers().find((x) => x.id === it.id); if (st) void addStickerAt(st, at); }
+    else if (it?.kind === "plugin") plugins.dropAt(it.id, it.hash, at, trackId);
     else if (dt.files?.length) void importAt(Array.from(dt.files), at, trackId);
   };
   const inserting = picker === "insert";
-  const pickerEl = picker ? <MediaPicker media={projectMedia} title={inserting ? "Insert after current clip" : picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} lead={inserting ? "The new clip goes just after the current clip. Later clips move later, and linked layers and subtitles stay with the clips they belong to. Upload a file and it is selected here — then Insert." : undefined} confirmLabel={inserting ? "Insert" : "Add"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void (inserting ? addInserted(p) : addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main"))} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(inserting ? "insert" : picker === "overlay" ? "overlay" : "main")} onCreateScene={picker === "audio" || picker === "fromVideo" || picker === "overlay" || inserting ? undefined : () => void createScene()} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : inserting ? insertBlank : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} /> : null;
+  const pickerEl = picker ? <MediaPicker media={projectMedia} title={inserting ? "Insert after current clip" : picker === "overlay" ? "Add overlay" : picker === "audio" || picker === "fromVideo" ? "Add audio" : picker === "stickers" ? "Add stickers" : "Add media"} lead={inserting ? "The new clip goes just after the current clip. Later clips move later, and linked layers and subtitles stay with the clips they belong to. Upload a file and it is selected here — then Insert." : undefined} confirmLabel={inserting ? "Insert" : "Add"} only={picker === "audio" || picker === "fromVideo" ? "audio" : undefined} initialTab={picker === "stickers" ? "stickers" : picker === "fromVideo" ? "fromVideo" : undefined} onClose={() => setPicker(null)} onAdd={(p) => void (inserting ? addInserted(p) : addPicked(p, picker === "overlay" || picker === "stickers" ? "overlay" : "main"))} onCreateCode={picker === "audio" || picker === "fromVideo" ? undefined : () => createCode(inserting ? "insert" : picker === "overlay" ? "overlay" : "main")} onCreateScene={picker === "audio" || picker === "fromVideo" || picker === "overlay" || inserting ? undefined : () => void createScene()} onCreateAudio={picker === "audio" || picker === "fromVideo" ? createAudio : undefined} onCreateAudioAi={picker === "audio" || picker === "fromVideo" ? openAudioAi : undefined} onAddFromVideo={picker === "audio" || picker === "fromVideo" ? (fv) => void addFromVideo(fv) : undefined} onTimeline={videoOnTimeline} onUploadVideo={picker === "audio" || picker === "fromVideo" ? uploadFromVideo : undefined} onDiscardVideo={(id) => engine.dispatch(cmd.removeAsset(id))} onAddBlank={picker === "audio" || picker === "fromVideo" || picker === "stickers" ? undefined : inserting ? insertBlank : (c) => addBlank(c, picker === "overlay" ? "overlay" : "main")} loadMedia={loadAssetBlob} pluginsTab={picker === "main" || picker === "overlay" ? plugins.pickerTab : undefined} /> : null;
   const assetBrowser = (
     <AssetBrowser project={project} thumbs={thumbs} busy={busy} tab={btab} onTab={setBtab}
       onImport={importDialog} onFiles={(fs) => void onFiles(fs)} onAddAsset={addToTimeline} onRemoveAsset={(a) => engine.dispatch(cmd.removeAsset(a.id))}
       onAddBlank={addBlank} onAddText={(tp) => addTextAt(player.time, tp)} onImportSrt={openSubImport}
       onAddSticker={(st) => void addStickerAt(st, player.time)} onAddEffect={(id) => addEffectAt(id, player.time)}
-      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateScene={() => void createScene()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} />
+      onAddTransition={addTransitionNearPlayhead} onCreateCode={() => createCode()} onCreateScene={() => void createScene()} onCreateAudio={createAudio} onCreateAudioAi={openAudioAi} onAudioFromVideo={() => setPicker("fromVideo")} pluginsTab={plugins.browserTab} />
   );
   useEffect(() => { setItab(preferTab.current); preferTab.current = undefined; }, [selectedId]);
   const fpsNow = project.settings.fps;
@@ -1187,7 +1198,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
     if (captionTrack && !selected) return { icon: "caption-style", title: "Caption style", subtitle: captionTrack.name, onDone: () => { setCaptionEdit(undefined); setCaptionClip(undefined); }, tabs: [{ id: "caption", label: "Caption style", render: () => <CaptionStylePanel engine={engine} track={captionTrack} placement={captionPlacement} /> }] };
     if (layerTrack && !selected) return { icon: "layers", title: "Edit all", subtitle: layerTrack.name, onDone: () => setLayerEdit(undefined), tabs: [{ id: "layer", label: "Layer style", render: () => <TextPanel key={layerTrack.id} engine={engine} layer={layerTrack} initialTab="Style" /> }] };
     if (cue && !selected) return { icon: "≡", title: "Subtitle", onDone: () => setSubId(undefined), tabs: [{ id: "cue", label: "Subtitle", render: () => <SubtitleEditor engine={engine} sub={cue} onDelete={delCue} /> }] };
-    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "srt-out", label: "Export SRT", title: "Download subtitles as an .srt file", run: exportSrt }])}</section> : undefined} /> }] };
+    if (!selected) return { icon: "settings", title: "Project", subtitle: `${project.settings.width}×${project.settings.height} · ${fpsNow} fps`, tabs: [{ id: "project", label: "Project", render: () => <ProjectSettings engine={engine} project={project} onSeries={() => setSeriesLib(true)} onCleanup={() => setCleanOpen(true)} onPlugins={plugins.openManage} pluginCount={plugins.rows.filter((r) => r.inProject).length} extra={textLayers.length ? <section aria-label="Subtitles"><h4>Subtitles</h4>{actionList([{ icon: "≡", label: "Subtitles", title: "Edit every subtitle in a list: text, timing, split, merge, find & replace", run: editSubtitles }, { icon: "srt-out", label: "Export SRT", title: "Download subtitles as an .srt file", run: exportSrt }])}</section> : undefined} /> }] };
     const pl = selected.placement, u = clipUi(pl);
     const rel = clipTimeAt(pl, time);
     const sub = `${formatTimecode(pl.startTicks, fpsNow).slice(0, 8)} · ${(pl.durationTicks / 120000).toFixed(1)}s${rel ? ` · ${clipTimeText(rel)}` : ""}`;
@@ -1240,7 +1251,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
         {pl.clipType.startsWith("x-") ? <p className="v2-abnote">{unknownPluginNote(pl.clipType)}</p>
           : <p className="v2-abnote">This clip&apos;s type “{pl.clipType}” is not in this version of the editor, so it can&apos;t be shown or edited here. Its data is kept as is: you can move, trim, split or delete it, and it plays again in a version that has this type. It shows as a slate and exports as a black frame without sound.</p>}</section></div> },
       // P84: a clip of a registered third-party plugin type: its details and settings (read-only until P87).
-      plugin: { id: "plugin", label: "Plugin", icon: "puzzle", render: () => <PluginClipPanel project={project} placement={pl} /> },
+      plugin: { id: "plugin", label: "Plugin", icon: "puzzle", render: () => <PluginClipPanel project={project} placement={pl} onRetry={retryPlugin} onReview={plugins.review} /> },
       // P74: a 3D scene clip's objects, events and problems (read-only in step 2.1).
       scene: { id: "scene", label: "Scene", icon: "scene", render: () => <ScenePanel project={project} placement={pl} blobs={storage.blobs} engine={engine} onEdit={() => setSceneEdit(pl.id)} /> },
       colour: { id: "colour", label: "Colour", icon: "palette", render: () => <div className="v2-psettings"><section aria-label="Colour"><h4>Colour</h4><BlankColorPicker value={pl.blank!.color} onChange={(c) => engine.dispatch(cmd.setBlankColor(pl.id, c))} /></section></div> },
@@ -1420,6 +1431,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           <button className="v2-btn primary v2-export-d" aria-label="Export MP4" title="Export MP4 (⌘/Ctrl+E)" onClick={openExport}><Ic g="film" size={16} /> Export MP4</button>
         </header>
       )}
+      {plugins.banner}
       {board && <StoryboardView engine={engine} blobs={storage.blobs} player={player} initialOpen={boardOpen} onSeries={() => setSeriesLib(true)} onClose={() => { setBoard(false); setBoardOpen(undefined); }}
         onView={(id) => { setBoard(false); setBoardOpen(undefined); const pl = ops.mainTrack(engine.getState().project.compositions[engine.getState().project.rootCompositionId])?.placements.find((x) => x.id === id); if (pl) { if (mobile) setMenu("edit"); selectClip(id); seek(pl.startTicks); } }} />}
       {seriesLib && <SeriesLibrary engine={engine} project={project} storage={storage} onClose={() => setSeriesLib(false)} />}
@@ -1469,7 +1481,8 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
       {cleanOpen && <div className="v2-modal-back" onPointerDown={(e) => { if (e.target === e.currentTarget) setCleanOpen(false); }}>
         <CleanupDialog engine={engine} project={project} blobs={storage.blobs} onClose={() => setCleanOpen(false)} onDone={(m) => { setCleanOpen(false); setToast(m); }} />
       </div>}
-      {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} onCleanup={() => { setProjOpen(false); setCleanOpen(true); }} /></Sheet>}
+      {projOpen && <Sheet label="Project settings" className="v2-msheet-insp" onClose={() => setProjOpen(false)}><MobileProjectSettings engine={engine} project={project} onSeries={() => { setProjOpen(false); setSeriesLib(true); }} onCleanup={() => { setProjOpen(false); setCleanOpen(true); }} onPlugins={() => { setProjOpen(false); plugins.openManage(); }} pluginCount={plugins.rows.filter((r) => r.inProject).length} /></Sheet>}
+      {plugins.overlay}
       {mobile ? (
         <>
           {preview}
@@ -1533,7 +1546,7 @@ function Editor({ engine, storage, recovery, onSwitch }: EditorContext & { onSwi
           {fxOpen && <Sheet label="Effects" className="v2-msheet-insp" onClose={() => setFxOpen(false)}><EffectPicker engine={engine} at={time} placement={isEffect ? selected!.placement : undefined} onAdded={(id) => setSel([id])} onClose={() => setFxOpen(false)} onNewCode={() => createCodeRole("effect")} onEditCode={(id) => void editCodeAsset(id)} /></Sheet>}
           {sceneEditor}
           {paramsOpen && selected && isHtml && <Sheet label="Clip params" className="v2-msheet-insp" onClose={() => setParamsOpen(false)}><HtmlParamsPanel engine={engine} project={project} placement={selected.placement} blobs={storage.blobs} onEditCode={() => { setParamsOpen(false); void openCode(); }} /></Sheet>}
-          {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} /></Sheet>}
+          {pluginInfo && selected && pluginMetaOf(selected.placement.clipType) && <Sheet label="Plugin" className="v2-msheet-insp" onClose={() => setPluginInfo(false)}><PluginClipPanel project={project} placement={selected.placement} onRetry={retryPlugin} onReview={(id) => { setPluginInfo(false); plugins.review(id); }} /></Sheet>}
           {animOpen && !textOpen && selected && isText && <Sheet label="Animation" className="v2-msheet-insp v2-anim-sheet" snapTo={animLoop ? 0 : undefined} extra={scopeChip || undefined} onClose={closeAnim}><AnimationPicker engine={engine} placement={selected.placement} onPicked={() => setAnimLoop(true)} /></Sheet>}
         </>
       ) : (
