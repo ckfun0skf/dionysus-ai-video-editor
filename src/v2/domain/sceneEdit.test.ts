@@ -212,7 +212,8 @@ describe("P81b light ids", () => {
     expect(bad(lights([{ type: "point", id: "camera" }]))).toEqual(['world.lights[0].id: "camera" is reserved for the camera.']);
     expect(bad(lights([{ type: "point", id: 3 }]))[0]).toMatch(/^world.lights\[0\].id: must start with a letter/);
     expect(bad(lights([{ type: "point", id: "ball" }]))).toEqual(['objects[1].id: "ball" is the id of a light (world.lights[0]).']);
-    expect(bad({ ...lights([{ type: "point", id: "key" }]), events: [{ at: 0, obj: "key", call: "moveTo", args: { position: [0, 0, 0] } }] }))
-      .toEqual(['events[0].obj: "key" is a light; lights are static (no events animate them).']);
+    // Scene Phase 1 (#350): a light with an id takes events.
+    expect(bad({ ...lights([{ type: "point", id: "key" }]), events: [{ at: 0, obj: "key", call: "moveTo", args: { position: [0, 0, 0] } }] })).toEqual([]);
+    expect(bad({ ...lights([{ type: "point", id: "key" }]), events: [{ at: 0, obj: "key", call: "spin" }] })[0]).toMatch(/^events\[0\]\.call: The light "key" has no function "spin"/);
   });
 });

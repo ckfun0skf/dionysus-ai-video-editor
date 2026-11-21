@@ -1,4 +1,5 @@
 import type { SceneDoc } from "../domain/scene";
+import { lookStructure } from "../domain/sceneLook";
 import { writeManifest } from "../domain/htmlClipPackage";
 
 /**
@@ -67,13 +68,164 @@ const scene = new THREE.Scene();
 const world = doc.world || {};
 const camera = new THREE.PerspectiveCamera(40, 16 / 9, 0.05, 500);
 const lights = Array.isArray(world.lights) && world.lights.length ? world.lights : [{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [3, 5, 2], intensity: 1.5 }];
+const isObj = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+// Scene Phase 1 (#350): shadows (any light with "shadow" turns the shadow map on; every object then casts and receives).
+const shadows = lights.some((l) => l && l.shadow && (l.type === "directional" || l.type === "point"));
+if (shadows) { renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFShadowMap; }
+const lightNodes = [];
 for (const l of lights) {
   const c = new THREE.Color(l.color || "#ffffff"), k = typeof l.intensity === "number" ? l.intensity : 1;
-  const L = l.type === "ambient" ? new THREE.AmbientLight(c, k) : l.type === "hemisphere" ? new THREE.HemisphereLight(c, 0x303040, k)
+  const L = l.type === "ambient" ? new THREE.AmbientLight(c, k) : l.type === "hemisphere" ? new THREE.HemisphereLight(c, l.groundColor || 0x303040, k)
     : l.type === "point" ? new THREE.PointLight(c, k * 10, 0, 2) : new THREE.DirectionalLight(c, k);
   if (Array.isArray(l.position)) L.position.set(l.position[0], l.position[1], l.position[2]);
-  scene.add(L);
+  if (L.isDirectionalLight) { if (Array.isArray(l.lookAt)) L.target.position.set(l.lookAt[0], l.lookAt[1], l.lookAt[2]); scene.add(L.target); }
+  if (l.shadow && (L.isDirectionalLight || L.isPointLight)) {
+    const s = isObj(l.shadow) ? l.shadow : {};
+    L.castShadow = true;
+    const size = s.mapSize || 2048; L.shadow.mapSize.set(size, size);
+    L.shadow.bias = typeof s.bias === "number" ? s.bias : -0.0005;
+    L.shadow.normalBias = typeof s.normalBias === "number" ? s.normalBias : 0.02;
+    L.shadow.radius = typeof s.radius === "number" ? s.radius : 2;
+    if (L.isDirectionalLight) { const a = s.area || 10, sc = L.shadow.camera; sc.left = -a; sc.right = a; sc.top = a; sc.bottom = -a; sc.near = 0.1; sc.far = 200; sc.updateProjectionMatrix(); }
+  }
+  scene.add(L); lightNodes.push(L);
 }
+// The lights at this frame (state.lights, from the pure evaluator: events and the sky's sun already applied).
+function applyLights(list) {
+  if (!Array.isArray(list)) return;
+  lightNodes.forEach((L, i) => {
+    const l = list[i]; if (!l) return;
+    L.color.set(l.color); L.intensity = L.isPointLight ? l.intensity * 10 : l.intensity;
+    if (Array.isArray(l.position)) L.position.fromArray(l.position);
+    if (L.isDirectionalLight && Array.isArray(l.target)) L.target.position.fromArray(l.target);
+    if (L.isHemisphereLight && l.groundColor) L.groundColor.set(l.groundColor);
+    L.updateMatrixWorld(); if (L.target) L.target.updateMatrixWorld();
+  });
+}
+// Scene Phase 1: materials. "standard" is the old look; "toon" bands the light (a gradient map of "steps"); "unlit"
+// ignores lights; "rim" adds a fresnel edge; "outline" adds an inverted hull (a back-face shell pushed out along the
+// normals) that follows skinning and morphs.
+const matSpec = (o) => (typeof o.material === "string" ? { type: o.material } : isObj(o.material) ? o.material : null);
+const gradients = new Map();
+function gradientMap(steps) {
+  const n = Math.max(2, Math.min(8, steps | 0 || 3));
+  if (gradients.has(n)) return gradients.get(n);
+  const data = new Uint8Array(n);
+  for (let i = 0; i < n; i++) data[i] = Math.round((i / (n - 1)) * 255);
+  const tex = new THREE.DataTexture(data, n, 1, THREE.RedFormat);
+  tex.minFilter = tex.magFilter = THREE.NearestFilter; tex.generateMipmaps = false; tex.needsUpdate = true;
+  gradients.set(n, tex); return tex;
+}
+function addRim(m, rim) {
+  if (!rim || m.isMeshBasicMaterial) return;
+  const r = isObj(rim) ? rim : {};
+  const color = new THREE.Color(r.color || "#ffffff"), strength = typeof r.strength === "number" ? r.strength : 0.6, power = typeof r.power === "number" ? r.power : 3;
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.rimColor = { value: color }; sh.uniforms.rimStrength = { value: strength }; sh.uniforms.rimPower = { value: power };
+    sh.fragmentShader = "uniform vec3 rimColor; uniform float rimStrength; uniform float rimPower;\\n" + sh.fragmentShader.replace("#include <opaque_fragment>",
+      "outgoingLight += rimColor * rimStrength * pow(1.0 - clamp(dot(normalize(vViewPosition), normal), 0.0, 1.0), rimPower);\\n#include <opaque_fragment>");
+  };
+  m.customProgramCacheKey = () => "rim";
+}
+// A material of a type from the look of an existing one (a model's or script's): colour, maps and alpha carry over.
+function makeMaterial(type, from, spec) {
+  const p = { color: from.color ? from.color.clone() : new THREE.Color(0xcccccc), map: from.map || null, side: from.side, transparent: !!from.transparent, opacity: from.opacity ?? 1, alphaTest: from.alphaTest || 0, vertexColors: !!from.vertexColors };
+  let m;
+  if (type === "unlit") m = new THREE.MeshBasicMaterial(p);
+  else if (type === "toon") m = new THREE.MeshToonMaterial({ ...p, gradientMap: gradientMap(spec.steps), normalMap: from.normalMap || null, emissive: from.emissive ? from.emissive.clone() : new THREE.Color(0), emissiveMap: from.emissiveMap || null });
+  else m = new THREE.MeshStandardMaterial({ ...p, roughness: from.roughness ?? 0.55, metalness: from.metalness ?? 0.1, normalMap: from.normalMap || null, emissive: from.emissive ? from.emissive.clone() : new THREE.Color(0), emissiveMap: from.emissiveMap || null });
+  return m;
+}
+function styleMaterial(x, spec) {
+  let m = spec.type && spec.type !== "keep" ? makeMaterial(spec.type, x, spec) : x;
+  if (typeof spec.roughness === "number" && "roughness" in m) m.roughness = spec.roughness;
+  if (typeof spec.metalness === "number" && "metalness" in m) m.metalness = spec.metalness;
+  if (spec.emissive && m.emissive) { m.emissive.set(spec.emissive); m.emissiveIntensity = typeof spec.emissiveIntensity === "number" ? spec.emissiveIntensity : 1; }
+  else if (typeof spec.emissiveIntensity === "number" && m.emissive) m.emissiveIntensity = spec.emissiveIntensity;
+  addRim(m, spec.rim);
+  return m;
+}
+const outlineMats = new Map();
+function outlineMaterial(spec) {
+  const o = isObj(spec) ? spec : {};
+  const color = o.color || "#101014", width = typeof o.width === "number" ? o.width : 0.02, key = color + "|" + width;
+  const m = new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+  m.onBeforeCompile = (sh) => { sh.vertexShader = sh.vertexShader.replace("#include <begin_vertex>", "#include <begin_vertex>\\ntransformed += normalize(normal) * " + width.toFixed(5) + ";"); };
+  m.customProgramCacheKey = () => "outline" + key;
+  return m;
+}
+// Add an outline shell to a mesh (a child with the same geometry, skeleton and morphs); returns its material.
+function addOutline(mesh, spec) {
+  const mat = outlineMaterial(spec);
+  const hull = mesh.isSkinnedMesh ? new THREE.SkinnedMesh(mesh.geometry, mat) : new THREE.Mesh(mesh.geometry, mat);
+  if (mesh.isSkinnedMesh) hull.bind(mesh.skeleton, mesh.bindMatrix);
+  if (mesh.morphTargetInfluences) { hull.morphTargetInfluences = mesh.morphTargetInfluences; hull.morphTargetDictionary = mesh.morphTargetDictionary; }
+  hull.castShadow = false; hull.receiveShadow = false; hull.frustumCulled = false; hull.userData.outline = true;
+  mesh.add(hull);
+  return mat;
+}
+// A model's or script's tree in the object's style: each mesh's materials converted / styled, an outline per mesh.
+function styleTree(root, spec, mats) {
+  const meshes = [];
+  root.traverse((n) => { if (n.isMesh && !n.userData.outline) meshes.push(n); });
+  for (const n of meshes) {
+    if (shadows) { n.castShadow = true; n.receiveShadow = true; }
+    if (!spec) continue;
+    const list = Array.isArray(n.material) ? n.material : [n.material];
+    const next = list.map((x) => styleMaterial(x, spec));
+    n.material = Array.isArray(n.material) ? next : next[0];
+    if (spec.outline) { const om = addOutline(n, spec.outline); if (mats) mats.push({ m: om, opacity: 1, transparent: false }); }
+  }
+}
+// Scene Phase 1: fog (values per frame from state.fog).
+if (isObj(world.fog)) scene.fog = world.fog.type === "exp2" ? new THREE.FogExp2(0x000000, 0.03) : new THREE.Fog(0x000000, 10, 60);
+function applyFog(f) {
+  if (!scene.fog || !f) return;
+  scene.fog.color.set(f.color);
+  if (scene.fog.isFogExp2) scene.fog.density = f.density; else { scene.fog.near = f.near; scene.fog.far = Math.max(f.far, f.near + 1e-3); }
+}
+// Scene Phase 1: the addons (post-processing, Sky, RGBELoader) from the vendored bundle, loaded only when used (a
+// variable specifier, like GLTFLoader, so pages without them don't list it).
+let lookLib = null;
+const lookAddons = async () => { if (!lookLib) { const LOOK = "three/addons/dionysus-look.js"; lookLib = await import(LOOK); } return lookLib; };
+let sky = null, envBackground = null;
+async function loadLook(ctx) {
+  if (isObj(world.sky)) {
+    const { Sky } = await lookAddons();
+    sky = new Sky(); sky.scale.setScalar(400); sky.frustumCulled = false; scene.add(sky);
+  }
+  const env = isObj(world.environment) && typeof world.environment.file === "string" ? world.environment : null;
+  const url = env && ctx.asset(env.file);
+  if (url) {
+    try {
+      let tex;
+      if (/\\.hdr$/i.test(env.file)) { const { RGBELoader } = await lookAddons(); tex = await new RGBELoader().loadAsync(url); }
+      else { tex = await new THREE.TextureLoader().loadAsync(url); tex.colorSpace = THREE.SRGBColorSpace; }
+      tex.mapping = THREE.EquirectangularReflectionMapping;
+      const pm = new THREE.PMREMGenerator(renderer);
+      scene.environment = pm.fromEquirectangular(tex).texture; pm.dispose();
+      if (env.background) envBackground = tex;
+    } catch (err) { console.error(err); }
+  }
+}
+const sunVec = new THREE.Vector3();
+// Background, sky, fog and lights at this frame. "lights" false: the Edit view sets lights itself (while dragging).
+function applyLook(s, withLights) {
+  if (envBackground) scene.background = envBackground;
+  else if (sky) scene.background = null;
+  else scene.background = new THREE.Color(s.background);
+  if (sky && s.sky) {
+    const u = sky.material.uniforms;
+    u.turbidity.value = s.sky.turbidity; u.rayleigh.value = s.sky.rayleigh; u.mieCoefficient.value = s.sky.mieCoefficient; u.mieDirectionalG.value = s.sky.mieDirectionalG;
+    sunVec.setFromSphericalCoords(1, (90 - s.sky.elevation) * D, s.sky.azimuth * D); u.sunPosition.value.copy(sunVec);
+  }
+  applyFog(s.fog);
+  if (withLights !== false) applyLights(s.lights);
+}
+// Tone mapping without the post stack: a scene with a sky (and no "post") gets ACES, as its sky is HDR.
+const TONE = { none: THREE.NoToneMapping, linear: THREE.LinearToneMapping, reinhard: THREE.ReinhardToneMapping, cineon: THREE.CineonToneMapping, aces: THREE.ACESFilmicToneMapping, agx: THREE.AgXToneMapping };
+if (isObj(world.post)) renderer.toneMapping = TONE[world.post.toneMapping] ?? (isObj(world.sky) ? THREE.ACESFilmicToneMapping : THREE.NoToneMapping);
+else if (isObj(world.sky)) renderer.toneMapping = THREE.ACESFilmicToneMapping;
 const sizeOf = (o, n, d) => { const s = o.size; if (typeof s === "number") return Array(n).fill(s); if (Array.isArray(s)) return s.length === 1 ? Array(n).fill(s[0]) : s; return d; };
 const geometry = (o) => {
   switch (o.shape) {
@@ -90,10 +242,18 @@ const geometry = (o) => {
 const nodes = new Map();
 const objects = (Array.isArray(doc.objects) ? doc.objects : []).filter((o) => o && typeof o.id === "string");
 for (const o of objects) {
-  const mat = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.1, side: o.shape === "plane" ? THREE.DoubleSide : THREE.FrontSide });
+  const side = o.shape === "plane" ? THREE.DoubleSide : THREE.FrontSide;
+  const spec = matSpec(o);
+  const base = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.1, side });
+  // A shape's own material ("keep" = standard); without "material" exactly the old one.
+  const mat = spec ? styleMaterial(base, { ...spec, type: spec.type === "keep" ? "standard" : spec.type || "standard" }) : base;
+  if (mat !== base) base.dispose();
   const m = new THREE.Mesh(geometry(o), mat);
   m.rotation.order = "XYZ";
-  scene.add(m); nodes.set(o.id, { node: m, tint: true, mats: [{ m: mat, opacity: 1, transparent: false }] });
+  if (shadows) { m.castShadow = true; m.receiveShadow = true; }
+  const mats = [{ m: mat, opacity: 1, transparent: false }];
+  if (spec && spec.outline) mats.push({ m: addOutline(m, spec.outline), opacity: 1, transparent: false });
+  scene.add(m); nodes.set(o.id, { node: m, tint: true, mats });
 }
 const LOOP = { once: THREE.LoopOnce, pingpong: THREE.LoopPingPong };
 // P75: load each model object's GLB (an attached file of the scene) before the first frame; a missing or broken file
@@ -125,8 +285,10 @@ async function loadModels(ctx) {
       n.frustumCulled = false;
       const own = Array.isArray(n.material) ? n.material.map((x) => x.clone()) : n.material.clone();
       n.material = own;
-      for (const x of Array.isArray(own) ? own : [own]) mats.push({ m: x, opacity: x.opacity, transparent: x.transparent });
     });
+    // Scene Phase 1 (#350): the object's material style (and outline shells), then the materials its opacity drives.
+    styleTree(root, matSpec(o), null);
+    root.traverse((n) => { if (n.isMesh) for (const x of Array.isArray(n.material) ? n.material : [n.material]) mats.push({ m: x, opacity: x.opacity, transparent: x.transparent }); });
     const old = nodes.get(o.id);
     scene.remove(old.node); old.node.geometry.dispose(); old.node.material.dispose();
     scene.add(group);
@@ -220,6 +382,8 @@ async function loadScripts(ctx) {
       try { obj = await mod.build(THREE, params, sctx); } catch (err) { scriptNote(o.id, "build failed: " + errText(err) + "; a " + shape + " is drawn instead."); continue; }
       if (!obj || !obj.isObject3D) { scriptNote(o.id, "build must return a THREE.Object3D (a Mesh, Points, Group…); a " + shape + " is drawn instead."); continue; }
       const group = new THREE.Group(); group.rotation.order = "XYZ"; group.add(obj);
+      // Scene Phase 1 (#350): a Script object opts in to a material style by having "material".
+      try { styleTree(obj, matSpec(o), null); } catch (err) { scriptNote(o.id, "its material style couldn't be applied: " + errText(err)); }
       const old = nodes.get(o.id);
       scene.remove(old.node); old.node.geometry.dispose(); old.node.material.dispose();
       scene.add(group);
@@ -273,24 +437,114 @@ function applyObject(n, o, t) {
 }
 `;
 /** The frame part: draw the state the editor sends for each time, from the scene's camera. */
+/**
+ * Scene Phase 1 (#350): the post-processing stack, built once when the scene has world.post: the scene (through SSAO
+ * when on), bloom, depth of field, the output pass (tone mapping + sRGB), a grade pass (lift / gamma / gain, contrast,
+ * saturation, vignette, film grain seeded by the frame's time) and FXAA or SMAA. Every value is set per frame from
+ * state.post, and composer.render(0) never reads a clock, so a frame is a function of the document and t.
+ */
+export const SCENE_POST_JS = `const GRADE = {
+  uniforms: { tDiffuse: { value: null }, contrast: { value: 1 }, saturation: { value: 1 }, lift: { value: new THREE.Vector3() }, gamma: { value: new THREE.Vector3(1, 1, 1) },
+    gain: { value: new THREE.Vector3(1, 1, 1) }, vignette: { value: 0 }, grain: { value: 0 }, seed: { value: 0 }, res: { value: new THREE.Vector2(1, 1) } },
+  vertexShader: "varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }",
+  fragmentShader: [
+    "uniform sampler2D tDiffuse; uniform float contrast, saturation, vignette, grain, seed; uniform vec3 lift, gamma, gain; uniform vec2 res; varying vec2 vUv;",
+    "float hash(vec2 p) { vec3 q = fract(vec3(p.xyx) * 0.1031); q += dot(q, q.yzx + 33.33); return fract((q.x + q.y) * q.z); }",
+    "void main() {",
+    "  vec4 c = texture2D(tDiffuse, vUv); vec3 col = c.rgb;",
+    "  col = gain * (col + lift * (1.0 - col));",
+    "  col = pow(max(col, vec3(0.0)), 1.0 / max(gamma, vec3(0.01)));",
+    "  col = (col - 0.5) * contrast + 0.5;",
+    "  float l = dot(col, vec3(0.2126, 0.7152, 0.0722)); col = mix(vec3(l), col, saturation);",
+    "  vec2 d = vUv - 0.5; d.x *= res.x / res.y;",
+    "  col *= 1.0 - vignette * smoothstep(0.25, 0.95, length(d) * 1.1);",
+    "  col += (hash(floor(vUv * res) + seed) - 0.5) * grain * 0.3;",
+    "  gl_FragColor = vec4(clamp(col, 0.0, 1.0), c.a);",
+    "}",
+  ].join("\\n"),
+};
+let post = null;
+async function initPost() {
+  const P = isObj(world.post) ? world.post : null;
+  if (!P) return;
+  const L = await lookAddons();
+  const w = 16, h = 9; // resized on the first frame
+  const composer = new L.EffectComposer(renderer);
+  composer.renderToScreen = true;
+  const on = (v) => v === true || isObj(v);
+  const x = { composer };
+  // SSAOPass draws its sample kernel from the clip runtime's seeded random numbers, and the page builds everything in
+  // the same order for one document, so preview and export get the same kernel.
+  // (In three 0.160 SSAOPass darkens the picture of the pass before it, so the scene is always rendered first.)
+  composer.addPass(new L.RenderPass(scene, camera));
+  if (on(P.ssao)) { x.ssao = new L.SSAOPass(scene, camera, w, h); composer.addPass(x.ssao); }
+  if (on(P.bloom)) { x.bloom = new L.UnrealBloomPass(new THREE.Vector2(w, h), 0.6, 0.4, 0.85); composer.addPass(x.bloom); }
+  if (on(P.dof)) { x.dof = new L.BokehPass(scene, camera, { focus: 6, aperture: 0.01, maxblur: 0.01 }); composer.addPass(x.dof); }
+  composer.addPass(new L.OutputPass());
+  x.grade = new L.ShaderPass(GRADE); composer.addPass(x.grade);
+  const aa = P.aa || "fxaa";
+  if (aa === "fxaa") { x.fxaa = new L.ShaderPass(L.FXAAShader); composer.addPass(x.fxaa); }
+  else if (aa === "smaa") {
+    x.smaa = new L.SMAAPass(w, h); composer.addPass(x.smaa);
+    // Its lookup textures are images: wait for them so the first frame is anti-aliased like the rest.
+    await Promise.all([x.smaa.areaTexture, x.smaa.searchTexture].map((t) => (t && t.image && t.image.decode ? t.image.decode().catch(() => {}) : null)));
+    for (const t of [x.smaa.areaTexture, x.smaa.searchTexture]) if (t) t.needsUpdate = true;
+  }
+  post = x;
+}
+function renderPost(s, rw, rh, ss, t) {
+  const x = post, p = s.post;
+  if (x.w !== rw || x.h !== rh) {
+    x.composer.setPixelRatio(1); x.composer.setSize(rw, rh); x.w = rw; x.h = rh;
+    if (x.fxaa) x.fxaa.material.uniforms.resolution.value.set(1 / rw, 1 / rh);
+  }
+  if (p) {
+    const tm = TONE[p.toneMapping] ?? THREE.NoToneMapping;
+    // Exposure needs a tone mapping: "none" with exposure becomes linear (the same picture at exposure 1).
+    renderer.toneMapping = tm === THREE.NoToneMapping && p.exposure !== 1 ? THREE.LinearToneMapping : tm;
+    renderer.toneMappingExposure = p.exposure;
+    if (x.bloom && p.bloom) { x.bloom.strength = p.bloom.strength; x.bloom.radius = p.bloom.radius; x.bloom.threshold = p.bloom.threshold; }
+    if (x.dof && p.dof) { const u = x.dof.uniforms; u.focus.value = p.dof.focus; u.aperture.value = p.dof.aperture; u.maxblur.value = p.dof.maxblur; u.aspect.value = rw / rh; }
+    if (x.ssao && p.ssao) {
+      x.ssao.kernelRadius = p.ssao.radius; x.ssao.minDistance = p.ssao.minDistance; x.ssao.maxDistance = p.ssao.maxDistance;
+      // SSAOPass copies the projection only on resize; the camera's field of view can change every frame.
+      const u = x.ssao.ssaoMaterial.uniforms;
+      u.cameraProjectionMatrix.value.copy(camera.projectionMatrix); u.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
+      u.cameraNear.value = camera.near; u.cameraFar.value = camera.far;
+    }
+    const g = x.grade.uniforms;
+    g.contrast.value = p.contrast; g.saturation.value = p.saturation; g.lift.value.fromArray(p.lift); g.gamma.value.fromArray(p.gamma); g.gain.value.fromArray(p.gain);
+    g.vignette.value = p.vignette; g.grain.value = p.grain;
+    // Grain: one pattern per frame time, the same size at any supersampling.
+    g.seed.value = Math.floor(t * 1000) % 9973; g.res.value.set(rw / ss, rh / ss);
+  }
+  x.composer.render(0);
+}
+`;
 const SCENE_CLIP_JS = `dionysus.clip({
-  init: async (ctx) => { await loadModels(ctx); await loadScripts(ctx); },
+  init: async (ctx) => { await loadModels(ctx); await loadScripts(ctx); await loadLook(ctx); await initPost(); },
   render(t, ctx) {
     const s = ctx.inputs && ctx.inputs.scene;
     if (!s) return;
     const w = ctx.width || innerWidth, h = ctx.height || innerHeight;
-    if (canvas.width !== w || canvas.height !== h) renderer.setSize(w, h, false);
-    scene.background = new THREE.Color(s.background);
+    // Scene Phase 1 (#350): export may ask for supersampling (render larger; the editor scales the frame down).
+    const want = Math.max(1, Math.min(4, (ctx.inputs.supersample | 0) || 1));
+    const ss = Math.max(1, Math.min(want, 8192 / Math.max(w, h)));
+    const rw = Math.round(w * ss), rh = Math.round(h * ss);
+    if (canvas.width !== rw || canvas.height !== rh) renderer.setSize(rw, rh, false);
+    applyLook(s);
     camera.aspect = w / h; camera.fov = s.camera.fov;
     camera.position.set(s.camera.position[0], s.camera.position[1], s.camera.position[2]);
     camera.lookAt(s.camera.target[0], s.camera.target[1], s.camera.target[2]);
     camera.updateProjectionMatrix();
-    for (const o of s.objects) { const n = nodes.get(o.id); if (n) applyObject(n, o, typeof s.t === "number" ? s.t : t); }
-    renderer.render(scene, camera);
+    const time = typeof s.t === "number" ? s.t : t;
+    for (const o of s.objects) { const n = nodes.get(o.id); if (n) applyObject(n, o, time); }
+    if (post) renderPost(s, rw, rh, ss, time);
+    else renderer.render(scene, camera);
   },
 });
 `;
-export const SCENE_RUNTIME_JS = SCENE_BUILD_JS + SCENE_CLIP_JS;
+export const SCENE_RUNTIME_JS = SCENE_BUILD_JS + SCENE_POST_JS + SCENE_CLIP_JS;
 
 /**
  * The runtime page for one scene document (the HTML clip host adds the CSP, import map and time shim). P75: the
@@ -308,18 +562,27 @@ export function scenePage(doc: SceneDoc | undefined): string {
 <script type="module">
 ${SCENE_RUNTIME_JS}</script></body></html>
 `;
-  const { models, scripts } = sceneFileUse(rest);
-  if (!models && !scripts) return page;
+  const { models, scripts, look, environment } = sceneFileUse(rest);
+  if (!models && !scripts && !look && !environment) return page;
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: models ? ["three", "three-gltf"] : ["three"], files: used });
+  return writeManifest(page, { libs: ["three", ...(models ? ["three-gltf"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment ? used : {} });
 }
 
-/** Whether a scene has model objects (GLTFLoader and the files) or Script objects (P82: the files). */
-export function sceneFileUse(doc: Pick<SceneDoc, "objects">): { models: boolean; scripts: boolean } {
+/**
+ * Whether a scene has model objects (GLTFLoader and the files) or Script objects (P82: the files); Scene Phase 1
+ * (#350): `look` = it needs the vendored look addons (post-processing, sky, or an .hdr environment), `environment` =
+ * it has an environment map file.
+ */
+export function sceneFileUse(doc: Pick<SceneDoc, "objects"> & { world?: SceneDoc["world"] }): { models: boolean; scripts: boolean; look: boolean; environment: boolean } {
   const list = Array.isArray(doc.objects) ? doc.objects : [];
+  const w = doc.world && typeof doc.world === "object" ? doc.world : {};
+  const env = w.environment && typeof w.environment === "object" && typeof w.environment.file === "string" ? w.environment.file : "";
+  const isObj = (v: unknown) => !!v && typeof v === "object" && !Array.isArray(v);
   return {
     models: list.some((o) => o && typeof o.model === "string" && o.model),
     scripts: list.some((o) => o && o.script && typeof o.script === "object" && typeof o.script.file === "string"),
+    look: isObj(w.post) || isObj(w.sky) || /\.hdr$/i.test(env),
+    environment: !!env,
   };
 }
 
@@ -338,7 +601,9 @@ export function scenePageKey(doc: SceneDoc | undefined): string {
   const lights = doc.world && typeof doc.world === "object" ? doc.world.lights : undefined;
   const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model, o.script ?? null] : null));
   const files = doc.files && typeof doc.files === "object" ? Object.entries(doc.files).map(([n, d]) => [n, typeof d === "string" ? `${d.length}:${hashText(d)}` : null]) : [];
-  const key = JSON.stringify([lights ?? null, objects, files]);
+  // Scene Phase 1 (#350): which look parts the page builds (materials, post passes, fog type, sky, environment).
+  const look = lookStructure(doc.world, doc.objects);
+  const key = JSON.stringify([lights ?? null, objects, files, look]);
   pageKeys.set(doc, key);
   return key;
 }

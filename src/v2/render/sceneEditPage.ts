@@ -60,7 +60,6 @@ function syncRig() {
   rig.lookAt(aim.position);
   aimLine.geometry.setFromPoints([rig.position, aim.position]); aimLine.computeLineDistances();
 }
-const lightNodes = scene.children.filter((c) => c.isLight);
 const handles = lightNodes.map((L, i) => {
   if (!(L.isDirectionalLight || L.isPointLight)) return null;
   const h = new THREE.Mesh(new THREE.SphereGeometry(0.11, 20, 12), new THREE.MeshBasicMaterial({ color: 0xffffff }));
@@ -70,11 +69,13 @@ const handles = lightNodes.map((L, i) => {
   return { L, h, helper };
 });
 function syncLight(x) { x.L.position.copy(x.h.position); x.L.updateMatrixWorld(); x.helper.update(); }
-function applyLights(list) {
+function applyEditLights(list) {
   lightNodes.forEach((L, i) => {
     const l = list[i]; if (!l) return;
     const k = typeof l.intensity === "number" ? l.intensity : 1;
     L.color.set(l.color || "#ffffff"); L.intensity = L.isPointLight ? k * 10 : k;
+    if (L.isHemisphereLight) L.groundColor.set(l.groundColor || 0x303040);
+    if (L.isDirectionalLight) { L.target.position.fromArray(Array.isArray(l.lookAt) ? l.lookAt : [0, 0, 0]); L.target.updateMatrixWorld(); }
     const x = handles[i]; if (!x) return;
     if (Array.isArray(l.position) && !(dragging && tc.object === x.h)) x.h.position.fromArray(l.position);
     x.h.material.color.copy(L.color); syncLight(x);
@@ -99,7 +100,7 @@ function home() {
   orbit.target.copy(c); view.updateProjectionMatrix(); orbit.update();
 }
 function apply(s) {
-  scene.background = new THREE.Color(s.background);
+  applyLook(s, false); // Scene Phase 1 (#350): background, sky and fog (the lights come from the editor)
   if (!(dragging && tc.object === rig)) rig.position.fromArray(s.camera.position);
   if (!(dragging && tc.object === aim)) aim.position.fromArray(s.camera.target);
   shot.fov = s.camera.fov; shot.aspect = opts.aspect || 16 / 9; syncRig();
@@ -161,7 +162,7 @@ addEventListener("message", (e) => {
   const d = e.data; if (!d || e.source !== parent) return;
   if (d.type === "scene-edit:state") {
     if (d.opts) { Object.assign(opts, d.opts); setOpts(); }
-    if (Array.isArray(d.lights)) applyLights(d.lights);
+    if (Array.isArray(d.lights)) applyEditLights(d.lights);
     if (d.state) { st = d.state; apply(st); if (!homed) { home(); homed = true; } }
     if ("sel" in d) setSel(d.sel);
     draw();
@@ -172,6 +173,7 @@ addEventListener("message", (e) => {
 reportScript = () => post({ type: "scene-edit:script-issues", issues: scriptIssues.slice() });
 try { await loadModels(dionysus.ctx); } catch (err) { console.error(err); }
 try { await loadScripts(dionysus.ctx); } catch (err) { console.error(err); }
+try { await loadLook(dionysus.ctx); } catch (err) { console.error(err); }
 for (const [id, n] of nodes) n.node.userData.sceneId = id;
 setOpts(); size();
 post({ type: "scene-edit:ready" });
@@ -187,7 +189,7 @@ export function sceneEditPageKey(doc: SceneDoc | undefined): string {
   const hit = editKeys.get(doc);
   if (hit !== undefined) return hit;
   const w = doc.world && typeof doc.world === "object" ? doc.world : {};
-  const lights = Array.isArray(w.lights) ? w.lights.map((l) => (l && typeof l === "object" ? { type: l.type } : l)) : w.lights;
+  const lights = Array.isArray(w.lights) ? w.lights.map((l) => (l && typeof l === "object" ? { type: l.type, shadow: l.shadow ?? null } : l)) : w.lights;
   const key = scenePageKey({ ...doc, world: { ...w, lights } as typeof w });
   editKeys.set(doc, key);
   return key;
@@ -204,7 +206,7 @@ export function sceneEditPage(doc: SceneDoc | undefined): string {
 <script type="module">
 ${SCENE_BUILD_JS}${SCENE_EDIT_JS}</script></body></html>
 `;
-  const { models, scripts } = sceneFileUse(rest);
+  const { models, scripts, look, environment } = sceneFileUse(rest);
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models ? ["three-gltf"] : [])], files: models || scripts ? used : {} });
+  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models ? ["three-gltf"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment ? used : {} });
 }

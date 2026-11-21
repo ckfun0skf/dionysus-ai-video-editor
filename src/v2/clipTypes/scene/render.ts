@@ -35,7 +35,11 @@ const scene: ClipRenderer = {
     // P76: a page kept across an edit (same page key) draws the same time again for the edited scene.
     const fresh = shownDoc.has(host) && shownDoc.get(host) !== doc;
     shownDoc.set(host, doc);
-    host.request(at, dur, () => Promise.resolve({ data: { inputs: { scene: state } } }), fresh);
+    // Scene Phase 1 (#350): export only, world.export.supersample renders the frame larger; it is placed (fitted) like
+    // any frame, so drawing it into the export canvas scales it down. Preview stays 1×.
+    const ss = h.offline ? doc.world?.export?.supersample : undefined;
+    const inputs = typeof ss === "number" && ss > 1 && ss <= 4 ? { scene: state, supersample: Math.floor(ss) } : { scene: state };
+    host.request(at, dur, () => Promise.resolve({ data: { inputs } }), fresh);
     const f = host.frame;
     if (ctx && canvas && isValidFrame(f)) {
       const r = placeRect(placement, f.width, f.height, canvas.width, canvas.height, h.time);

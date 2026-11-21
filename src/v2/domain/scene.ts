@@ -27,6 +27,12 @@
 import { checkParamValue, cleanParamDecls, validateParamDecls, type HtmlClipParam, type HtmlParamValue } from "./htmlClipPackage";
 import { glbInfoOfDataUrl } from "./glb";
 import { scriptCodeOf, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
+import {
+  fogBase, getLookProp, lookValueProblem, postBase, SCENE_LOOK_CALLS, SCENE_LOOK_IDS, setLookProp, skyBase, SUN_DISTANCE, sunDirection,
+  validateLightLook, validateMaterial, validateWorldLook,
+  type SceneEnvironment, type SceneExport, type SceneFog, type SceneFogState, type SceneLightState, type SceneLookTarget, type SceneMaterial,
+  type SceneMaterialType, type ScenePost, type ScenePostState, type SceneShadow, type SceneSky, type SceneSkyState,
+} from "./sceneLook";
 
 export const SCENE_FORMAT = "dionysus.scene/1" as const;
 /** MIME type of a scene asset version's blob. */
@@ -42,11 +48,14 @@ export const SCENE_LIGHTS: readonly SceneLightType[] = ["ambient", "hemisphere",
 
 /**
  * A light. P81b: an optional `id` names it (unique among objects and lights, not "camera") so the editor and agents can
- * refer to it; lights are static (no events animate them).
+ * refer to it. Scene Phase 1 (#350): a light with an id takes events (intensity, color, position / moveTo, lookAt);
+ * `groundColor` (hemisphere), `lookAt` (where a directional light aims, default the origin) and `shadow` (directional
+ * and point lights: true or { mapSize, bias, normalBias, radius, area }).
  */
-export interface SceneLight { id?: string; type: SceneLightType; color?: string; intensity?: number; position?: Vec3 }
+export interface SceneLight { id?: string; type: SceneLightType; color?: string; intensity?: number; position?: Vec3; groundColor?: string; lookAt?: Vec3; shadow?: boolean | SceneShadow }
 export interface SceneCamera { fov?: number; position?: Vec3; lookAt?: Vec3 }
-export interface SceneWorld { background?: string; camera?: SceneCamera; lights?: SceneLight[] }
+/** Scene Phase 1 (#350): fog, sky, environment, post and export are optional (domain/sceneLook.ts). */
+export interface SceneWorld { background?: string; camera?: SceneCamera; lights?: SceneLight[]; fog?: SceneFog; sky?: SceneSky; environment?: SceneEnvironment; post?: ScenePost; export?: SceneExport }
 
 /** Base properties every object has (the evaluator's output per object). */
 export interface SceneProps { position: Vec3; rotation: Vec3; scale: Vec3; visible: boolean; opacity: number; color: string }
@@ -102,6 +111,12 @@ export interface SceneObject {
   scale?: number | Vec3;
   visible?: boolean;
   opacity?: number;
+  /**
+   * Scene Phase 1 (#350): how it is shaded: "standard" (default for shapes), "toon", "unlit", "keep" (a model's or
+   * script's own materials, their default), or { type, steps, roughness, metalness, emissive, emissiveIntensity,
+   * outline, rim } (domain/sceneLook.ts). A Script object opts in by having one.
+   */
+  material?: SceneMaterialType | SceneMaterial;
   functions?: Record<string, SceneFunction>;
 }
 
@@ -273,6 +288,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
           if (l.color !== undefined && !isSceneColor(l.color)) err(`${p}.color`, "must be a colour like \"#ffffff\".");
           if (l.intensity !== undefined && !(num(l.intensity) && l.intensity >= 0)) err(`${p}.intensity`, "must be a number ≥ 0.");
           if (l.position !== undefined && !isVec3(l.position)) err(`${p}.position`, "must be [x, y, z] numbers.");
+          validateLightLook(l, p, err, warn);
           if (l.id !== undefined) {
             if (typeof l.id !== "string" || !ID_RE.test(l.id)) err(`${p}.id`, "must start with a letter and use letters, digits, \"_\" or \"-\".");
             else if (l.id === SCENE_CAMERA) err(`${p}.id`, `"${SCENE_CAMERA}" is reserved for the camera.`);
@@ -281,6 +297,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
           }
         });
       }
+      validateWorldLook(w, files, Array.isArray(w.lights) ? w.lights.filter(isObj) : [], err, warn);
     }
   }
   // objects
@@ -337,6 +354,9 @@ export function validateScene(raw: unknown): SceneIssue[] {
       }
     }
     if (o.name !== undefined && typeof o.name !== "string") err(`${p}.name`, "must be a string.");
+    if (o.material !== undefined) validateMaterial(o.material, `${p}.material`, err);
+    if (typeof id === "string" && SCENE_LOOK_IDS.includes(id) && isObj(raw.world) && raw.world[id] !== undefined)
+      warn(`${p}.id`, `An object is called "${id}", so events on "${id}" change the object, not world.${id}; rename the object to animate world.${id}.`);
     for (const prop of SCENE_PROPS) if (o[prop] !== undefined) { const why = propProblem(prop, o[prop]); if (why) err(`${p}.${prop}`, `${why}.`); }
     if (o.functions !== undefined) {
       if (!isObj(o.functions)) err(`${p}.functions`, "must be an object of function name → { params, set, states }.");
@@ -417,8 +437,9 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
   }
   const o = objects.get(e.obj);
   if (!o) {
-    const lights = isObj(doc.world) && Array.isArray(doc.world.lights) ? doc.world.lights : [];
-    err(`${p}.obj`, lights.some((l) => isObj(l) && l.id === e.obj) ? `"${e.obj}" is a light; lights are static (no events animate them).` : `There is no object "${e.obj}".`);
+    const look = lookTargetOf(doc, e.obj);
+    if (look) { validateLookEvent(doc, e as unknown as SceneEvent, look.kind, args, p, objects, err, warn); return; }
+    err(`${p}.obj`, `There is no object "${e.obj}".`);
     return;
   }
   const base = SCENE_BASE_FUNCTIONS[e.call];
@@ -451,6 +472,43 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
     const c = checkParamValue(d, v);
     if (c.value === undefined || c.clamped) err(`${p}.args.${k}`, c.problem ?? "has the wrong type.");
   }
+}
+
+/** Scene Phase 1 (#350): an event on a light, "post", "fog" or "sky". */
+function validateLookEvent(doc: SceneDoc, e: SceneEvent, kind: SceneLookTarget, args: Record<string, unknown>, p: string, objects: Map<string, Record<string, unknown>>, err: (path: string, m: string) => void, warn: (path: string, m: string) => void) {
+  const calls = SCENE_LOOK_CALLS[kind];
+  const c = calls[e.call];
+  const what = kind === "light" ? `The light "${e.obj}"` : `"${e.obj}"`;
+  if (!c) { err(`${p}.call`, `${what} has no function "${e.call}" (${Object.keys(calls).join(", ")}).`); return; }
+  for (const k of Object.keys(args)) if (k !== c.arg && !(c.arg === "position" && k === "value")) err(`${p}.args.${k}`, `"${e.call}" takes "${c.arg}" only.`);
+  const v = args[c.arg] ?? (c.arg === "position" ? args.value : undefined);
+  const why = lookValueProblem(c, v, (id) => objects.has(id));
+  if (why) { err(`${p}.args.${c.arg}`, `${why}.`); return; }
+  const w = isObj(doc.world) ? doc.world : {};
+  if (kind === "light") {
+    const l = (Array.isArray(w.lights) ? w.lights : []).find((x) => isObj(x) && x.id === e.obj);
+    const type = l?.type;
+    if (c.prop === "position" && type !== "directional" && type !== "point") warn(`${p}.call`, `"${e.obj}" is a ${type} light: it lights from everywhere, so moving it changes nothing.`);
+    if (c.prop === "target" && type !== "directional") warn(`${p}.call`, `"${e.obj}" is a ${type} light; only a directional light is aimed.`);
+    if (c.prop === "position" && isObj(w.sky) && w.sky.light === e.obj) warn(`${p}.call`, `The sky places "${e.obj}" (world.sky.light), so this move is overridden; move the sun with "sky" events.`);
+    return;
+  }
+  const own = (w as Record<string, unknown>)[kind];
+  if (!isObj(own)) { warn(`${p}.obj`, `The scene has no world.${kind}, so this event changes nothing.`); return; }
+  if (kind === "post" && c.needs) {
+    const x = own[c.needs];
+    if (!(x === true || isObj(x))) warn(`${p}.call`, `world.post.${c.needs} is off, so "${e.call}" changes nothing.`);
+  }
+}
+
+/** Scene Phase 1 (#350): what an event's `obj` names besides the camera and objects (an object id always wins). */
+export function lookTargetOf(doc: Pick<SceneDoc, "objects" | "world">, id: unknown): { kind: SceneLookTarget; key: string } | undefined {
+  if (typeof id !== "string" || id === SCENE_CAMERA) return undefined;
+  if ((Array.isArray(doc.objects) ? doc.objects : []).some((o) => isObj(o) && o.id === id)) return undefined;
+  const w = isObj(doc.world) ? doc.world : {};
+  if (Array.isArray(w.lights) && w.lights.some((l) => isObj(l) && l.id === id)) return { kind: "light", key: `\u0001light:${id}` };
+  if (SCENE_LOOK_IDS.includes(id)) return { kind: id as SceneLookTarget, key: `\u0001${id}` };
+  return undefined;
 }
 
 /** Warn when a tween starts while an earlier tween of the same object property is still running (the later one wins). */
@@ -488,7 +546,16 @@ export interface SceneState {
   background: string;
   camera: { fov: number; position: Vec3; target: Vec3 };
   objects: SceneObjectState[];
+  /** Scene Phase 1 (#350): every drawn light (the defaults when the scene has none) at `t`. */
+  lights: SceneLightState[];
+  /** Scene Phase 1: world.post / fog / sky at `t`, when the scene has them. */
+  post?: ScenePostState;
+  fog?: SceneFogState;
+  sky?: SceneSkyState;
 }
+
+/** The lights a scene without `world.lights` (or with an empty list) is lit by (as the scene page draws them). */
+export const SCENE_DEFAULT_LIGHTS: readonly SceneLight[] = [{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [3, 5, 2], intensity: 1.5 }];
 
 export const SCENE_DEFAULTS = { background: "#101018", fov: 40, cameraPosition: [0, 1.6, 6] as Vec3, cameraTarget: [0, 1, 0] as Vec3 };
 
@@ -547,6 +614,8 @@ function eventTargets(doc: SceneDoc, e: SceneEvent): Targets {
 /** The properties one event writes (for overlap warnings). */
 function eventProps(doc: SceneDoc, e: SceneEvent): string[] {
   if (e.obj === SCENE_CAMERA) { const f = SCENE_CAMERA_FUNCTIONS[e.call]; return f ? [f.prop] : []; }
+  const look = lookTargetOf(doc, e.obj);
+  if (look) { const c = SCENE_LOOK_CALLS[look.kind][e.call]; return c ? [c.prop] : []; }
   return Object.keys(eventTargets(doc, e)).map((k) => (k === "lookAt" ? "rotation" : k));
 }
 
@@ -559,7 +628,7 @@ const rgbToHex = (c: Vec3) => `#${c.map((x) => Math.round(Math.min(255, Math.max
 const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
 
 function mix(a: Val, b: Val, k: number): Val {
-  if (Array.isArray(a) && Array.isArray(b)) return [lerp(a[0], b[0], k), lerp(a[1], b[1], k), lerp(a[2], b[2], k)];
+  if (Array.isArray(a) && Array.isArray(b)) return a.map((x, i) => lerp(x, b[i], k)) as Vec3;
   if (typeof a === "number" && typeof b === "number") return lerp(a, b, k);
   if (typeof a === "string" && typeof b === "string") return a.toLowerCase() === b.toLowerCase() ? b : rgbToHex(mix(hexToRgb(a), hexToRgb(b), k) as Vec3);
   return b; // booleans snap at the start
@@ -629,6 +698,15 @@ function planOf(doc: SceneDoc): Plan {
       const v = args[f.arg] ?? (f.arg === "position" ? args.value : undefined);
       if (f.prop === "fov" ? num(v) && v > 1 && v < 179 : f.prop === "target" ? isVec3(v) || (typeof v === "string" && !!objOf(doc, v)) : isVec3(v))
         push(SCENE_CAMERA, f.prop, { at: e.at, dur, ease, to: f.prop === "target" && typeof v === "string" ? { lookAt: v, obj: SCENE_CAMERA } : (v as Val) });
+      continue;
+    }
+    const look = lookTargetOf(doc, e.obj);
+    if (look) {
+      const c = SCENE_LOOK_CALLS[look.kind][e.call];
+      const args = isObj(e.args) ? e.args : {};
+      const v = c ? args[c.arg] ?? (c.arg === "position" ? args.value : undefined) : undefined;
+      if (c && !lookValueProblem(c, v, (id) => !!objOf(doc, id)))
+        push(look.key, c.prop, { at: e.at, dur, ease, to: c.kind === "target" && typeof v === "string" ? { lookAt: v, obj: e.obj } : (v as Val) });
       continue;
     }
     const targets = eventTargets(doc, e);
@@ -725,7 +803,51 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
       return to && typeof to === "object" && !Array.isArray(to) ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
     }) as Vec3,
   };
-  return { t: time, background: isSceneColor(w.background) ? w.background : SCENE_DEFAULTS.background, camera, objects };
+  const background = isSceneColor(w.background) ? w.background : SCENE_DEFAULTS.background;
+  // Scene Phase 1 (#350): lights, post, fog and sky: each property is a chain like an object's.
+  const lookChain = (key: string, prop: string, base: unknown): unknown => {
+    const segs = plan.props.get(key)?.get(prop);
+    if (!segs || base === undefined) return base;
+    return evalChain(base as Val, segs, time, (s) => {
+      const to = s.to;
+      return to && typeof to === "object" && !Array.isArray(to) ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
+    });
+  };
+  const resolveGroup = <T extends object>(key: string, base: T | undefined, kind: SceneLookTarget): T | undefined => {
+    if (!base) return undefined;
+    const out = { ...base } as Record<string, unknown>;
+    for (const c of Object.values(SCENE_LOOK_CALLS[kind])) {
+      const b = getLookProp(out, c.prop);
+      if (b !== undefined) setLookProp(out, c.prop, lookChain(key, c.prop, b));
+    }
+    return out as T;
+  };
+  // An object with the id "post", "fog" or "sky" takes those events (old scenes), so the world's one has none.
+  const lookKey = (id: string) => (objOf(doc, id) ? `\u0002${id}` : `\u0001${id}`);
+  const sky = resolveGroup(lookKey("sky"), skyBase(w), "sky");
+  const own = Array.isArray(w.lights) ? w.lights.filter(isObj) : [];
+  const drawn = (own.length ? own : SCENE_DEFAULT_LIGHTS) as SceneLight[];
+  const lights = drawn.map((l): SceneLightState => {
+    const live = typeof l.id === "string" && !objOf(doc, l.id);
+    const key = `\u0001light:${l.id}`;
+    const val = (prop: string, base: unknown) => (live ? lookChain(key, prop, base) : base);
+    const out: SceneLightState = {
+      ...(typeof l.id === "string" ? { id: l.id } : {}), type: String(l.type),
+      color: val("color", isSceneColor(l.color) ? l.color : "#ffffff") as string,
+      intensity: val("intensity", num(l.intensity) && l.intensity >= 0 ? l.intensity : 1) as number,
+    };
+    if (l.type === "directional" || l.type === "point") out.position = val("position", isVec3(l.position) ? l.position : l.type === "directional" ? [0, 1, 0] : [0, 0, 0]) as Vec3;
+    if (l.type === "directional") out.target = val("target", isVec3(l.lookAt) ? l.lookAt : [0, 0, 0]) as Vec3;
+    if (l.type === "hemisphere") out.groundColor = isSceneColor(l.groundColor) ? l.groundColor : "#303040";
+    if (sky?.light && l.id === sky.light && l.type === "directional") {
+      const d = sunDirection(sky.elevation, sky.azimuth), t0 = out.target ?? [0, 0, 0];
+      out.position = [t0[0] + d[0] * SUN_DISTANCE, t0[1] + d[1] * SUN_DISTANCE, t0[2] + d[2] * SUN_DISTANCE];
+    }
+    return out;
+  });
+  const post = resolveGroup(lookKey("post"), postBase(w), "post");
+  const fog = resolveGroup(lookKey("fog"), fogBase(w, background), "fog");
+  return { t: time, background, camera, objects, lights, ...(post ? { post } : {}), ...(fog ? { fog } : {}), ...(sky ? { sky } : {}) };
 }
 
 /** A short summary for the inspector and agents: objects with their functions, and the events in time order. */

@@ -1,0 +1,2 @@
+# Vendored libraries are pinned by SRI hashes of their exact bytes: never convert their line endings.
+public/vendor/** -text
