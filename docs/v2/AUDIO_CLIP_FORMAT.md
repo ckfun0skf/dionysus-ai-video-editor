@@ -88,7 +88,7 @@ Where it is used:
 
 `"instrument": "sampler"` with `"sampler": "<pack>"` plays notes on recordings of real instruments instead of
 oscillators, for film scores and anything that should sound acoustic. The built-in packs are cut from
-[VSCO-2-CE](https://github.com/sgossner/VSCO-2-CE) (Versilian Studios Chamber Orchestra 2, Community Edition, CC0);
+VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition, CC0; repository `sgossner/VSCO-2-CE`);
 credits and the processing are in `public/samples/CREDITS.md`.
 
 | Pack | Range | Kind | Notes |
