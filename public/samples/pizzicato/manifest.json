@@ -1,0 +1,285 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "pizzicato",
+ "name": "Pizzicato",
+ "kind": "decay",
+ "attack": 0.002,
+ "release": 0.2,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "36-f.mp3",
+   "root": 36,
+   "lo": 0,
+   "hi": 38,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "40-f.mp3",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "43-f.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 45,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "47-f.mp3",
+   "root": 47,
+   "lo": 46,
+   "hi": 48,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "50-f.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "53-f.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 54,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "55-f.mp3",
+   "root": 55,
+   "lo": 55,
+   "hi": 56,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "57-f.mp3",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "59-f.mp3",
+   "root": 59,
+   "lo": 59,
+   "hi": 60,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "62-f.mp3",
+   "root": 62,
+   "lo": 61,
+   "hi": 64,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "66-f.mp3",
+   "root": 66,
+   "lo": 65,
+   "hi": 67,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "69-f.mp3",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "72-f.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "76-f.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "79-f.mp3",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "83-f.mp3",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "86-f.mp3",
+   "root": 86,
+   "lo": 85,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "36-p.mp3",
+   "root": 36,
+   "lo": 0,
+   "hi": 38,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "40-p.mp3",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "43-p.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 45,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "47-p.mp3",
+   "root": 47,
+   "lo": 46,
+   "hi": 48,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "50-p.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "53-p.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 54,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "55-p.mp3",
+   "root": 55,
+   "lo": 55,
+   "hi": 56,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "57-p.mp3",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "59-p.mp3",
+   "root": 59,
+   "lo": 59,
+   "hi": 60,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "62-p.mp3",
+   "root": 62,
+   "lo": 61,
+   "hi": 64,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "66-p.mp3",
+   "root": 66,
+   "lo": 65,
+   "hi": 67,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "69-p.mp3",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "72-p.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "76-p.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "79-p.mp3",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "83-p.mp3",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "86-p.mp3",
+   "root": 86,
+   "lo": 85,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80
+  }
+ ]
+}

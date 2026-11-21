@@ -1,0 +1,197 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "harp",
+ "name": "Harp",
+ "kind": "decay",
+ "attack": 0.002,
+ "release": 1.2,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "28-all.mp3",
+   "root": 28,
+   "lo": 0,
+   "hi": 29,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "31-all.mp3",
+   "root": 31,
+   "lo": 30,
+   "hi": 33,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "35-all.mp3",
+   "root": 35,
+   "lo": 34,
+   "hi": 36,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "38-all.mp3",
+   "root": 38,
+   "lo": 37,
+   "hi": 39,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "41-all.mp3",
+   "root": 41,
+   "lo": 40,
+   "hi": 43,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "45-all.mp3",
+   "root": 45,
+   "lo": 44,
+   "hi": 46,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "48-all.mp3",
+   "root": 48,
+   "lo": 47,
+   "hi": 50,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "52-all.mp3",
+   "root": 52,
+   "lo": 51,
+   "hi": 53,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "55-all.mp3",
+   "root": 55,
+   "lo": 54,
+   "hi": 57,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "59-all.mp3",
+   "root": 59,
+   "lo": 58,
+   "hi": 60,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "62-all.mp3",
+   "root": 62,
+   "lo": 61,
+   "hi": 63,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "65-all.mp3",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "69-all.mp3",
+   "root": 69,
+   "lo": 68,
+   "hi": 70,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "72-all.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "76-all.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "79-all.mp3",
+   "root": 79,
+   "lo": 78,
+   "hi": 81,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "83-all.mp3",
+   "root": 83,
+   "lo": 82,
+   "hi": 84,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "86-all.mp3",
+   "root": 86,
+   "lo": 85,
+   "hi": 87,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "89-all.mp3",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "93-all.mp3",
+   "root": 93,
+   "lo": 92,
+   "hi": 94,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "95-all.mp3",
+   "root": 95,
+   "lo": 95,
+   "hi": 96,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "98-all.mp3",
+   "root": 98,
+   "lo": 97,
+   "hi": 99,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "101-all.mp3",
+   "root": 101,
+   "lo": 100,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 127
+  }
+ ]
+}

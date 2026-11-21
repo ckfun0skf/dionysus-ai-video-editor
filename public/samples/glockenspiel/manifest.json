@@ -1,0 +1,61 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "glockenspiel",
+ "name": "Glockenspiel",
+ "kind": "decay",
+ "attack": 0.001,
+ "release": 1.5,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "79-all.mp3",
+   "root": 79,
+   "lo": 0,
+   "hi": 81,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "84-all.mp3",
+   "root": 84,
+   "lo": 82,
+   "hi": 87,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "91-all.mp3",
+   "root": 91,
+   "lo": 88,
+   "hi": 93,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "96-all.mp3",
+   "root": 96,
+   "lo": 94,
+   "hi": 99,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "103-all.mp3",
+   "root": 103,
+   "lo": 100,
+   "hi": 105,
+   "velLo": 1,
+   "velHi": 127
+  },
+  {
+   "file": "108-all.mp3",
+   "root": 108,
+   "lo": 106,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 127
+  }
+ ]
+}

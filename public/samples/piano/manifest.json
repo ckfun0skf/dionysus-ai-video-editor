@@ -1,0 +1,381 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "piano",
+ "name": "Piano",
+ "kind": "decay",
+ "attack": 0.002,
+ "release": 0.35,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "21-f.mp3",
+   "root": 21,
+   "lo": 0,
+   "hi": 23,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "25-f.mp3",
+   "root": 25,
+   "lo": 24,
+   "hi": 27,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "29-f.mp3",
+   "root": 29,
+   "lo": 28,
+   "hi": 31,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "33-f.mp3",
+   "root": 33,
+   "lo": 32,
+   "hi": 35,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "37-f.mp3",
+   "root": 37,
+   "lo": 36,
+   "hi": 39,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "41-f.mp3",
+   "root": 41,
+   "lo": 40,
+   "hi": 43,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "45-f.mp3",
+   "root": 45,
+   "lo": 44,
+   "hi": 47,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "49-f.mp3",
+   "root": 49,
+   "lo": 48,
+   "hi": 51,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "53-f.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "57-f.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 59,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "61-f.mp3",
+   "root": 61,
+   "lo": 60,
+   "hi": 63,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "65-f.mp3",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "69-f.mp3",
+   "root": 69,
+   "lo": 68,
+   "hi": 71,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "73-f.mp3",
+   "root": 73,
+   "lo": 72,
+   "hi": 75,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "77-f.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "81-f.mp3",
+   "root": 81,
+   "lo": 80,
+   "hi": 83,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "85-f.mp3",
+   "root": 85,
+   "lo": 84,
+   "hi": 87,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "89-f.mp3",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "93-f.mp3",
+   "root": 93,
+   "lo": 92,
+   "hi": 95,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "97-f.mp3",
+   "root": 97,
+   "lo": 96,
+   "hi": 99,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "101-f.mp3",
+   "root": 101,
+   "lo": 100,
+   "hi": 103,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "105-f.mp3",
+   "root": 105,
+   "lo": 104,
+   "hi": 106,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "108-f.mp3",
+   "root": 108,
+   "lo": 107,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127
+  },
+  {
+   "file": "21-p.mp3",
+   "root": 21,
+   "lo": 0,
+   "hi": 23,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "25-p.mp3",
+   "root": 25,
+   "lo": 24,
+   "hi": 27,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "29-p.mp3",
+   "root": 29,
+   "lo": 28,
+   "hi": 31,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "33-p.mp3",
+   "root": 33,
+   "lo": 32,
+   "hi": 35,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "37-p.mp3",
+   "root": 37,
+   "lo": 36,
+   "hi": 39,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "41-p.mp3",
+   "root": 41,
+   "lo": 40,
+   "hi": 43,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "45-p.mp3",
+   "root": 45,
+   "lo": 44,
+   "hi": 47,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "49-p.mp3",
+   "root": 49,
+   "lo": 48,
+   "hi": 51,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "53-p.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "57-p.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 59,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "61-p.mp3",
+   "root": 61,
+   "lo": 60,
+   "hi": 63,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "65-p.mp3",
+   "root": 65,
+   "lo": 64,
+   "hi": 67,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "69-p.mp3",
+   "root": 69,
+   "lo": 68,
+   "hi": 71,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "73-p.mp3",
+   "root": 73,
+   "lo": 72,
+   "hi": 75,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "77-p.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 79,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "81-p.mp3",
+   "root": 81,
+   "lo": 80,
+   "hi": 83,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "85-p.mp3",
+   "root": 85,
+   "lo": 84,
+   "hi": 87,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "89-p.mp3",
+   "root": 89,
+   "lo": 88,
+   "hi": 91,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "93-p.mp3",
+   "root": 93,
+   "lo": 92,
+   "hi": 95,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "97-p.mp3",
+   "root": 97,
+   "lo": 96,
+   "hi": 99,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "101-p.mp3",
+   "root": 101,
+   "lo": 100,
+   "hi": 103,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "105-p.mp3",
+   "root": 105,
+   "lo": 104,
+   "hi": 106,
+   "velLo": 1,
+   "velHi": 80
+  },
+  {
+   "file": "108-p.mp3",
+   "root": 108,
+   "lo": 107,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80
+  }
+ ]
+}

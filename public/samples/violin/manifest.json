@@ -1,0 +1,313 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "violin",
+ "name": "Solo violin",
+ "kind": "sustain",
+ "attack": 0.01,
+ "release": 0.5,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "55-f.mp3",
+   "root": 55,
+   "lo": 0,
+   "hi": 56,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-f.mp3",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "60-f.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "64-f.mp3",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "67-f.mp3",
+   "root": 67,
+   "lo": 66,
+   "hi": 68,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "69-f.mp3",
+   "root": 69,
+   "lo": 69,
+   "hi": 70,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "72-f.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "76-f.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "79-f.mp3",
+   "root": 79,
+   "lo": 78,
+   "hi": 80,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "81-f.mp3",
+   "root": 81,
+   "lo": 81,
+   "hi": 82,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "84-f.mp3",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "88-f.mp3",
+   "root": 88,
+   "lo": 87,
+   "hi": 89,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "91-f.mp3",
+   "root": 91,
+   "lo": 90,
+   "hi": 92,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "93-f.mp3",
+   "root": 93,
+   "lo": 93,
+   "hi": 94,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "96-f.mp3",
+   "root": 96,
+   "lo": 95,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "55-p.mp3",
+   "root": 55,
+   "lo": 0,
+   "hi": 56,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-p.mp3",
+   "root": 57,
+   "lo": 57,
+   "hi": 58,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "60-p.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "64-p.mp3",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "67-p.mp3",
+   "root": 67,
+   "lo": 66,
+   "hi": 68,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "69-p.mp3",
+   "root": 69,
+   "lo": 69,
+   "hi": 70,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "72-p.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "76-p.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 77,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "79-p.mp3",
+   "root": 79,
+   "lo": 78,
+   "hi": 80,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "81-p.mp3",
+   "root": 81,
+   "lo": 81,
+   "hi": 82,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "84-p.mp3",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "88-p.mp3",
+   "root": 88,
+   "lo": 87,
+   "hi": 89,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "91-p.mp3",
+   "root": 91,
+   "lo": 90,
+   "hi": 92,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "93-p.mp3",
+   "root": 93,
+   "lo": 93,
+   "hi": 94,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "96-p.mp3",
+   "root": 96,
+   "lo": 95,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  }
+ ]
+}
