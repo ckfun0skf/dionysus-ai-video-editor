@@ -3,11 +3,26 @@
  * value comes from a seeded generator, so the same JSON gives the same samples (the Audio editor preview, the stored
  * WAV and export all use this). See docs/v2/AUDIO_CLIP_FORMAT.md.
  */
-import { clipDuration, DRUMS, midiHz, midiOf, paramValue, stepSec, type AudioClip, type ClipTrack, type DrumId } from "../domain/audioClip";
+import { clipDuration, DRUMS, midiHz, midiOf, paramValue, stepSec, stepTime, type AudioClip, type ClipTrack, type DrumId } from "../domain/audioClip";
+import { IR_SPECS, spaceConvolver } from "./reverb";
+import { loadClipSamples, SAMPLER_TAIL, samplerNote, type SampleBank, type SampleLoader } from "./sampler";
 
 export const CLIP_SAMPLE_RATE = 48000;
-/** Seconds added after the clip so reverb and delay tails are not cut (the WAV is this much longer). */
-export const tailSec = (c: AudioClip) => (c.tracks.some((t) => !t.mute && (t.fx?.reverb || t.fx?.delay)) ? 1.5 : 0.1);
+/**
+ * Seconds added after the clip so reverb and delay tails are not cut (the WAV is this much longer). Clips without the
+ * P91 fields keep the original rule (1.5 s with reverb or delay, else 0.1 s); sampled instruments and reverb spaces
+ * extend it to their release and impulse length.
+ */
+export const tailSec = (c: AudioClip) => {
+  let tail = c.tracks.some((t) => !t.mute && (t.fx?.reverb || t.fx?.delay)) ? 1.5 : 0.1;
+  for (const t of c.tracks) {
+    if (t.mute) continue;
+    if (t.instrument === "sampler") tail = Math.max(tail, SAMPLER_TAIL);
+    if (t.fx?.reverb && t.fx.reverbType) tail = Math.max(tail, IR_SPECS[t.fx.reverbType].length);
+  }
+  if (c.master?.reverb) tail = Math.max(tail, IR_SPECS[c.master.reverbType ?? "hall"].length);
+  return tail;
+};
 
 /** mulberry32: a small fast seeded PRNG. */
 export function rng(seed: number): () => number {
@@ -257,7 +272,9 @@ function trackChain(ctx: Ctx, t: ClipTrack, master: AudioNode, rand: () => numbe
   node.connect(pan).connect(vol);
   vol.connect(master);
   if (t.fx?.reverb) {
-    const c = ctx.createConvolver(); c.buffer = impulse(ctx, 2.2, rand);
+    // P91: a named space uses its synthetic IR; without one, the original seeded noise impulse (unchanged).
+    const c = t.fx.reverbType ? spaceConvolver(ctx, t.fx.reverbType) : ctx.createConvolver();
+    if (!t.fx.reverbType) c.buffer = impulse(ctx, 2.2, rand);
     const w = ctx.createGain(); w.gain.value = t.fx.reverb * 0.6;
     vol.connect(c).connect(w).connect(master);
   }
@@ -270,12 +287,21 @@ function trackChain(ctx: Ctx, t: ClipTrack, master: AudioNode, rand: () => numbe
   return input;
 }
 
-/** Schedule the whole clip into a context (offline or live) starting at `at` seconds. */
-export function scheduleClip(ctx: Ctx, c: AudioClip, dest: AudioNode = ctx.destination, at = 0) {
+/**
+ * Schedule the whole clip into a context (offline or live) starting at `at` seconds. Sampler tracks play from `bank`
+ * (loadClipSamples); without it their notes are skipped.
+ */
+export function scheduleClip(ctx: Ctx, c: AudioClip, dest: AudioNode = ctx.destination, at = 0, bank?: SampleBank) {
   const master = ctx.createGain(); master.gain.value = c.volume ?? 0.8;
   const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -6; comp.ratio.value = 4;
   master.connect(comp).connect(dest);
-  const ss = stepSec(c), dur = clipDuration(c);
+  if (c.master?.reverb) {
+    // P91: one shared space for the whole mix (a send from the master bus into the compressor).
+    const conv = spaceConvolver(ctx, c.master.reverbType ?? "hall"), w = ctx.createGain();
+    w.gain.value = c.master.reverb * 0.6;
+    master.connect(conv).connect(w).connect(comp);
+  }
+  const ss = stepSec(c), dur = clipDuration(c), timed = !!c.tempoMap?.length;
   for (const t of c.tracks) {
     if (t.mute) continue;
     const rand = rng(((c.seed ?? 1) ^ hashStr(t.id)) >>> 0);
@@ -285,24 +311,30 @@ export function scheduleClip(ctx: Ctx, c: AudioClip, dest: AudioNode = ctx.desti
       continue;
     }
     for (const n of t.notes ?? []) {
-      const t0 = n.step * ss;
+      // Without a tempo map these are the original expressions (bit-identical timing for old clips).
+      const t0 = timed ? stepTime(c, n.step) : n.step * ss;
       if (t0 >= dur) continue;
       if (t.instrument === "drums") { if (DRUMS.includes(n.pitch as DrumId)) drum(v, at + t0, n.pitch as DrumId, Math.max(1e-4, n.vel ?? 0.9)); continue; }
       const m = midiOf(n.pitch);
-      if (m !== undefined) synthNote(v, t, at + t0, (n.len ?? 1) * ss, m, (n.vel ?? 0.8) * 0.6);
+      if (m === undefined) continue;
+      const len = timed ? stepTime(c, n.step + (n.len ?? 1)) - t0 : (n.len ?? 1) * ss;
+      if (t.instrument === "sampler") samplerNote(ctx, v.out, t, bank, at + t0, len, m, Math.max(1e-4, n.vel ?? 0.8));
+      else synthNote(v, t, at + t0, len, m, (n.vel ?? 0.8) * 0.6);
     }
   }
 }
 
 export type OfflineCtor = new (channels: number, length: number, sampleRate: number) => OfflineAudioContext;
 /** Render to a stereo AudioBuffer (clip length + tail). */
-export async function renderAudioClip(c: AudioClip, opts: { sampleRate?: number; Offline?: OfflineCtor; tail?: boolean } = {}): Promise<AudioBuffer> {
+export async function renderAudioClip(c: AudioClip, opts: { sampleRate?: number; Offline?: OfflineCtor; tail?: boolean; samples?: SampleLoader } = {}): Promise<AudioBuffer> {
   const sr = opts.sampleRate ?? CLIP_SAMPLE_RATE;
   const Ctor = opts.Offline ?? (globalThis as unknown as { OfflineAudioContext?: OfflineCtor; webkitOfflineAudioContext?: OfflineCtor }).OfflineAudioContext ?? (globalThis as unknown as { webkitOfflineAudioContext?: OfflineCtor }).webkitOfflineAudioContext;
   if (!Ctor) throw new Error("This browser can't render audio (no OfflineAudioContext).");
+  // P91: recorded instruments are fetched and decoded first (cached), so the render itself stays deterministic.
+  const bank = await loadClipSamples(c, sr, opts.samples);
   const sec = clipDuration(c) + (opts.tail === false ? 0 : tailSec(c));
   const ctx = new Ctor(2, Math.max(1, Math.ceil(sec * sr)), sr);
-  scheduleClip(ctx, c);
+  scheduleClip(ctx, c, ctx.destination, 0, bank);
   return ctx.startRendering();
 }
 
@@ -322,7 +354,7 @@ export function encodeWav(channels: Float32Array[], sampleRate: number): Blob {
 export const bufferToWav = (b: AudioBuffer) => encodeWav(Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i)), b.sampleRate);
 
 /** Render a clip to a WAV blob plus its length in seconds. */
-export async function audioClipWav(c: AudioClip, opts?: { Offline?: OfflineCtor }): Promise<{ wav: Blob; seconds: number; buffer: AudioBuffer }> {
+export async function audioClipWav(c: AudioClip, opts?: { Offline?: OfflineCtor; samples?: SampleLoader }): Promise<{ wav: Blob; seconds: number; buffer: AudioBuffer }> {
   const buffer = await renderAudioClip(c, opts);
   return { wav: bufferToWav(buffer), seconds: buffer.duration, buffer };
 }
