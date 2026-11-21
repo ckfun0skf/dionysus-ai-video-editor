@@ -1,0 +1,103 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "timpani",
+ "name": "Timpani",
+ "kind": "decay",
+ "attack": 0.001,
+ "release": 1.0,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "42-f.mp3",
+   "root": 42,
+   "lo": 0,
+   "hi": 44,
+   "velLo": 81,
+   "velHi": 127,
+   "tune": 50
+  },
+  {
+   "file": "47-f.mp3",
+   "root": 47,
+   "lo": 45,
+   "hi": 48,
+   "velLo": 81,
+   "velHi": 127,
+   "tune": 30
+  },
+  {
+   "file": "50-f.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 81,
+   "velHi": 127,
+   "tune": 50
+  },
+  {
+   "file": "52-f.mp3",
+   "root": 52,
+   "lo": 52,
+   "hi": 53,
+   "velLo": 81,
+   "velHi": 127,
+   "tune": -40
+  },
+  {
+   "file": "55-f.mp3",
+   "root": 55,
+   "lo": 54,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127,
+   "tune": 40
+  },
+  {
+   "file": "42-p.mp3",
+   "root": 42,
+   "lo": 0,
+   "hi": 44,
+   "velLo": 1,
+   "velHi": 80,
+   "tune": 50
+  },
+  {
+   "file": "47-p.mp3",
+   "root": 47,
+   "lo": 45,
+   "hi": 48,
+   "velLo": 1,
+   "velHi": 80,
+   "tune": 30
+  },
+  {
+   "file": "50-p.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 1,
+   "velHi": 80,
+   "tune": 50
+  },
+  {
+   "file": "52-p.mp3",
+   "root": 52,
+   "lo": 52,
+   "hi": 53,
+   "velLo": 1,
+   "velHi": 80,
+   "tune": -40
+  },
+  {
+   "file": "55-p.mp3",
+   "root": 55,
+   "lo": 54,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80,
+   "tune": 40
+  }
+ ]
+}

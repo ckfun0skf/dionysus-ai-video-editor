@@ -1,0 +1,273 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "cello",
+ "name": "Cellos",
+ "kind": "sustain",
+ "attack": 0.01,
+ "release": 0.5,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "36-f.mp3",
+   "root": 36,
+   "lo": 0,
+   "hi": 38,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "40-f.mp3",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "43-f.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 45,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "47-f.mp3",
+   "root": 47,
+   "lo": 46,
+   "hi": 48,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "50-f.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "53-f.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-f.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "60-f.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "64-f.mp3",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "67-f.mp3",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "71-f.mp3",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "74-f.mp3",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "77-f.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "36-p.mp3",
+   "root": 36,
+   "lo": 0,
+   "hi": 38,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.5995,
+   "loopEnd": 5.1995
+  },
+  {
+   "file": "40-p.mp3",
+   "root": 40,
+   "lo": 39,
+   "hi": 41,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.5971,
+   "loopEnd": 5.1971
+  },
+  {
+   "file": "43-p.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 45,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "47-p.mp3",
+   "root": 47,
+   "lo": 46,
+   "hi": 48,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.597,
+   "loopEnd": 5.197
+  },
+  {
+   "file": "50-p.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "53-p.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-p.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.5971,
+   "loopEnd": 5.1971
+  },
+  {
+   "file": "60-p.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 62,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "64-p.mp3",
+   "root": 64,
+   "lo": 63,
+   "hi": 65,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.598,
+   "loopEnd": 5.198
+  },
+  {
+   "file": "67-p.mp3",
+   "root": 67,
+   "lo": 66,
+   "hi": 69,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "71-p.mp3",
+   "root": 71,
+   "lo": 70,
+   "hi": 72,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "74-p.mp3",
+   "root": 74,
+   "lo": 73,
+   "hi": 75,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "77-p.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  }
+ ]
+}

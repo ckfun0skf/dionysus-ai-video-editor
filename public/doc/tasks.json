@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "project": "Dionysus",
-  "updatedAt": "2026-11-20",
+  "updatedAt": "2026-11-21",
   "sourceOfTruth": "public/doc/tasks.json on main (see docs/v2/MODULE_DESIGN.md §14)",
   "statusDefinitions": {
     "done": "Implementation exists and has evidence; release/browser validation may still be pending.",
@@ -3444,6 +3444,12 @@
           "title": "Motion path gaps after P89b (docs/v2/MOTION_PATH.md sections 5, 7, 9): path guide steps can be skipped (Skip this keeps the planned points as the final path, marked skipped; Reopen step; storyboard JSON \"skipped\": true and set_story_path skipped true/false; tracking or drawing clears it). The Motion path editing view is one view transform (zoom about a point, pan, clamped to the frame) applied to the preview or reference frame, with the overlay drawn in screen space so points and handles keep 44px targets: pinch, Cmd/Ctrl+wheel, +/- keys and a - % + control zoom; two fingers, an empty-area drag (Add point off), Space+drag, the middle button and the wheel pan; double-tap, Fit and 0 reset; a pinch drops the one-finger gesture it interrupts (fixes a stray point). Path steps with an image or code clip reference hide Track with the reason and draw over the picture; a reference with several versions gets a version picker for the Track and draw sheets (default the one in use). Phone: tapping the timeline time opens Go to time (timecode, seconds or frames, +/- one frame and one second), used for a 390 preview vs export pixel check. AI rule 82 mentions skipping; list_motion_paths reports skipped. Checked in Chrome at 1440 and 390.",
           "status": "done",
           "progress": 100
+        },
+        {
+          "id": "P91-AUDIO-SAMPLER",
+          "title": "Audio: recorded instruments, convolution reverb spaces, exact timing, MIDI and MusicXML import (#345). dionysus.audioclip/1 gains instrument \"sampler\" with \"sampler\": piano, strings, pizzicato, cello, violin, horn, flute, harp, glockenspiel or timpani: VSCO-2-CE recordings (CC0, credited in public/samples/CREDITS.md), mono MP3 with a dionysus.samplerpack/1 manifest per pack (about 10 MB in all, fetched lazily per needed recording and cached); nearest-zone choice per velocity layer, playbackRate pitch shift, velocity curve, attack/release, crossfaded sustain loops baked at load, decoder-padding skip; the render waits for loading (editor: Loading instruments..., errors name the instrument). fx.reverbType room/hall/church/plate and master { reverb, reverbType } use deterministic synthetic stereo IRs (early reflections, three-band decay, energy-normalised); without them the original noise reverb is unchanged. Timing: stepsPerBeat up to 960, steps/len up to 1,000,000, duration up to 600 s, tempoMap [{ step, tempo }]. Import... in the Audio editor reads .mid/.midi (own SMF parser: running status, note-on vel 0, tempo map, GM program to instrument, channel 10 drums, sustain pedal, CC7/CC10) and MusicXML .musicxml/.xml/.mxl (own XML reader; divisions, chords, ties, backup/forward, tempo, dynamics, transposition). Fine clips show a read-only piano roll; Sound tab pack picker, Mix tab reverb space, Clip tab shared reverb; new template Film cue (D minor). Old clips render exactly as before. Docs and generated AI files updated; tests for parsing, MIDI, MusicXML, zone choice, loading, loops and IRs. Not browser-verified in this PR.",
+          "status": "in_progress",
+          "progress": 90
         }
       ]
     }

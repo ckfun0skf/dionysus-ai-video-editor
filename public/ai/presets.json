@@ -2008,6 +2008,7 @@
       "bass",
       "pluck",
       "lead",
+      "sampler",
       "drums",
       "noise",
       "sfx"
@@ -2028,6 +2029,114 @@
       "glitch",
       "wind",
       "rain"
+    ],
+    "samplers": [
+      {
+        "id": "piano",
+        "name": "Piano",
+        "description": "Upright piano, two velocity layers; notes ring and decay naturally (hold them for sustain).",
+        "range": [
+          21,
+          108
+        ],
+        "kind": "decay"
+      },
+      {
+        "id": "strings",
+        "name": "Strings",
+        "description": "String section (cellos, violas, violins) sustained with vibrato, two dynamics; the film-score bed.",
+        "range": [
+          36,
+          86
+        ],
+        "kind": "sustain"
+      },
+      {
+        "id": "pizzicato",
+        "name": "Pizzicato",
+        "description": "Plucked string section (cellos and violins).",
+        "range": [
+          36,
+          86
+        ],
+        "kind": "decay"
+      },
+      {
+        "id": "cello",
+        "name": "Cellos",
+        "description": "Cello section sustained with vibrato, two dynamics; warm low melodies and bass lines.",
+        "range": [
+          36,
+          77
+        ],
+        "kind": "sustain"
+      },
+      {
+        "id": "violin",
+        "name": "Solo violin",
+        "description": "Solo violin sustained with vibrato, soft and loud layers; expressive high melodies.",
+        "range": [
+          55,
+          96
+        ],
+        "kind": "sustain"
+      },
+      {
+        "id": "horn",
+        "name": "French horn",
+        "description": "French horn sustained, two dynamics; noble, soft brass.",
+        "range": [
+          33,
+          77
+        ],
+        "kind": "sustain"
+      },
+      {
+        "id": "flute",
+        "name": "Flute",
+        "description": "Flute sustained with vibrato; airy melodies.",
+        "range": [
+          60,
+          96
+        ],
+        "kind": "sustain"
+      },
+      {
+        "id": "harp",
+        "name": "Harp",
+        "description": "Concert harp, plucked; arpeggios and glissando-like runs.",
+        "range": [
+          28,
+          101
+        ],
+        "kind": "decay"
+      },
+      {
+        "id": "glockenspiel",
+        "name": "Glockenspiel",
+        "description": "Glockenspiel, bright and high (G5–C8); music-box and sparkle lines.",
+        "range": [
+          79,
+          108
+        ],
+        "kind": "decay"
+      },
+      {
+        "id": "timpani",
+        "name": "Timpani",
+        "description": "Orchestral timpani hits, soft and loud; tune notes around D2–A3.",
+        "range": [
+          38,
+          57
+        ],
+        "kind": "decay"
+      }
+    ],
+    "reverbTypes": [
+      "room",
+      "hall",
+      "church",
+      "plate"
     ],
     "params": {
       "synth": [
@@ -2069,6 +2178,37 @@
           "default": 8,
           "description": "Cents between the voice's oscillators (pad, lead).",
           "unit": "ct"
+        }
+      ],
+      "sampler": [
+        {
+          "key": "attack",
+          "label": "Attack",
+          "min": 0,
+          "max": 4,
+          "step": 0.01,
+          "default": -1,
+          "description": "Seconds to full level (-1 = the recording's own attack).",
+          "unit": "s"
+        },
+        {
+          "key": "release",
+          "label": "Release",
+          "min": 0,
+          "max": 6,
+          "step": 0.01,
+          "default": -1,
+          "description": "Seconds to fade after the note (-1 = the instrument's own).",
+          "unit": "s"
+        },
+        {
+          "key": "tone",
+          "label": "Tone",
+          "min": 0,
+          "max": 1,
+          "step": 0.01,
+          "default": 1,
+          "description": "Brightness: 1 = the recording as is, lower = a darker low-pass."
         }
       ],
       "noise": [
@@ -2359,6 +2499,11 @@
         "id": "whoosh",
         "name": "Whoosh",
         "description": "A fast air pass for transitions."
+      },
+      {
+        "id": "film-cue-dminor",
+        "name": "Film cue (D minor)",
+        "description": "A slow, melancholic cue: string chords, a cello line and sparse piano in a hall (recorded instruments)."
       }
     ]
   }

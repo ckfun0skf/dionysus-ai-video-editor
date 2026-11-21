@@ -17,7 +17,8 @@ import { DEFAULT_TRANSITION_SEC, STORYBOARD_FORMAT } from "./storyJson";
 import { HTML_CLIP_FORMAT } from "./htmlClipPackage";
 import { storyToolsMarkdown } from "./storyAgent";
 import { timelineToolsMarkdown } from "./timelineReview";
-import { AUDIO_CLIP_FORMAT, AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, NOISE_PARAMS, SFX, SFX_PARAMS, SYNTH_PARAMS } from "./audioClip";
+import { AUDIO_CLIP_FORMAT, AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, NOISE_PARAMS, REVERB_TYPES, SAMPLER_PARAMS, SFX, SFX_PARAMS, SYNTH_PARAMS } from "./audioClip";
+import { SAMPLER_PACKS } from "./samplerPacks";
 
 const GUIDE_TITLE = `Dionysus storyboard guide (${STORYBOARD_FORMAT}, v${FORMAT_REVISION})`;
 
@@ -66,7 +67,9 @@ export function presetsJson(site = DEFAULT_SITE_URL): string {
     audioClip: {
       format: AUDIO_CLIP_FORMAT, spec: aiLinks(site).audioClipSpec, usedFor: 'audio assets with "source": "json"',
       instruments: INSTRUMENTS, drums: DRUMS, sfx: SFX,
-      params: { synth: SYNTH_PARAMS, noise: NOISE_PARAMS, sfx: SFX_PARAMS },
+      samplers: SAMPLER_PACKS.map((p) => ({ id: p.id, name: p.name, description: p.description, range: p.range, kind: p.kind })),
+      reverbTypes: REVERB_TYPES,
+      params: { synth: SYNTH_PARAMS, sampler: SAMPLER_PARAMS, noise: NOISE_PARAMS, sfx: SFX_PARAMS },
       templates: AUDIO_TEMPLATES.map((t) => ({ id: t.id, name: t.name, description: t.description })),
     },
   };
@@ -111,7 +114,7 @@ ${timelineToolsMarkdown()}
 
 - [Format reference](${l.formatDoc}): the full specification, including importer warnings and errors
 - [HTML clip package](${l.htmlClipSpec}): the ${HTML_CLIP_FORMAT} single-file format for "html" assets (manifest, runtime contract, bindings, params, template). Create code → AI mode writes a new clip from this spec; Code Editor → Revise with AI revises an existing one. Dionysus does not call an AI.
-- [Audio clip format](${l.audioClipSpec}): the ${AUDIO_CLIP_FORMAT} JSON for audio assets with "source": "json" (tempo, tracks, synths, drums, noise, sfx, fx, params, examples)
+- [Audio clip format](${l.audioClipSpec}): the ${AUDIO_CLIP_FORMAT} JSON for audio assets with "source": "json" (tempo, tracks, synths, recorded orchestral instruments, drums, noise, sfx, fx and reverb spaces, params, examples)
 - [Open the app](${l.app})
 `;
 }

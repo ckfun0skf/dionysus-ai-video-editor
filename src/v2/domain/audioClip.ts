@@ -3,6 +3,8 @@
  * An audio asset made in the Audio editor (or pasted from an AI) keeps this JSON next to its rendered WAV; the WAV is
  * what the timeline, the storyboard and export play. Pure data + parse/validate; rendering lives in render/audioClip.
  */
+import { SAMPLER_IDS, type SamplerId } from "./samplerPacks";
+
 export const AUDIO_CLIP_FORMAT = "dionysus.audioclip/1" as const;
 
 export const SYNTHS = ["piano", "pad", "bass", "pluck", "lead"] as const;
@@ -11,14 +13,21 @@ export const DRUMS = ["kick", "snare", "hat", "openhat", "clap", "tom"] as const
 export type DrumId = (typeof DRUMS)[number];
 export const SFX = ["whoosh", "impact", "riser", "beep", "glitch", "wind", "rain"] as const;
 export type SfxId = (typeof SFX)[number];
-export type Instrument = SynthId | "drums" | "noise" | "sfx";
-export const INSTRUMENTS: readonly Instrument[] = [...SYNTHS, "drums", "noise", "sfx"];
+export type Instrument = SynthId | "sampler" | "drums" | "noise" | "sfx";
+export const INSTRUMENTS: readonly Instrument[] = [...SYNTHS, "sampler", "drums", "noise", "sfx"];
+/** P91: convolution reverb spaces (synthetic impulse responses, render/reverb.ts). Without a type, `fx.reverb` uses the original noise impulse. */
+export const REVERB_TYPES = ["room", "hall", "church", "plate"] as const;
+export type ReverbType = (typeof REVERB_TYPES)[number];
 
 /** A note on the step grid: `step` from 0, `len` in steps; `pitch` is a MIDI number or a name like "C4" / "F#3" (drums: a drum name). */
 export interface ClipNote { step: number; len?: number; pitch: number | string; vel?: number }
 /** A timed event for noise and sfx tracks, in seconds from the clip start. */
 export interface ClipEvent { t: number; dur: number; vel?: number }
-export interface ClipFx { reverb?: number; delay?: number; delayTime?: number; filter?: { type: "lowpass" | "highpass" | "bandpass"; cutoff: number; q?: number } }
+export interface ClipFx { reverb?: number; reverbType?: ReverbType; delay?: number; delayTime?: number; filter?: { type: "lowpass" | "highpass" | "bandpass"; cutoff: number; q?: number } }
+/** P91: a tempo change from a step on (tempo map). */
+export interface TempoChange { step: number; tempo: number }
+/** P91: the clip's shared space: the whole mix is sent into one reverb. */
+export interface ClipMaster { reverb?: number; reverbType?: ReverbType }
 
 export interface ClipTrack {
   id: string;
@@ -26,6 +35,8 @@ export interface ClipTrack {
   instrument: Instrument;
   /** sfx tracks: which generator. */
   sfx?: SfxId;
+  /** sampler tracks: which recorded instrument pack (samplerPacks.ts). */
+  sampler?: SamplerId;
   notes?: ClipNote[];
   events?: ClipEvent[];
   volume?: number;
@@ -40,7 +51,9 @@ export interface AudioClip {
   name: string;
   /** Beats per minute (40–240). */
   tempo: number;
-  /** Grid steps per beat (default 4 = sixteenth notes). */
+  /** P91: tempo changes at steps (sorted, one per step); an entry at step 0 replaces `tempo`. */
+  tempoMap?: TempoChange[];
+  /** Grid steps per beat (default 4 = sixteenth notes; up to 960 for imported MIDI timing). */
   stepsPerBeat?: number;
   /** Length of the step grid in steps (default 16). */
   steps?: number;
@@ -50,6 +63,8 @@ export interface AudioClip {
   seed?: number;
   /** Output gain 0–1 (default 0.8). */
   volume?: number;
+  /** P91: shared reverb for the whole mix. */
+  master?: ClipMaster;
   tracks: ClipTrack[];
 }
 
@@ -62,6 +77,11 @@ export const SYNTH_PARAMS: ParamSpec[] = [
   P("release", "Release", 0, 4, 0.01, -1, "Seconds to fade after the note (-1 = the instrument's own).", "s"),
   P("tone", "Tone", 0, 1, 0.01, 0.6, "Brightness: low-pass cutoff of the voice."),
   P("detune", "Detune", 0, 50, 1, 8, "Cents between the voice's oscillators (pad, lead).", "ct"),
+];
+export const SAMPLER_PARAMS: ParamSpec[] = [
+  P("attack", "Attack", 0, 4, 0.01, -1, "Seconds to full level (-1 = the recording's own attack).", "s"),
+  P("release", "Release", 0, 6, 0.01, -1, "Seconds to fade after the note (-1 = the instrument's own).", "s"),
+  P("tone", "Tone", 0, 1, 0.01, 1, "Brightness: 1 = the recording as is, lower = a darker low-pass."),
 ];
 export const NOISE_PARAMS: ParamSpec[] = [
   P("color", "Colour", 0, 2, 1, 1, "0 white, 1 pink, 2 brown."),
@@ -79,7 +99,7 @@ export const SFX_PARAMS: Record<SfxId, ParamSpec[]> = {
   rain: [P("density", "Drops", 0, 1, 0.01, 0.6, "Drop density."), P("tone", "Tone", 0, 1, 0.01, 0.6, "Hiss brightness."), P("hiss", "Hiss", 0, 1, 0.01, 0.5, "Background hiss level.")],
 };
 export const paramSpecs = (t: Pick<ClipTrack, "instrument" | "sfx">): ParamSpec[] =>
-  t.instrument === "sfx" ? SFX_PARAMS[t.sfx ?? "whoosh"] : t.instrument === "noise" ? NOISE_PARAMS : t.instrument === "drums" ? [] : SYNTH_PARAMS;
+  t.instrument === "sfx" ? SFX_PARAMS[t.sfx ?? "whoosh"] : t.instrument === "noise" ? NOISE_PARAMS : t.instrument === "drums" ? [] : t.instrument === "sampler" ? SAMPLER_PARAMS : SYNTH_PARAMS;
 export const paramValue = (t: ClipTrack, key: string): number => {
   const v = t.params?.[key];
   const spec = paramSpecs(t).find((p) => p.key === key);
@@ -103,13 +123,36 @@ export const midiHz = (m: number) => 440 * Math.pow(2, (m - 69) / 12);
 export const stepsPerBeat = (c: AudioClip) => c.stepsPerBeat ?? 4;
 export const gridSteps = (c: AudioClip) => c.steps ?? 16;
 export const stepSec = (c: AudioClip) => 60 / c.tempo / stepsPerBeat(c);
+/**
+ * Seconds from the clip start to a step. Without a tempo map this is `step * stepSec` (the original formula, so old
+ * clips give the same numbers); with one, each segment between tempo changes runs at its own tempo.
+ */
+export function stepTime(c: AudioClip, step: number): number {
+  const map = c.tempoMap;
+  if (!map?.length) return step * stepSec(c);
+  const spb = stepsPerBeat(c);
+  let t = 0, from = 0, tempo = c.tempo;
+  for (const ch of map) {
+    if (ch.step >= step) break;
+    t += ((ch.step - from) * 60) / tempo / spb;
+    from = ch.step; tempo = ch.tempo;
+  }
+  return t + ((step - from) * 60) / tempo / spb;
+}
+/** P91: clips finer than the editor's step grid (imported MIDI / MusicXML) show a read-only piano roll instead. */
+export const FINE_GRID = { stepsPerBeat: 8, steps: 256 } as const;
+export const isFineGrid = (c: AudioClip) => stepsPerBeat(c) > FINE_GRID.stepsPerBeat || gridSteps(c) > FINE_GRID.steps || !!c.tempoMap?.length;
 /** The clip's length in seconds. */
 export function clipDuration(c: AudioClip): number {
   if (c.duration && c.duration > 0) return c.duration;
-  const grid = gridSteps(c) * stepSec(c);
+  const grid = c.tempoMap?.length ? stepTime(c, gridSteps(c)) : gridSteps(c) * stepSec(c);
   const ev = Math.max(0, ...c.tracks.flatMap((t) => (t.events ?? []).map((e) => e.t + e.dur)));
   return Math.max(grid, ev) || 1;
 }
+
+/** P91 limits: long enough for a film cue or an imported song at MIDI resolution. */
+export const MAX_STEPS = 1_000_000;
+export const MAX_DURATION = 600;
 
 export interface ClipIssue { path: string; message: string; level: "error" | "warning" }
 export type ParseResult = { ok: true; clip: AudioClip; issues: ClipIssue[] } | { ok: false; issues: ClipIssue[] };
@@ -144,9 +187,34 @@ export function parseAudioClip(input: string | unknown): ParseResult {
     return v;
   };
   const tempo = rng("tempo", raw.tempo, 40, 240, 120, '"tempo"')!;
-  const spb = rng("stepsPerBeat", raw.stepsPerBeat, 1, 8, undefined, '"stepsPerBeat"');
-  const steps = rng("steps", raw.steps, 1, 256, undefined, '"steps"');
-  const duration = rng("duration", raw.duration, 0.05, 120, undefined, '"duration"');
+  const spb = rng("stepsPerBeat", raw.stepsPerBeat, 1, 960, undefined, '"stepsPerBeat"');
+  const steps = rng("steps", raw.steps, 1, MAX_STEPS, undefined, '"steps"');
+  const duration = rng("duration", raw.duration, 0.05, MAX_DURATION, undefined, '"duration"');
+  let tempoMap: TempoChange[] | undefined;
+  if (raw.tempoMap !== undefined) {
+    if (!Array.isArray(raw.tempoMap)) err("tempoMap", '"tempoMap" must be an array of { "step", "tempo" }.');
+    else {
+      const bySteps = new Map<number, number>();
+      raw.tempoMap.forEach((e: unknown, i: number) => {
+        if (!isObj(e) || !num(e.step) || e.step < 0 || !num(e.tempo)) { err(`tempoMap[${i}]`, 'A tempo change needs "step" (from 0) and "tempo" (beats per minute).'); return; }
+        const tp = rng(`tempoMap[${i}].tempo`, e.tempo, 10, 1000, 120, "tempo")!;
+        bySteps.set(Math.round(e.step), tp);
+      });
+      if (bySteps.size) tempoMap = [...bySteps.entries()].sort((a, b) => a[0] - b[0]).map(([step, tp]) => ({ step, tempo: tp }));
+    }
+  }
+  let master: ClipMaster | undefined;
+  if (raw.master !== undefined) {
+    if (!isObj(raw.master)) err("master", '"master" must be an object { reverb?, reverbType? }.');
+    else {
+      const m: ClipMaster = {};
+      const rv = rng("master.reverb", raw.master.reverb, 0, 1, undefined, "reverb"); if (rv) m.reverb = rv;
+      const ty = raw.master.reverbType;
+      if (ty !== undefined) { if (REVERB_TYPES.includes(ty as ReverbType)) m.reverbType = ty as ReverbType; else err("master.reverbType", `Unknown reverbType "${String(ty)}". Use one of: ${REVERB_TYPES.join(", ")}.`); }
+      for (const k of Object.keys(raw.master)) if (!["reverb", "reverbType"].includes(k)) warn(`master.${k}`, `Unknown master field "${k}"; ignored (reverb, reverbType).`);
+      if (Object.keys(m).length) master = m;
+    }
+  }
   const seed = rng("seed", raw.seed, 0, 2 ** 31, undefined, '"seed"');
   const volume = rng("volume", raw.volume, 0, 1, undefined, '"volume"');
   if (!Array.isArray(raw.tracks) || !raw.tracks.length) err("tracks", '"tracks" must be a non-empty array.');
@@ -165,6 +233,10 @@ export function parseAudioClip(input: string | unknown): ParseResult {
       if (!SFX.includes(t.sfx as SfxId)) err(`${p}.sfx`, `An sfx track needs "sfx": one of ${SFX.join(", ")}.`);
       else out.sfx = t.sfx as SfxId;
     } else if (t.sfx !== undefined) warn(`${p}.sfx`, '"sfx" only applies to instrument "sfx"; ignored.');
+    if (inst === "sampler") {
+      if (!SAMPLER_IDS.includes(t.sampler as SamplerId)) err(`${p}.sampler`, `A sampler track needs "sampler": one of ${SAMPLER_IDS.join(", ")}.`);
+      else out.sampler = t.sampler as SamplerId;
+    } else if (t.sampler !== undefined) warn(`${p}.sampler`, '"sampler" only applies to instrument "sampler"; ignored.');
     const v = rng(`${p}.volume`, t.volume, 0, 1, undefined, "volume"); if (v !== undefined) out.volume = v;
     const pan = rng(`${p}.pan`, t.pan, -1, 1, undefined, "pan"); if (pan !== undefined) out.pan = pan;
     if (t.mute === true) out.mute = true;
@@ -195,16 +267,18 @@ export function parseAudioClip(input: string | unknown): ParseResult {
           pitch = typeof n.pitch === "string" ? (n.pitch as string) : m;
         }
         const note: ClipNote = { step: Math.round(n.step), pitch };
-        const len = rng(`${q}.len`, n.len, 0.25, 256, undefined, "len"); if (len !== undefined && len !== 1) note.len = len;
+        const len = rng(`${q}.len`, n.len, 0.25, MAX_STEPS, undefined, "len"); if (len !== undefined && len !== 1) note.len = len;
         const vel = rng(`${q}.vel`, n.vel, 0, 1, undefined, "vel"); if (vel !== undefined) note.vel = vel;
         return [note];
       });
     }
     if (t.fx !== undefined) {
-      if (!isObj(t.fx)) err(`${p}.fx`, '"fx" must be an object { reverb?, delay?, delayTime?, filter? }.');
+      if (!isObj(t.fx)) err(`${p}.fx`, '"fx" must be an object { reverb?, reverbType?, delay?, delayTime?, filter? }.');
       else {
         const fx: ClipFx = {};
         const rv = rng(`${p}.fx.reverb`, t.fx.reverb, 0, 1, undefined, "reverb"); if (rv) fx.reverb = rv;
+        const ty = t.fx.reverbType;
+        if (ty !== undefined) { if (REVERB_TYPES.includes(ty as ReverbType)) fx.reverbType = ty as ReverbType; else err(`${p}.fx.reverbType`, `Unknown reverbType "${String(ty)}". Use one of: ${REVERB_TYPES.join(", ")}.`); }
         const dl = rng(`${p}.fx.delay`, t.fx.delay, 0, 0.95, undefined, "delay"); if (dl) fx.delay = dl;
         const dt = rng(`${p}.fx.delayTime`, t.fx.delayTime, 0.02, 2, undefined, "delayTime"); if (dt !== undefined) fx.delayTime = dt;
         const f = t.fx.filter;
@@ -212,7 +286,7 @@ export function parseAudioClip(input: string | unknown): ParseResult {
           if (!isObj(f) || !["lowpass", "highpass", "bandpass"].includes(f.type as string) || !num(f.cutoff)) err(`${p}.fx.filter`, '"filter" must be { "type": "lowpass" | "highpass" | "bandpass", "cutoff": Hz, "q"? }.');
           else fx.filter = { type: f.type as "lowpass", cutoff: clamp(f.cutoff, 20, 20000), ...(num(f.q) ? { q: clamp(f.q, 0.1, 30) } : {}) };
         }
-        for (const k of Object.keys(t.fx)) if (!["reverb", "delay", "delayTime", "filter"].includes(k)) warn(`${p}.fx.${k}`, `Unknown fx "${k}"; ignored (reverb, delay, delayTime, filter).`);
+        for (const k of Object.keys(t.fx)) if (!["reverb", "reverbType", "delay", "delayTime", "filter"].includes(k)) warn(`${p}.fx.${k}`, `Unknown fx "${k}"; ignored (reverb, reverbType, delay, delayTime, filter).`);
         if (Object.keys(fx).length) out.fx = fx;
       }
     }
@@ -230,12 +304,12 @@ export function parseAudioClip(input: string | unknown): ParseResult {
         if (Object.keys(params).length) out.params = params;
       }
     }
-    for (const k of Object.keys(t)) if (!["id", "name", "instrument", "sfx", "notes", "events", "volume", "pan", "mute", "fx", "params"].includes(k)) warn(`${p}.${k}`, `Unknown track field "${k}"; ignored.`);
+    for (const k of Object.keys(t)) if (!["id", "name", "instrument", "sfx", "sampler", "notes", "events", "volume", "pan", "mute", "fx", "params"].includes(k)) warn(`${p}.${k}`, `Unknown track field "${k}"; ignored.`);
     return [out];
   });
-  for (const k of Object.keys(raw)) if (!["format", "name", "tempo", "stepsPerBeat", "steps", "duration", "seed", "volume", "tracks"].includes(k)) warn(k, `Unknown field "${k}"; ignored.`);
+  for (const k of Object.keys(raw)) if (!["format", "name", "tempo", "tempoMap", "stepsPerBeat", "steps", "duration", "seed", "volume", "master", "tracks"].includes(k)) warn(k, `Unknown field "${k}"; ignored.`);
   if (issues.some((i) => i.level === "error")) return { ok: false, issues };
-  const clip: AudioClip = { format: AUDIO_CLIP_FORMAT, name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Audio clip", tempo, ...(spb !== undefined ? { stepsPerBeat: Math.round(spb) } : {}), ...(steps !== undefined ? { steps: Math.round(steps) } : {}), ...(duration !== undefined ? { duration } : {}), ...(seed !== undefined ? { seed: Math.round(seed) } : {}), ...(volume !== undefined ? { volume } : {}), tracks };
+  const clip: AudioClip = { format: AUDIO_CLIP_FORMAT, name: typeof raw.name === "string" && raw.name.trim() ? raw.name.trim() : "Audio clip", tempo, ...(tempoMap ? { tempoMap } : {}), ...(spb !== undefined ? { stepsPerBeat: Math.round(spb) } : {}), ...(steps !== undefined ? { steps: Math.round(steps) } : {}), ...(duration !== undefined ? { duration } : {}), ...(seed !== undefined ? { seed: Math.round(seed) } : {}), ...(volume !== undefined ? { volume } : {}), ...(master ? { master } : {}), tracks };
   return { ok: true, clip, issues };
 }
 
@@ -269,6 +343,15 @@ export const AUDIO_TEMPLATES: { id: string; name: string; description: string; c
   { id: "whoosh", name: "Whoosh", description: "A fast air pass for transitions.", clip: {
     format: AUDIO_CLIP_FORMAT, name: "Whoosh", tempo: 120, duration: 1.2, seed: 5, tracks: [
       { id: "whoosh", name: "Whoosh", instrument: "sfx", sfx: "whoosh", volume: 0.85, pan: 0, fx: { reverb: 0.15 }, params: { tone: 0.6, sweep: 0.8, peak: 0.55 }, events: [{ t: 0, dur: 1.1 }] },
+    ] } },
+  { id: "film-cue-dminor", name: "Film cue (D minor)", description: "A slow, melancholic cue: string chords, a cello line and sparse piano in a hall (recorded instruments).", clip: {
+    format: AUDIO_CLIP_FORMAT, name: "Film cue (D minor)", tempo: 66, steps: 64, master: { reverb: 0.35, reverbType: "hall" }, tracks: [
+      { id: "strings", name: "Strings", instrument: "sampler", sampler: "strings", volume: 0.55, pan: -0.15, params: { attack: 0.6, release: 1.5 },
+        notes: [["D3", "A3", "F4"], ["Bb2", "F3", "D4"], ["G2", "D3", "Bb3"], ["A2", "E3", "C#4"]].flatMap((chord, bar) => chord.map((pitch) => ({ step: bar * 16, len: 16, pitch, vel: 0.5 }))) },
+      { id: "cello", name: "Cello line", instrument: "sampler", sampler: "cello", volume: 0.6, pan: 0.2, params: { attack: 0.25 },
+        notes: [{ step: 0, len: 8, pitch: "A3", vel: 0.6 }, { step: 8, len: 4, pitch: "G3", vel: 0.55 }, { step: 12, len: 4, pitch: "F3", vel: 0.55 }, { step: 16, len: 8, pitch: "F3", vel: 0.6 }, { step: 24, len: 4, pitch: "E3", vel: 0.55 }, { step: 28, len: 4, pitch: "D3", vel: 0.5 }, { step: 32, len: 12, pitch: "D3", vel: 0.6 }, { step: 44, len: 4, pitch: "Bb2", vel: 0.5 }, { step: 48, len: 16, pitch: "C#3", vel: 0.55 }] },
+      { id: "piano", name: "Piano", instrument: "sampler", sampler: "piano", volume: 0.5, params: { release: 1.2 },
+        notes: [["D4", "F4", "A4", "D5"], ["D4", "F4", "Bb4", "D5"], ["D4", "G4", "Bb4", "D5"], ["C#4", "E4", "A4", "E5"]].flatMap((arp, bar) => arp.map((pitch, i) => ({ step: bar * 16 + i * 4, len: 4, pitch, vel: i === 3 ? 0.42 : 0.35 }))) },
     ] } },
 ];
 

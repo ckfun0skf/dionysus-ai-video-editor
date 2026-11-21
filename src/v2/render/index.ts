@@ -12,6 +12,8 @@ export { effectFrameAt, applyEffectFrame } from "./effects";
 export { drawWithLook, isPlainLook } from "./transitionDraw";
 export { blendOp, withBlend } from "./blend";
 export * from "./audioClip";
+export { clipSamplesReady, clipUsesSamples, loadClipSamples, samplesBaseUrl, type SampleBank, type SampleLoader } from "./sampler";
+export { IR_SPECS } from "./reverb";
 export { bundledFontUrl, bundledFonts, loadBundledFonts, projectBundledFonts, projectFontFiles } from "./fonts";
 export { ExportVideoFrames } from "./export/videoFrames";
 export { buildSpatial, reverbBus, type SpatialStage } from "./spatial";

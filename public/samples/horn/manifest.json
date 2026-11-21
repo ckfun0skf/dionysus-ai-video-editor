@@ -1,0 +1,233 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "horn",
+ "name": "French horn",
+ "kind": "sustain",
+ "attack": 0.015,
+ "release": 0.4,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "33-f.mp3",
+   "root": 33,
+   "lo": 0,
+   "hi": 34,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 1.8893,
+   "loopEnd": 4.4893
+  },
+  {
+   "file": "36-f.mp3",
+   "root": 36,
+   "lo": 35,
+   "hi": 37,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 0.9,
+   "loopEnd": 3.1279
+  },
+  {
+   "file": "39-f.mp3",
+   "root": 39,
+   "lo": 38,
+   "hi": 41,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 1.2572,
+   "loopEnd": 3.8572
+  },
+  {
+   "file": "43-f.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 1.9311,
+   "loopEnd": 4.5311
+  },
+  {
+   "file": "46-f.mp3",
+   "root": 46,
+   "lo": 45,
+   "hi": 48,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "50-f.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "53-f.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-f.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "60-f.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 67,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "74-f.mp3",
+   "root": 74,
+   "lo": 68,
+   "hi": 75,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "77-f.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 127,
+   "velLo": 81,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "33-p.mp3",
+   "root": 33,
+   "lo": 0,
+   "hi": 34,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 1.8893,
+   "loopEnd": 4.4893
+  },
+  {
+   "file": "36-p.mp3",
+   "root": 36,
+   "lo": 35,
+   "hi": 37,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.5146,
+   "loopEnd": 5.1146
+  },
+  {
+   "file": "39-p.mp3",
+   "root": 39,
+   "lo": 38,
+   "hi": 41,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "43-p.mp3",
+   "root": 43,
+   "lo": 42,
+   "hi": 44,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "46-p.mp3",
+   "root": 46,
+   "lo": 45,
+   "hi": 48,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "50-p.mp3",
+   "root": 50,
+   "lo": 49,
+   "hi": 51,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "53-p.mp3",
+   "root": 53,
+   "lo": 52,
+   "hi": 55,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "57-p.mp3",
+   "root": 57,
+   "lo": 56,
+   "hi": 58,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "60-p.mp3",
+   "root": 60,
+   "lo": 59,
+   "hi": 67,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "74-p.mp3",
+   "root": 74,
+   "lo": 68,
+   "hi": 75,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "77-p.mp3",
+   "root": 77,
+   "lo": 76,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 80,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  }
+ ]
+}

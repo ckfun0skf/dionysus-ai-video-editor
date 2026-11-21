@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from "react";
 import {
-  AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, SFX, clipDuration, gridSteps, midiOf, newAudioClip, noteName, paramSpecs, paramValue, parseAudioClip, stepSec, stringifyAudioClip,
-  type AudioClip, type ClipIssue, type ClipNote, type ClipTrack, type Instrument, type SfxId,
+  AUDIO_TEMPLATES, DRUMS, INSTRUMENTS, REVERB_TYPES, SAMPLER_PACKS, SFX, clipDuration, gridSteps, isFineGrid, midiOf, newAudioClip, noteName, paramSpecs, paramValue, parseAudioClip, samplerPack, stepSec, stepTime, stringifyAudioClip,
+  type AudioClip, type ClipIssue, type ClipNote, type ClipTrack, type Instrument, type ReverbType, type SamplerId, type SfxId,
 } from "../domain";
-import { bufferToWav, renderAudioClip } from "../render";
+import { bufferToWav, CLIP_SAMPLE_RATE, clipSamplesReady, renderAudioClip } from "../render";
+import { AUDIO_IMPORT_ACCEPT, importAudioFile } from "./audioImport";
 import { Confirm } from "./CodeEditor";
 import { ClipIssues } from "./HtmlImport";
 import { Ic as Icon } from "./Icon";
@@ -19,7 +20,8 @@ import { SliderField } from "./SliderField";
  */
 type Tab = "pattern" | "sound" | "mix" | "clip";
 const TABS: { id: Tab; label: string }[] = [{ id: "pattern", label: "Pattern" }, { id: "sound", label: "Sound" }, { id: "mix", label: "Mix" }, { id: "clip", label: "Clip" }];
-const INST_LABEL: Record<Instrument, string> = { piano: "Piano", pad: "Pad", bass: "Bass", pluck: "Pluck", lead: "Lead", drums: "Drums", noise: "Noise", sfx: "SFX" };
+const INST_LABEL: Record<Instrument, string> = { piano: "Piano", pad: "Pad", bass: "Bass", pluck: "Pluck", lead: "Lead", sampler: "Recorded", drums: "Drums", noise: "Noise", sfx: "SFX" };
+const REVERB_LABEL: Record<ReverbType, string> = { room: "Room", hall: "Hall", church: "Church", plate: "Plate" };
 const SFX_LABEL: Record<SfxId, string> = { whoosh: "Whoosh", impact: "Impact", riser: "Riser", beep: "Beep", glitch: "Glitch", wind: "Wind", rain: "Rain" };
 const LENS = [1, 2, 4, 8, 16];
 const DEFAULT_OCTAVE: Partial<Record<Instrument, number>> = { bass: 2, pad: 3, piano: 4, pluck: 4, lead: 4 };
@@ -27,7 +29,8 @@ const fmt = (t: number) => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart
 export const AUDIO_JSON_ACCEPT = ".json,application/json";
 const fileBase = (name: string) => (name.trim() || "audio").replace(/[^\w\- ]+/g, "").trim().replace(/\s+/g, "-").toLowerCase() || "audio";
 export const toHtmlIssues = (issues: ClipIssue[]) => issues.map((i) => ({ level: i.level, message: i.message, code: i.path || "clip" }));
-const trackLabel = (t: ClipTrack) => t.name || (t.instrument === "sfx" ? SFX_LABEL[t.sfx ?? "whoosh"] : INST_LABEL[t.instrument]);
+const trackLabel = (t: ClipTrack) => t.name || (t.instrument === "sfx" ? SFX_LABEL[t.sfx ?? "whoosh"] : t.instrument === "sampler" ? samplerPack(t.sampler)?.name ?? "Recorded" : INST_LABEL[t.instrument]);
+const octaveFor = (t: ClipTrack) => (t.instrument === "sampler" ? samplerPack(t.sampler)?.octave : DEFAULT_OCTAVE[t.instrument]) ?? 4;
 
 /** Undo history for the clip; `key` coalesces a burst of edits (a slider drag) into one step. */
 function useHistory(start: AudioClip) {
@@ -45,14 +48,15 @@ function useHistory(start: AudioClip) {
 }
 
 /** A new track of an instrument with a short starter pattern. */
-export function newTrack(inst: Instrument, ids: string[], sfx: SfxId = "whoosh"): ClipTrack {
+export function newTrack(inst: Instrument, ids: string[], sfx: SfxId = "whoosh", sampler: SamplerId = "piano"): ClipTrack {
   let n = 1;
-  const base = inst === "sfx" ? sfx : inst;
+  const base = inst === "sfx" ? sfx : inst === "sampler" ? sampler : inst;
   while (ids.includes(`${base}${n}`)) n++;
   const id = `${base}${n}`;
   if (inst === "sfx") return { id, instrument: "sfx", sfx, volume: 0.8, events: [{ t: 0, dur: sfx === "impact" ? 1.5 : sfx === "beep" ? 0.4 : 1.2 }] };
   if (inst === "noise") return { id, instrument: "noise", volume: 0.4, events: [{ t: 0, dur: 2 }] };
   if (inst === "drums") return { id, instrument: "drums", volume: 0.8, notes: [{ step: 0, pitch: "kick" }, { step: 4, pitch: "snare" }, { step: 8, pitch: "kick" }, { step: 12, pitch: "snare" }] };
+  if (inst === "sampler") return { id, instrument: "sampler", sampler, volume: 0.7, notes: [] };
   return { id, instrument: inst, volume: 0.7, notes: [] };
 }
 
@@ -62,10 +66,13 @@ export function newTrack(inst: Instrument, ids: string[], sfx: SfxId = "whoosh")
 function usePreview(clip: AudioClip) {
   const [buffer, setBuffer] = useState<AudioBuffer | null>(null);
   const [err, setErr] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<false | "render" | "load">(false);
   useEffect(() => {
     let live = true;
-    setBusy(true);
+    // P91: recorded instruments download on first use; say so instead of "Rendering…".
+    let ready = true;
+    try { ready = clipSamplesReady(clip, CLIP_SAMPLE_RATE); } catch { /* no URL base outside a browser */ }
+    setBusy(ready ? "render" : "load");
     const id = setTimeout(() => {
       renderAudioClip(clip).then((b) => { if (live) { setBuffer(b); setErr(""); } }, (e) => { if (live) { setBuffer(null); setErr(e instanceof Error ? e.message : String(e)); } }).finally(() => { if (live) setBusy(false); });
     }, 250);
@@ -165,7 +172,7 @@ function PreviewPanel({ clip, undo, redo, canUndo, canRedo }: { clip: AudioClip;
       <div className="v2-ce-transport">
         <button type="button" className="v2-btn v2-ce-icon primary" aria-label={playing ? "Stop preview" : "Play preview"} disabled={!buffer} onClick={() => (playing ? stop() : buffer && start(buffer, 0))}><Icon g={playing ? "❚❚" : "▶"} /></button>
         <button type="button" className={`v2-btn v2-ce-icon ${loop ? "is-on" : ""}`} aria-label="Loop" aria-pressed={loop} title="Loop the preview" onClick={() => setLoop(!loop)}><Icon g="anim-loop" /></button>
-        <span className="v2-ce-time" aria-live="off">{busy ? "Rendering…" : `${fmt(t)} / ${fmt(seconds)}`}</span>
+        <span className="v2-ce-time" aria-live="off" role={busy === "load" ? "status" : undefined}>{busy === "load" ? "Loading instruments…" : busy ? "Rendering…" : `${fmt(t)} / ${fmt(seconds)}`}</span>
         <span className="v2-ae-spacer" />
         <button type="button" className="v2-btn v2-ce-icon" aria-label="Undo" title="Undo (Ctrl+Z)" disabled={!canUndo} onClick={undo}><Icon g="↶" /></button>
         <button type="button" className="v2-btn v2-ce-icon" aria-label="Redo" title="Redo (Ctrl+Shift+Z)" disabled={!canRedo} onClick={redo}><Icon g="↷" /></button>
@@ -178,11 +185,39 @@ function PreviewPanel({ clip, undo, redo, canUndo, canRedo }: { clip: AudioClip;
 // ---------------------------------------------------------------------------------------------------------------
 // Pattern: step grid (synths, drums) or events (noise, sfx)
 
+/** P91: a read-only piano roll for clips finer than the step grid (imported MIDI / MusicXML). */
+function PianoRoll({ clip, track }: { clip: AudioClip; track: ClipTrack }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  const notes = track.notes ?? [];
+  const total = clipDuration(clip);
+  useEffect(() => {
+    const c = ref.current, g = c?.getContext?.("2d");
+    if (!c || !g) return;
+    const w = (c.width = c.clientWidth * (devicePixelRatio || 1) || 600), h = (c.height = c.clientHeight * (devicePixelRatio || 1) || 160);
+    g.clearRect(0, 0, w, h);
+    const keys = notes.map((n) => (track.instrument === "drums" ? DRUMS.indexOf(n.pitch as never) : midiOf(n.pitch) ?? 60));
+    const lo = Math.min(...keys, 127), hi = Math.max(...keys, 0), span = Math.max(1, hi - lo + 1);
+    g.fillStyle = "#5ad1c8";
+    notes.forEach((n, i) => {
+      const t0 = stepTime(clip, n.step), t1 = stepTime(clip, n.step + (n.len ?? 1));
+      const x = (t0 / total) * w, y = h - ((keys[i] - lo + 1) / span) * h;
+      g.globalAlpha = 0.35 + 0.65 * (n.vel ?? 0.8);
+      g.fillRect(x, y, Math.max(1, ((t1 - t0) / total) * w), Math.max(2, h / span - 1));
+    });
+  }, [clip, track, notes, total]);
+  return (
+    <div className="v2-ae-pattern">
+      <div className="v2-ae-wave"><canvas ref={ref} aria-label={`${trackLabel(track)} notes`} role="img" /></div>
+      <p className="v2-ce-hint">{notes.length} note{notes.length === 1 ? "" : "s"} with exact timing ({clip.stepsPerBeat ?? 4} steps per beat{clip.tempoMap?.length ? `, ${clip.tempoMap.length} tempo change${clip.tempoMap.length > 1 ? "s" : ""}` : ""}). This clip is finer than the step grid, so notes are shown read-only; change the instrument, sound and mix here, or edit the notes in the JSON.</p>
+    </div>
+  );
+}
+
 function StepGrid({ clip, track, set }: { clip: AudioClip; track: ClipTrack; set: (t: ClipTrack, key?: string) => void }) {
   const drums = track.instrument === "drums";
-  const [octave, setOctave] = useState(DEFAULT_OCTAVE[track.instrument] ?? 4);
-  const [len, setLen] = useState(track.instrument === "pad" ? 8 : track.instrument === "bass" ? 2 : 1);
-  useEffect(() => { setOctave(DEFAULT_OCTAVE[track.instrument] ?? 4); }, [track.id, track.instrument]);
+  const [octave, setOctave] = useState(octaveFor(track));
+  const [len, setLen] = useState(track.instrument === "pad" || (track.instrument === "sampler" && samplerPack(track.sampler)?.kind === "sustain") ? 8 : track.instrument === "bass" ? 2 : 1);
+  useEffect(() => { setOctave(octaveFor(track)); }, [track.id, track.instrument, track.sampler]); // eslint-disable-line react-hooks/exhaustive-deps
   const steps = gridSteps(clip), spb = clip.stepsPerBeat ?? 4;
   const rows: { key: string; label: string; match: (n: ClipNote) => boolean; pitch: string | number }[] = drums
     ? DRUMS.map((d) => ({ key: d, label: d, match: (n: ClipNote) => n.pitch === d, pitch: d }))
@@ -264,13 +299,13 @@ function Slider({ label, value, min, max, step, unit, onChange, hint }: { label:
 
 function SoundTab({ track, set }: { track: ClipTrack; set: (t: ClipTrack, key?: string) => void }) {
   const specs = paramSpecs(track);
-  const synth = !["drums", "noise", "sfx"].includes(track.instrument);
+  const synth = !["drums", "noise", "sfx", "sampler"].includes(track.instrument);
   const changeInst = (inst: Instrument) => {
     if (inst === track.instrument) return;
     const evented = (i: Instrument) => i === "sfx" || i === "noise";
     const base = newTrack(inst, [], track.sfx ?? "whoosh");
     const keep = evented(inst) === evented(track.instrument) && (inst === "drums") === (track.instrument === "drums");
-    set({ ...track, instrument: inst, sfx: inst === "sfx" ? track.sfx ?? "whoosh" : undefined, params: undefined, notes: evented(inst) ? undefined : keep ? track.notes : base.notes, events: evented(inst) ? (keep ? track.events : base.events) : undefined });
+    set({ ...track, instrument: inst, sfx: inst === "sfx" ? track.sfx ?? "whoosh" : undefined, sampler: inst === "sampler" ? track.sampler ?? "piano" : undefined, params: undefined, notes: evented(inst) ? undefined : keep ? track.notes : base.notes, events: evented(inst) ? (keep ? track.events : base.events) : undefined });
   };
   return (
     <div className="v2-ce-panel">
@@ -284,6 +319,13 @@ function SoundTab({ track, set }: { track: ClipTrack; set: (t: ClipTrack, key?: 
           {SFX.map((s) => <button key={s} type="button" role="radio" aria-checked={track.sfx === s} className={`v2-chip ${track.sfx === s ? "is-active" : ""}`} onClick={() => set({ ...track, sfx: s, params: undefined })}>{SFX_LABEL[s]}</button>)}
         </div>
       </>}
+      {track.instrument === "sampler" && <>
+        <span className="v2-ce-label">Recorded instrument</span>
+        <div className="v2-tp-chips" role="radiogroup" aria-label="Recorded instrument">
+          {SAMPLER_PACKS.map((p) => <button key={p.id} type="button" role="radio" aria-checked={track.sampler === p.id} title={p.description} className={`v2-chip ${track.sampler === p.id ? "is-active" : ""}`} onClick={() => set({ ...track, sampler: p.id })}>{p.name}</button>)}
+        </div>
+        <p className="v2-ce-hint">{samplerPack(track.sampler)?.description} Recordings: VSCO-2-CE (CC0); they download the first time they play.</p>
+      </>}
       {specs.length > 0 && <span className="v2-ce-label">{track.instrument === "sfx" ? "Designer" : "Shape"}</span>}
       <div className="v2-ae-sliders">
         {specs.map((p) => {
@@ -295,9 +337,20 @@ function SoundTab({ track, set }: { track: ClipTrack; set: (t: ClipTrack, key?: 
           );
         })}
       </div>
-      {synth && <p className="v2-ce-hint">Attack and Release at the far left use the instrument's own envelope.</p>}
+      {(synth || track.instrument === "sampler") && <p className="v2-ce-hint">Attack and Release at the far left use the instrument's own envelope.</p>}
       {track.instrument === "drums" && <p className="v2-ce-hint">The kit has kick, snare, hat, open hat, clap and tom; place them on the Pattern grid.</p>}
       {specs.length > 0 && <button type="button" className="v2-btn v2-ae-reset" disabled={!track.params} onClick={() => set({ ...track, params: undefined })}>Reset sound</button>}
+    </div>
+  );
+}
+
+/** P91: reverb space chips (Classic = the original short noise reverb). */
+function ReverbTypePicker({ value, onChange, label, classic = true }: { value?: ReverbType; onChange: (t: ReverbType | undefined) => void; label: string; classic?: boolean }) {
+  const opts: (ReverbType | undefined)[] = classic ? [undefined, ...REVERB_TYPES] : [...REVERB_TYPES];
+  const cur = value ?? (classic ? undefined : "hall");
+  return (
+    <div className="v2-ce-seg" role="radiogroup" aria-label={label}>
+      {opts.map((k) => <button key={k ?? "classic"} type="button" role="radio" aria-checked={cur === k} className={`v2-btn ${cur === k ? "is-active" : ""}`} onClick={() => onChange(k)}>{k ? REVERB_LABEL[k] : "Classic"}</button>)}
     </div>
   );
 }
@@ -312,6 +365,7 @@ function MixTab({ track, set }: { track: ClipTrack; set: (t: ClipTrack, key?: st
         <Slider label="Volume" min={0} max={1} step={0.01} value={track.volume ?? 0.8} onChange={(v) => set({ ...track, volume: v }, `vol-${track.id}`)} />
         <Slider label="Pan" min={-1} max={1} step={0.01} value={track.pan ?? 0} onChange={(v) => set({ ...track, pan: Math.abs(v) < 0.02 ? undefined : v }, `pan-${track.id}`)} hint="Left −1 … right 1" />
         <Slider label="Reverb" min={0} max={1} step={0.01} value={fx.reverb ?? 0} onChange={(v) => setFx({ ...fx, reverb: v }, `rv-${track.id}`)} />
+        {!!fx.reverb && <ReverbTypePicker value={fx.reverbType} onChange={(ty) => setFx({ ...fx, reverbType: ty }, "")} label="Reverb space" />}
         <Slider label="Delay" min={0} max={0.95} step={0.01} value={fx.delay ?? 0} onChange={(v) => setFx({ ...fx, delay: v }, `dl-${track.id}`)} hint="Echo feedback and level" />
         {!!fx.delay && <Slider label="Delay time" unit="s" min={0.02} max={2} step={0.01} value={fx.delayTime ?? 0.25} onChange={(v) => setFx({ ...fx, delayTime: v }, `dt-${track.id}`)} />}
       </div>
@@ -333,6 +387,8 @@ function MixTab({ track, set }: { track: ClipTrack; set: (t: ClipTrack, key?: st
 
 function ClipTab({ clip, commit, onImport, issues }: { clip: AudioClip; commit: (c: AudioClip, key?: string) => void; onImport: (f: File) => void; issues: ClipIssue[] }) {
   const [wavMsg, setWavMsg] = useState("");
+  const fine = isFineGrid(clip);
+  const setMaster = (m: AudioClip["master"], key: string) => { const { master: _m, ...rest } = clip; commit(m?.reverb ? { ...rest, master: m } : (rest as AudioClip), key); };
   const exportWav = async () => {
     setWavMsg("Rendering…");
     try { const b = await renderAudioClip(clip); await saveFile(bufferToWav(b), `${fileBase(clip.name)}.wav`); setWavMsg(""); }
@@ -343,16 +399,18 @@ function ClipTab({ clip, commit, onImport, issues }: { clip: AudioClip; commit: 
       <label className="v2-ce-field"><span>Name</span><input type="text" value={clip.name} onChange={(e) => commit({ ...clip, name: e.target.value }, "name")} /></label>
       <div className="v2-ae-sliders">
         <Slider label="Tempo" unit="BPM" min={40} max={240} step={1} value={clip.tempo} onChange={(v) => commit({ ...clip, tempo: v }, "tempo")} />
-        <Slider label="Grid length" unit="steps" min={4} max={64} step={4} value={gridSteps(clip)} onChange={(v) => commit({ ...clip, steps: v }, "steps")} hint={`${(gridSteps(clip) * stepSec(clip)).toFixed(2)} s at this tempo`} />
+        {!fine && <Slider label="Grid length" unit="steps" min={4} max={64} step={4} value={gridSteps(clip)} onChange={(v) => commit({ ...clip, steps: v }, "steps")} hint={`${(gridSteps(clip) * stepSec(clip)).toFixed(2)} s at this tempo`} />}
         <Slider label="Duration" unit="s" min={0} max={30} step={0.1} value={clip.duration ?? 0} onChange={(v) => { const { duration: _d, ...rest } = clip; commit(v > 0 ? { ...rest, duration: v } : (rest as AudioClip), "dur"); }} hint="0 = the grid length" />
         <Slider label="Master volume" min={0} max={1} step={0.01} value={clip.volume ?? 0.8} onChange={(v) => commit({ ...clip, volume: v }, "mvol")} />
+        <Slider label="Shared reverb" min={0} max={1} step={0.01} value={clip.master?.reverb ?? 0} onChange={(v) => setMaster({ ...clip.master, reverb: v }, "mrv")} hint="Sends the whole mix into one space, so every instrument sits in the same room" />
         <Slider label="Seed" min={0} max={999} step={1} value={clip.seed ?? 1} onChange={(v) => commit({ ...clip, seed: v }, "seed")} hint="Changes noise, rain and glitch randomness (same seed = same sound)" />
       </div>
-      <p className="v2-ce-hint">Length {clipDuration(clip).toFixed(2)} s{clip.duration ? "" : " (from the grid)"}. One step is {(stepSec(clip) * 1000).toFixed(0)} ms.</p>
+      {!!clip.master?.reverb && <ReverbTypePicker classic={false} value={clip.master.reverbType} onChange={(ty) => setMaster({ ...clip.master, reverbType: ty }, "")} label="Shared reverb space" />}
+      <p className="v2-ce-hint">Length {clipDuration(clip).toFixed(2)} s{clip.duration ? "" : " (from the grid)"}. One step is {fine ? `${(stepSec(clip) * 1000).toFixed(2)} ms (fine timing${clip.tempoMap?.length ? ", with tempo changes" : ""})` : `${(stepSec(clip) * 1000).toFixed(0)} ms`}.</p>
       <span className="v2-ce-label">Files</span>
       <div className="v2-ce-export">
-        <label className="v2-btn" title="Load a dionysus.audioclip/1 .json file">Import .json
-          <input type="file" hidden accept={AUDIO_JSON_ACCEPT} aria-label="Import audio clip JSON" onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = ""; }} />
+        <label className="v2-btn" title="Load a dionysus.audioclip/1 .json file, a MIDI file (.mid) or MusicXML (.musicxml, .xml, .mxl)">Import…
+          <input type="file" hidden accept={AUDIO_IMPORT_ACCEPT} aria-label="Import audio clip JSON, MIDI or MusicXML" onChange={(e) => { const f = e.target.files?.[0]; if (f) onImport(f); e.target.value = ""; }} />
         </label>
         <button type="button" className="v2-btn" onClick={() => void saveFile(new Blob([stringifyAudioClip(clip)], { type: "application/json" }), `${fileBase(clip.name)}.audioclip.json`)}>Export .json</button>
         <button type="button" className="v2-btn" onClick={() => void exportWav()}>Export WAV</button>
@@ -380,11 +438,13 @@ function TemplateList({ onPick }: { onPick: (c: AudioClip) => void }) {
   );
 }
 
-function AddTrackList({ onPick }: { onPick: (i: Instrument, s?: SfxId) => void }) {
+function AddTrackList({ onPick }: { onPick: (i: Instrument, s?: SfxId, p?: SamplerId) => void }) {
   return (
     <div className="v2-ae-addlist">
-      <span className="v2-ce-label">Instruments</span>
-      <div className="v2-tp-chips">{INSTRUMENTS.filter((i) => i !== "sfx").map((i) => <button key={i} type="button" className="v2-chip" onClick={() => onPick(i)}>{INST_LABEL[i]}</button>)}</div>
+      <span className="v2-ce-label">Recorded instruments</span>
+      <div className="v2-tp-chips">{SAMPLER_PACKS.map((p) => <button key={p.id} type="button" className="v2-chip" title={p.description} onClick={() => onPick("sampler", undefined, p.id)}>{p.name}</button>)}</div>
+      <span className="v2-ce-label">Synths and drums</span>
+      <div className="v2-tp-chips">{INSTRUMENTS.filter((i) => i !== "sfx" && i !== "sampler").map((i) => <button key={i} type="button" className="v2-chip" onClick={() => onPick(i)}>{INST_LABEL[i]}</button>)}</div>
       <span className="v2-ce-label">Sound effects</span>
       <div className="v2-tp-chips">{SFX.map((s) => <button key={s} type="button" className="v2-chip" onClick={() => onPick("sfx", s)}>{SFX_LABEL[s]}</button>)}</div>
     </div>
@@ -420,11 +480,11 @@ export function AudioEditor({ source, mobile, onSave, onClose, create }: {
   const load = (c: AudioClip, iss: ClipIssue[] = []) => { commit(c); setIssues(iss); setSel(c.tracks[0]?.id ?? ""); setTab("pattern"); };
   const pickTemplate = (c: AudioClip) => { setTemplates(false); ask(`Load "${c.name}"?`, "This replaces the tracks you're editing (Undo brings them back).", "Replace", () => load(c)); };
   const importFile = async (f: File) => {
-    const r = parseAudioClip(await f.text());
+    const r = await importAudioFile(f);
     if (!r.ok) { setIssues(r.issues); setTab("clip"); return; }
     ask(`Import "${r.clip.name}"?`, "This replaces the tracks you're editing (Undo brings them back).", "Import", () => load(r.clip, r.issues));
   };
-  const addTrack = (i: Instrument, s?: SfxId) => { setAdding(false); const t = newTrack(i, clip.tracks.map((x) => x.id), s); commit({ ...clip, tracks: [...clip.tracks, t] }); setSel(t.id); setTab(i === "sfx" ? "sound" : "pattern"); };
+  const addTrack = (i: Instrument, s?: SfxId, p?: SamplerId) => { setAdding(false); const t = newTrack(i, clip.tracks.map((x) => x.id), s, p); commit({ ...clip, tracks: [...clip.tracks, t] }); setSel(t.id); setTab(i === "sfx" ? "sound" : "pattern"); };
   const removeTrack = (id: string) => { const rest = clip.tracks.filter((t) => t.id !== id); commit({ ...clip, tracks: rest }); setSel(rest[0]?.id ?? ""); };
   const save = async () => {
     if (!canSave) return;
@@ -443,7 +503,7 @@ export function AudioEditor({ source, mobile, onSave, onClose, create }: {
   const panel: ReactNode = !track ? (
     <div className="v2-ce-panel"><p className="v2-ce-empty">No tracks. Add one to start.</p><AddTrackList onPick={addTrack} /></div>
   ) : tab === "pattern" ? (
-    <div className="v2-ce-panel">{track.instrument === "sfx" || track.instrument === "noise" ? <EventsEditor clip={clip} track={track} set={setTrack} /> : <StepGrid clip={clip} track={track} set={setTrack} />}</div>
+    <div className="v2-ce-panel">{track.instrument === "sfx" || track.instrument === "noise" ? <EventsEditor clip={clip} track={track} set={setTrack} /> : isFineGrid(clip) ? <PianoRoll clip={clip} track={track} /> : <StepGrid clip={clip} track={track} set={setTrack} />}</div>
   ) : tab === "sound" ? <SoundTab track={track} set={setTrack} />
     : tab === "mix" ? <MixTab track={track} set={setTrack} />
     : null;

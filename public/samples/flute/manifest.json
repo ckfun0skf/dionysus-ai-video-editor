@@ -1,0 +1,113 @@
+{
+ "format": "dionysus.samplerpack/1",
+ "id": "flute",
+ "name": "Flute",
+ "kind": "sustain",
+ "attack": 0.01,
+ "release": 0.3,
+ "gain": 1.0,
+ "source": "VSCO-2-CE (Versilian Studios Chamber Orchestra 2, Community Edition), https://github.com/sgossner/VSCO-2-CE",
+ "license": "CC0-1.0",
+ "zones": [
+  {
+   "file": "60-all.mp3",
+   "root": 60,
+   "lo": 0,
+   "hi": 62,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "64-all.mp3",
+   "root": 64,
+   "lo": 63,
+   "hi": 66,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "69-all.mp3",
+   "root": 69,
+   "lo": 67,
+   "hi": 70,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "72-all.mp3",
+   "root": 72,
+   "lo": 71,
+   "hi": 74,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.5994,
+   "loopEnd": 5.1994
+  },
+  {
+   "file": "76-all.mp3",
+   "root": 76,
+   "lo": 75,
+   "hi": 78,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.597,
+   "loopEnd": 5.197
+  },
+  {
+   "file": "81-all.mp3",
+   "root": 81,
+   "lo": 79,
+   "hi": 82,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "84-all.mp3",
+   "root": 84,
+   "lo": 83,
+   "hi": 86,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.6,
+   "loopEnd": 5.2
+  },
+  {
+   "file": "88-all.mp3",
+   "root": 88,
+   "lo": 87,
+   "hi": 90,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 2.4311,
+   "loopEnd": 5.0311
+  },
+  {
+   "file": "93-all.mp3",
+   "root": 93,
+   "lo": 91,
+   "hi": 94,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 1.8997,
+   "loopEnd": 4.4997
+  },
+  {
+   "file": "96-all.mp3",
+   "root": 96,
+   "lo": 95,
+   "hi": 127,
+   "velLo": 1,
+   "velHi": 127,
+   "loopStart": 1.1346,
+   "loopEnd": 3.7346
+  }
+ ]
+}
