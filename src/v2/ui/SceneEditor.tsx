@@ -12,6 +12,8 @@ import {
   addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, SCRIPT_PARAM_RE, sceneScriptCode, scriptProblems, setSceneScriptCode, setSceneScriptParams,
   type SceneScriptParams,
   fogBase, lookTargetOf, postBase, SCENE_AAS, SCENE_TONE_MAPPINGS, skyBase, updateSceneLook, type SceneMaterial, type SceneMaterialType,
+  addSceneAnimation, addSceneCharacter, audioVisemeFrames, autoRig, BUILTIN_CLIP_NAMES, glbInfoOfDataUrl, removeSceneAnimation, sceneClipNames,
+  visemesFromEnergy, type SceneCharacter,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -127,6 +129,7 @@ export function SceneEditor(props: SceneEditorProps) {
   const gzMoved = useRef(false);
   const viewState = useRef<{ doc: SceneDoc; at: number; s: SceneState }>();
   const fileInput = useRef<HTMLInputElement>(null);
+  const charInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "look" ? `k${sel.id}` : sel.kind === "camera" ? "c" : "s";
   useEffect(() => { if (panelRef.current) panelRef.current.scrollTop = 0; }, [selKey]);
@@ -306,13 +309,19 @@ export function SceneEditor(props: SceneEditorProps) {
   };
   const dropDraft = () => { setDialog(undefined); setDraftChecked(true); void drafts.delete(dkey).catch(() => undefined); };
 
-  const addModel = async (files: FileList | null) => {
+  const addModel = async (files: FileList | null, character = false) => {
     if (!files?.length) return;
-    const { next, notes } = await readAttachedFiles(files, {}, ".glb");
+    const { next, notes } = await readAttachedFiles(files, {}, character ? ".glb,.vrm" : ".glb");
     const [name, data] = Object.entries(next)[0] ?? [];
     if (fileInput.current) fileInput.current.value = "";
+    if (charInput.current) charInput.current.value = "";
     if (!name || !data) { setNote(notes.join(" ") || "No model was added."); return; }
-    await edit("add 3D model", (d) => { const r = addSceneModel(d, name, data); return { doc: r.doc, sel: { kind: "object", id: r.id }, note: [`Added “${r.id}” (${name}).`, ...notes].join(" ") }; });
+    await edit(character ? "add character" : "add 3D model", (d) => {
+      const r = addSceneModel(d, name, data);
+      // Scene Phase 2: a character model idles instead of playing the file's first clip.
+      const doc2 = character ? updateSceneObject(r.doc, r.id, { animation: undefined, character: {} }) : r.doc;
+      return { doc: doc2, sel: { kind: "object", id: r.id }, note: [`Added “${r.id}” (${name})${character ? " as a character" : ""}.`, ...notes].join(" ") };
+    });
   };
 
   const versions = asset?.versions ?? [];
@@ -466,13 +475,13 @@ export function SceneEditor(props: SceneEditorProps) {
   const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "look" ? { kind: "look", id: t.id as LookId }
     : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
   /** P81b: the camera and objects have events (the Scene track is settings); Scene Phase 1 (#350): so do lights with an id, post, fog and sky. */
-  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script" || t.kind === "look" || (t.kind === "light" && !!t.obj);
+  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script" || t.kind === "character" || t.kind === "look" || (t.kind === "light" && !!t.obj);
   const addEventOn = (t: SceneTrack) => {
     const target = t.obj ?? t.id;
-    const call = t.obj ? sceneCalls(doc, target)[0]?.call ?? "moveTo" : "moveTo";
+    const call = t.obj ? sceneCalls(doc, target)[0]?.call ?? "moveTo" : t.kind === "character" ? "walkTo" : "moveTo";
     void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, target, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; });
   };
-  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "look" ? "effect" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : t.kind === "script" ? "</>" : "scene");
+  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "look" ? "effect" : t.kind === "character" ? "person" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : t.kind === "script" ? "</>" : "scene");
 
   const tracksEl = (
     <div ref={tracksRef} className={`v2-sed-tracks ${draft ? "is-dragging" : ""}`} role="group" aria-label="Scene tracks">
@@ -553,6 +562,10 @@ export function SceneEditor(props: SceneEditorProps) {
     <div className="v2-sed-addmenu" role="menu" aria-label="Add object">
       {SCENE_SHAPES.map((s) => <button key={s} type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); void edit(`add ${s}`, (d) => { const r = addSceneObject(d, s); return { doc: r.doc, sel: { kind: "object", id: r.id } }; }); }}><Ic g="scene" size={16} /> {s[0].toUpperCase() + s.slice(1)}</button>)}
       <button type="button" role="menuitem" className="v2-sed-addglb" onClick={() => { setAdding(false); setPart(undefined); fileInput.current?.click(); }}><Ic g="⇪" size={16} /> GLB model…</button>
+      {/* Scene Phase 2 (#351): characters — the built-in mannequin, or a VRoid .vrm / humanoid .glb. */}
+      <p className="v2-sed-addhead" role="presentation"><Ic g="person" size={14} /> Character</p>
+      <button type="button" role="menuitem" data-testid="scene-add-character" onClick={() => { setAdding(false); setPart(undefined); void edit("add character", (d) => { const r = addSceneCharacter(d); return { doc: r.doc, sel: { kind: "object", id: r.id } }; }); }}><Ic g="person" size={16} /> Mannequin</button>
+      <button type="button" role="menuitem" onClick={() => { setAdding(false); setPart(undefined); charInput.current?.click(); }}><Ic g="⇪" size={16} /> VRM / humanoid GLB…</button>
       <p className="v2-sed-addhead" role="presentation"><Ic g="</>" size={14} /> Script (three.js code)</p>
       {SCENE_SCRIPT_TEMPLATES.map((t) => <button key={t.id} type="button" role="menuitem" title={t.description} data-template={t.id}
         onClick={() => { setAdding(false); setPart(undefined); void edit(`add ${t.label.toLowerCase()} script`, (d) => { const r = addSceneScript(d, t.id); return { doc: r.doc, sel: { kind: "object", id: r.id }, note: `Added “${r.id}”, a Script object (${t.label}). Its code and params are under Script.` }; }); }}>
@@ -577,6 +590,7 @@ export function SceneEditor(props: SceneEditorProps) {
         {adding && addMenu}
       </div>}
       <input ref={fileInput} type="file" accept=".glb,model/gltf-binary" hidden data-testid="scene-editor-model-input" onChange={(e) => void addModel(e.currentTarget.files)} />
+      <input ref={charInput} type="file" accept=".vrm,.glb" hidden data-testid="scene-editor-character-input" onChange={(e) => void addModel(e.currentTarget.files, true)} />
     </div>
   );
 
@@ -886,6 +900,7 @@ function SceneForm({ doc, edit, part, issues, onPickLight, onPickCamera, onPickL
       <SelectField label="Export supersampling" value={String(ss)} options={["1", "2", "3", "4"]} labels={{ 1: "Off", 2: "2× (smoother edges)", 3: "3×", 4: "4×" }}
         onCommit={(v) => edit("export supersampling", (d) => updateSceneLook(d, "export", v === "1" ? undefined : { supersample: Number(v) }))} />
       <Problems list={[...issuesAt(issues, "world.environment"), ...issuesAt(issues, "world.export")]} />
+      <AnimationLibrary doc={doc} edit={edit} issues={issues} />
     </>}
     {(all || part === "lights") && <>
       {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
@@ -968,6 +983,81 @@ function LightForm({ doc, index: i, light: l, issues, edit, part, atNow, onDelet
     </>}
     {live && (all || part === "addEvent") && <AddLookEvent doc={doc} obj={l.id!} calls={calls.map((c) => c.call)} atNow={atNow} edit={edit} />}
   </div>;
+}
+
+/** Scene Phase 2 (#351): a character's body (the mannequin), clips, blinking and, for a GLB, its bone map. */
+function CharacterFields({ doc, obj, set }: { doc: SceneDoc; obj: SceneObject; set: (label: string, patch: Partial<SceneObject>) => unknown }) {
+  const ch: SceneCharacter = obj.character ?? {};
+  const put = (label: string, patch: Partial<SceneCharacter>) => set(label, { character: Object.fromEntries(Object.entries({ ...ch, ...patch }).filter(([, v]) => v !== undefined)) as SceneCharacter });
+  const body = ch.body ?? {};
+  const putBody = (label: string, patch: Record<string, unknown>) => put(label, { body: Object.fromEntries(Object.entries({ ...body, ...patch }).filter(([, v]) => v !== undefined)) });
+  const clips = sceneClipNames(doc);
+  const model = typeof obj.model === "string" ? obj.model : undefined;
+  const glbRig = model && /\.glb$/i.test(model) && typeof doc.files?.[model] === "string" ? (() => { const names = glbInfoOfDataUrl(doc.files![model])?.nodeNames; return names ? autoRig(names) : undefined; })() : undefined;
+  return <>
+    <h5><Ic g="person" size={14} /> Character</h5>
+    {!model && <>
+      <NumField label="Height" value={body.height ?? 1.7} min={0.3} max={4} step={0.05} onCommit={(v) => putBody("height", { height: v })} />
+      <ColorField label="Skin" value={body.skin ?? "#e8c4a0"} onCommit={(v) => putBody("skin", { skin: v })} />
+      <ColorField label="Top" value={body.cloth ?? "#4a7bd0"} onCommit={(v) => putBody("top colour", { cloth: v })} />
+      <ColorField label="Trousers" value={body.pants ?? "#2f3542"} onCommit={(v) => putBody("trousers colour", { pants: v })} />
+      <ColorField label="Hair" value={body.hair ?? "#3b2a20"} onCommit={(v) => putBody("hair colour", { hair: v })} />
+    </>}
+    {model && /\.vrm$/i.test(model) && <p className="v2-abnote">A VRM character: its humanoid bones and expressions come from the file.</p>}
+    {glbRig && <p className="v2-abnote">{glbRig.missing.length ? `Bones found automatically, except ${glbRig.missing.join(", ")} (those parts won't move; map them with "rig" in the JSON).` : "All the humanoid bones were found automatically."}</p>}
+    <SelectField label="Idle clip" value={ch.idle ?? "idle"} options={clips} onCommit={(v) => put("idle clip", { idle: v === "idle" ? undefined : v })} />
+    <SelectField label="Walk clip" value={ch.walk ?? "walk"} options={clips} onCommit={(v) => put("walk clip", { walk: v === "walk" ? undefined : v })} />
+    <SelectField label="Run clip" value={ch.run ?? "run"} options={clips} onCommit={(v) => put("run clip", { run: v === "run" ? undefined : v })} />
+    <CheckField label="Blinks" value={ch.blink !== false} onCommit={(v) => put(v ? "blinking" : "no blinking", { blink: v ? undefined : false })} />
+    <p className="v2-abnote">Add events to make it walk (walkTo), turn, look at something or the camera, sit, gesture, change its expression, speak (lip sync) or pick something up.</p>
+  </>;
+}
+
+/** Scene Phase 2: the animation library (clips from animation-only GLBs, e.g. Mixamo exports). */
+function AnimationLibrary({ doc, edit, issues }: { doc: SceneDoc; edit: Edit; issues: SceneIssue[] }) {
+  const input = useRef<HTMLInputElement>(null);
+  const lib = doc.animations ?? {};
+  return <>
+    <h5><Ic g="anim-loop" size={14} /> Animations</h5>
+    <p className="v2-abnote">Built-in: {BUILTIN_CLIP_NAMES.join(", ")}. Add an animation GLB (e.g. from Mixamo) to use its clip on any character.</p>
+    <div className="v2-sed-picklist" role="list" aria-label="Animation library">
+      {Object.entries(lib).map(([n, a]) => <span key={n} role="listitem" className="v2-sed-row"><Ic g="anim-loop" size={14} /> <span>{n}</span> <small>{a.file}</small>
+        <button type="button" className="v2-icon" aria-label={`Remove ${n}`} onClick={() => void edit("remove animation", (d) => removeSceneAnimation(d, n))}><Ic g="🗑" size={14} /></button></span>)}
+    </div>
+    <button type="button" className="v2-btn" onClick={() => input.current?.click()}><Ic g="＋" size={16} /> Add animation GLB…</button>
+    <input ref={input} type="file" accept=".glb" hidden data-testid="scene-animation-input" onChange={(e) => {
+      const f = e.target.files?.[0]; e.target.value = "";
+      if (!f) return;
+      void fileDataUrl(f).then((url) => edit("add animation", (d) => { const r = addSceneAnimation(d, f.name, url); return { doc: r.doc, note: `Added the animation “${r.name}”.` }; }));
+    }} />
+    <Problems list={issuesAt(issues, "animations")} />
+  </>;
+}
+
+/** Scene Phase 2: speak visemes — how many keys, and computing them from an audio file (decoded here, analysed purely). */
+function VisemeField({ label, value, onCommit }: { label: string; value: unknown; onCommit: (v: unknown) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string>();
+  const n = Array.isArray(value) ? value.length : 0;
+  return <Field label={label}>
+    <span className="v2-sed-row">
+      <small>{n ? `${n} keys` : "none (the text is used)"}</small>
+      <button type="button" className="v2-btn" onClick={() => input.current?.click()}>{busy ?? "From audio file…"}</button>
+      {n > 0 && <button type="button" className="v2-btn" onClick={() => onCommit(undefined)}>Clear</button>}
+    </span>
+    <input ref={input} type="file" accept="audio/*" hidden onChange={(e) => {
+      const f = e.target.files?.[0]; e.target.value = "";
+      if (!f) return;
+      setBusy("Analysing…");
+      void f.arrayBuffer().then(async (buf) => {
+        const ctx = new OfflineAudioContext(1, 1, 22050);
+        const audio = await ctx.decodeAudioData(buf);
+        const mono = new Float32Array(audio.length);
+        for (let c = 0; c < audio.numberOfChannels; c++) { const d = audio.getChannelData(c); for (let i = 0; i < d.length; i++) mono[i] += d[i] / audio.numberOfChannels; }
+        onCommit(visemesFromEnergy(audioVisemeFrames(mono, audio.sampleRate), 0.01));
+      }).catch(() => setBusy("Couldn't read that audio")).finally(() => setTimeout(() => setBusy(undefined), 1500));
+    }} />
+  </Field>;
 }
 
 /** Scene Phase 1 (#350): an add-event row for a light, "post", "fog" or "sky". */
@@ -1119,8 +1209,9 @@ function ObjectForm({ doc, obj, issues, edit, atNow, part, runIssues = [] }: { d
       <CheckField label="Visible" value={obj.visible !== false} onCommit={(v) => set(v ? "show" : "hide", { visible: v ? undefined : false })} />
       <NumField label="Opacity" value={obj.opacity ?? 1} min={0} max={1} step={0.05} onCommit={(v) => set("opacity", { opacity: v === 1 ? undefined : v })} />
       <MaterialFields obj={obj} set={set} />
+      {obj.character && <CharacterFields doc={doc} obj={obj} set={set} />}
     </>}
-    {model && (all || part === "model") && <>
+    {model && !obj.character && (all || part === "model") && <>
       {all && <h5>Animation from 0 s</h5>}
       <SelectField label="Clip" value={anim?.clip ?? ""} options={["", ...(anims ?? (anim ? [anim.clip] : []))]} labels={{ "": "None (rest pose)" }} onCommit={(v) => set("animation", { animation: v ? (anim && typeof obj.animation === "object" ? { ...anim, clip: v } : v) : undefined })} />
       {anim && <>
@@ -1266,12 +1357,36 @@ function ArgField({ field: f, value, objIds, onCommit }: { field: SceneArgField;
     case "vec3": return <Vec3Field label={f.label} value={isVec3(value) ? value : [0, 0, 0]} onCommit={onCommit} />;
     case "scale": return <ListField label={f.label} value={typeof value === "number" || Array.isArray(value) ? value as number | number[] : 1} hint="one number or x, y, z" onCommit={(v) => onCommit(Array.isArray(v) && v.length === 1 ? v[0] : v)} />;
     case "target": {
-      const point = isVec3(value);
+      // Scene Phase 2: "camera" (look at it), an angle (turn to it), or nothing (optional).
+      const point = isVec3(value), angle = typeof value === "number";
+      const extra = [...(f.camera ? ["camera"] : []), ...(f.angle ? ["#angle"] : []), ...(f.optional ? ["#none"] : [])];
+      const cur = point ? "" : angle ? "#angle" : value === undefined && f.optional ? "#none" : String(value ?? "");
       return <>
-        <SelectField label={f.label} value={point ? "" : String(value ?? "")} options={["", ...objIds]} labels={{ "": "A point [x, y, z]" }} onCommit={(v) => onCommit(v || [0, 0, 0])} />
+        <SelectField label={f.label} value={cur} options={["", ...extra, ...objIds]} labels={{ "": "A point [x, y, z]", "#angle": "An angle (°)", "#none": "—", camera: "The camera" }}
+          onCommit={(v) => onCommit(v === "" ? [0, 0, 0] : v === "#angle" ? 0 : v === "#none" ? undefined : v)} />
         {point && <Vec3Field label="Point" value={value} onCommit={onCommit} />}
+        {angle && <NumField label="Angle (°)" value={value} min={-360} max={360} step={5} onCommit={(v) => onCommit(v ?? 0)} />}
       </>;
     }
+    case "points": {
+      const pts: Vec3[] = isVec3(value) ? [value] : Array.isArray(value) ? (value as unknown[]).filter(isVec3) : [];
+      return <Field label={f.label}>
+        <span className="v2-sed-points">
+          {pts.map((pt, i) => <span key={i} className="v2-sed-row">
+            <Vec3Field label={`Point ${i + 1}`} value={pt} onCommit={(v) => onCommit(pts.map((x, k) => (k === i ? v : x)))} />
+            {pts.length > 1 && <button type="button" className="v2-icon" aria-label={`Remove point ${i + 1}`} onClick={() => onCommit(pts.filter((_, k) => k !== i))}><Ic g="✕" size={14} /></button>}
+          </span>)}
+          <button type="button" className="v2-btn" onClick={() => { const last = pts[pts.length - 1] ?? [0, 0, 0]; onCommit([...pts, [last[0] + 1, last[1], last[2]] as Vec3]); }}><Ic g="＋" size={14} /> Point</button>
+        </span>
+      </Field>;
+    }
+    case "expressions": {
+      const map = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, number> : {};
+      return <>{(["happy", "angry", "sad", "surprised", "relaxed", "blink"] as const).map((k) => <NumField key={k} label={k[0].toUpperCase() + k.slice(1)} value={map[k]} min={0} max={1} step={0.1} optional
+        onCommit={(v) => { const next = { ...map }; if (v === undefined) delete next[k]; else next[k] = v; onCommit(Object.keys(next).length ? next : { [k]: 0 }); }} />)}</>;
+    }
+    case "text": return <TextField label={f.label} value={typeof value === "string" ? value : ""} onCommit={(v) => onCommit(v || undefined)} />;
+    case "visemes": return <VisemeField label={f.label} value={value} onCommit={onCommit} />;
     case "number": return <NumField label={f.label} value={typeof value === "number" ? value : undefined} min={f.min} max={f.max} step={f.step} optional={f.optional} onCommit={onCommit} />;
     case "bool": return <CheckField label={f.label} value={value === true} onCommit={onCommit} />;
     case "color": return <ColorField label={f.label} value={typeof value === "string" ? value : "#ffffff"} onCommit={onCommit} />;

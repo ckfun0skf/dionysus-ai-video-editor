@@ -14,9 +14,10 @@ import {
 } from "./scene";
 import {
   addSceneLight, addSceneObject, callTweens, defaultCallArgs, lightIdProblem, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject,
-  roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneLook, updateSceneObject, updateSceneWorld, type SceneArgField,
+  addSceneAnimation, removeSceneAnimation, roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneLook, updateSceneObject, updateSceneWorld, type SceneArgField,
 } from "./sceneEdit";
 import { SCENE_LOOK_IDS } from "./sceneLook";
+import { BUILTIN_CLIP_NAMES, SCENE_CHARACTER_CALLS } from "./sceneCharacter";
 import { moveSceneEventTo } from "./sceneRetime";
 import { addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, sceneScriptCode, setSceneScriptCode, setSceneScriptParams } from "./sceneScript";
 import { SCENE_SCRIPT_MAX, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
@@ -28,7 +29,7 @@ export const sceneMediaRef = (blobKey: string): AssetVersion["media"] => ({ blob
 /** The tools that change a scene (the others read it). */
 export const SCENE_EDIT_TOOLS = [
   "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event",
-  "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script",
+  "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation",
 ] as const;
 export type SceneEditTool = (typeof SCENE_EDIT_TOOLS)[number];
 export const isSceneEditTool = (n: string): n is SceneEditTool => (SCENE_EDIT_TOOLS as readonly string[]).includes(n);
@@ -56,7 +57,11 @@ export function argHint(f: SceneArgField): string {
   switch (f.kind) {
     case "vec3": return "[x, y, z]";
     case "scale": return "number or [x, y, z]";
-    case "target": return "object id or [x, y, z]";
+    case "target": return `${f.angle ? "object id, [x, y, z] or an angle in degrees" : f.camera ? "object id, [x, y, z] or \"camera\"" : "object id or [x, y, z]"}${f.optional ? ", optional" : ""}`;
+    case "points": return "[x, y, z] or a list of [x, y, z] (a path on the floor)";
+    case "expressions": return "{ happy | angry | sad | surprised | relaxed | blink | aa | ih | ou | ee | oh: 0–1 }";
+    case "text": return `text${f.optional ? ", optional" : ""}`;
+    case "visemes": return "[[seconds, aa | ih | ou | ee | oh, weight 0–1], …], optional";
     case "number": return `number${f.min !== undefined || f.max !== undefined ? ` ${f.min ?? "…"}..${f.max ?? "…"}` : ""}${f.optional ? ", optional" : ""}`;
     case "bool": return "true or false";
     case "color": return "\"#rrggbb\"";
@@ -116,7 +121,7 @@ const done = (before: SceneDoc, after: SceneDoc, info: Record<string, unknown>, 
   return g.error ? fail(g.error) : { ok: true, doc: after, info, warnings: g.warnings };
 };
 
-const OBJECT_KEYS = ["name", "shape", "size", "color", "position", "rotation", "scale", "visible", "opacity", "material", "model", "animation", "nodes", "functions"] as const;
+const OBJECT_KEYS = ["name", "shape", "size", "color", "position", "rotation", "scale", "visible", "opacity", "material", "character", "model", "animation", "nodes", "functions"] as const;
 type ObjectKey = (typeof OBJECT_KEYS)[number];
 
 /** Object fields from an input object; `null` removes a field. */
@@ -163,7 +168,7 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       let d: SceneDoc, id: string;
       if (file !== undefined) {
         if (!isObj(file) || typeof file.name !== "string" || typeof file.dataUrl !== "string" || !/^data:/.test(file.dataUrl)) return fail('"file" must be { name: "robot.glb", dataUrl: "data:model/gltf-binary;base64,…" }.');
-        if (!/\.glb$/i.test(file.name)) return fail("Only .glb models can be added (a binary glTF in one file).");
+        if (!/\.(glb|vrm)$/i.test(file.name)) return fail("Only .glb models (and .vrm characters) can be added (a binary glTF in one file).");
         ({ doc: d, id } = addSceneModel(doc, file.name, file.dataUrl, numOk(a.size) ? a.size : undefined));
       } else if (typeof a.model === "string") {
         if (!isObj(doc.files) || typeof doc.files[a.model] !== "string") return fail(`No file "${a.model}" in the scene. Files: ${Object.keys(isObj(doc.files) ? doc.files : {}).join(", ") || "none"}. Give "file" { name, dataUrl } to add one.`);
@@ -200,7 +205,7 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
         // P79: give the object a GLB model file (added to the scene's files; the object becomes that model).
         const file = a.file;
         if (!isObj(file) || typeof file.name !== "string" || typeof file.dataUrl !== "string" || !/^data:/.test(file.dataUrl)) return fail('"file" must be { name: "robot.glb", dataUrl: "data:model/gltf-binary;base64,…" } or { url }.');
-        if (!/\.glb$/i.test(file.name)) return fail("Only .glb models can be added (a binary glTF in one file).");
+        if (!/\.(glb|vrm)$/i.test(file.name)) return fail("Only .glb models (and .vrm characters) can be added (a binary glTF in one file).");
         d = { ...d, files: { ...(isObj(d.files) ? d.files : {}), [file.name]: file.dataUrl } };
         const cur = objectsOf(d).find((o) => o.id === id);
         d = updateSceneObject(d, id, { model: file.name, shape: undefined, ...(cur?.model ? {} : { size: 1.6 }) });
@@ -360,6 +365,29 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       d = updateSceneLight(d, i, patch);
       return done(doc, d, { lightIndex: i, light: sceneLights(d).lights[i] }, [`world.lights[${i}]`]);
     }
+    case "set_scene_animation": {
+      // Scene Phase 2 (#351): a library clip — add (file { url } or { name, dataUrl }) or change one, or remove it.
+      if (typeof a.name !== "string" || !a.name) return fail(`Name the clip ("name"). Library: ${Object.keys(isObj(doc.animations) ? doc.animations : {}).join(", ") || "empty"}; built-in: ${BUILTIN_CLIP_NAMES.join(", ")}.`);
+      const lib = isObj(doc.animations) ? doc.animations : {};
+      if (a.remove === true) {
+        if (!lib[a.name]) return fail(`No library clip "${a.name}". Library: ${Object.keys(lib).join(", ") || "empty"}.`);
+        return done(doc, removeSceneAnimation(doc, a.name), { removed: a.name }, ["animations"]);
+      }
+      const extra: Record<string, unknown> = {};
+      for (const k of ["clip", "stride", "length", "loop", "mask", "rig"] as const) if (a[k] !== undefined) extra[k] = a[k] === null ? undefined : a[k];
+      let d = doc;
+      if (a.file !== undefined) {
+        const file = a.file;
+        if (!isObj(file) || typeof file.name !== "string" || typeof file.dataUrl !== "string" || !/^data:/.test(file.dataUrl)) return fail('"file" must be { url } or { name: "walk.glb", dataUrl: "data:model/gltf-binary;base64,…" }.');
+        if (!/\.glb$/i.test(file.name)) return fail("Animation files are .glb (a binary glTF with animations; FBX converted to GLB).");
+        d = addSceneAnimation(doc, file.name, file.dataUrl, a.name, extra as never).doc;
+      } else {
+        if (!lib[a.name]) return fail(`No library clip "${a.name}"; give "file" to add it.`);
+        const entry = Object.fromEntries(Object.entries({ ...lib[a.name], ...extra }).filter(([, v]) => v !== undefined));
+        d = { ...doc, animations: { ...lib, [a.name]: entry as never } };
+      }
+      return done(doc, d, { name: a.name, animation: (d.animations ?? {})[a.name] }, ["animations"]);
+    }
     case "set_scene_script": {
       // P82: a Script object (three.js code in the scene's files): add one (from a template or code), change its code,
       // params or template, or turn it back into a plain shape.
@@ -456,6 +484,9 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
     events: sortedEvents(doc).map(({ e, i }) => ({ index: i, ...e })),
     eases: [...SCENE_EASES],
     baseCalls: Object.keys(SCENE_BASE_FUNCTIONS),
+    // Scene Phase 2 (#351): character calls (objects with "character"), the built-in clips and the library.
+    characterCalls: Object.keys(SCENE_CHARACTER_CALLS),
+    clips: { builtIn: BUILTIN_CLIP_NAMES, library: Object.keys(isObj(doc.animations) ? doc.animations : {}) },
     cameraCalls: Object.keys(SCENE_CAMERA_FUNCTIONS),
   };
 }

@@ -437,12 +437,7 @@
   },
   {
    "id": "hero",
-   "name": "Character (stand-in)",
-   "shape": "cylinder",
-   "size": [
-    0.25,
-    1.6
-   ],
+   "name": "Hero",
    "position": [
     -5,
     0,
@@ -453,28 +448,79 @@
     90,
     0
    ],
-   "script": {
-    "file": "hero.js",
-    "params": {
+   "character": {
+    "body": {
+     "height": 1.7,
      "skin": "#f2c9a0",
      "cloth": "#3d6fb6",
-     "walkFrom": 0.5,
-     "walkTo": 6.5,
-     "stride": 7,
-     "waveFrom": 8,
-     "waveTo": 10.6
+     "pants": "#2c3140",
+     "hair": "#4a2e1e"
     }
    },
    "material": {
     "type": "toon",
     "steps": 3,
     "outline": {
-     "width": 0.012
+     "width": 0.008
     },
     "rim": {
      "color": "#ffd0a0",
      "strength": 0.25,
      "power": 4
+    }
+   }
+  },
+  {
+   "id": "bench",
+   "name": "Bench",
+   "shape": "box",
+   "size": [
+    1.4,
+    0.45,
+    0.45
+   ],
+   "color": "#7a5236",
+   "position": [
+    -2.4,
+    0.225,
+    -1.5
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "elder",
+   "name": "Elder",
+   "position": [
+    -2.4,
+    0,
+    -1.2
+   ],
+   "rotation": [
+    0,
+    0,
+    0
+   ],
+   "character": {
+    "body": {
+     "height": 1.6,
+     "skin": "#e3b896",
+     "cloth": "#7d4e8c",
+     "pants": "#3a3340",
+     "hair": "#d8d8d8"
+    },
+    "idle": "idle"
+   },
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.008
     }
    }
   },
@@ -503,32 +549,105 @@
  ],
  "events": [
   {
+   "at": 0,
+   "obj": "elder",
+   "call": "sit",
+   "args": {
+    "seat": "bench",
+    "facing": 0
+   }
+  },
+  {
    "at": 0.5,
    "obj": "hero",
-   "call": "moveTo",
+   "call": "walkTo",
    "args": {
-    "position": [
-     1.6,
-     0,
-     0.6
-    ]
+    "path": [
+     [
+      -1,
+      0,
+      0.7
+     ],
+     [
+      1.6,
+      0,
+      0.6
+     ]
+    ],
+    "speed": 1.25
+   }
+  },
+  {
+   "at": 3,
+   "obj": "elder",
+   "call": "lookAt",
+   "args": {
+    "target": "hero"
    },
-   "dur": 6,
-   "ease": "linear"
+   "dur": 0.8
+  },
+  {
+   "at": 6.6,
+   "obj": "hero",
+   "call": "turnTo",
+   "args": {
+    "target": 28
+   },
+   "dur": 0.7
   },
   {
    "at": 7,
    "obj": "hero",
-   "call": "rotation",
+   "call": "lookAt",
    "args": {
-    "value": [
-     0,
-     24,
-     0
-    ]
+    "target": "camera"
    },
-   "dur": 0.8,
-   "ease": "inOutSine"
+   "dur": 0.6
+  },
+  {
+   "at": 7.4,
+   "obj": "hero",
+   "call": "expression",
+   "args": {
+    "value": {
+     "happy": 1
+    }
+   },
+   "dur": 0.5
+  },
+  {
+   "at": 8,
+   "obj": "hero",
+   "call": "gesture",
+   "args": {
+    "clip": "wave"
+   }
+  },
+  {
+   "at": 8.2,
+   "obj": "hero",
+   "call": "speak",
+   "args": {
+    "text": "Good evening!"
+   },
+   "dur": 1.1
+  },
+  {
+   "at": 9,
+   "obj": "elder",
+   "call": "gesture",
+   "args": {
+    "clip": "nod"
+   }
+  },
+  {
+   "at": 10.5,
+   "obj": "hero",
+   "call": "gesture",
+   "args": {
+    "clip": "talk"
+   },
+   "dur": 3
   },
   {
    "at": 2,
@@ -718,7 +837,6 @@
   }
  ],
  "files": {
-  "hero.js": "data:text/javascript;charset=utf-8;base64,Ly8gU3RhbmQtaW4gY2hhcmFjdGVyOiBhIHdhbGsgY3ljbGUgd2hpbGUgd2Fsa2luZyBhbmQgYSB3YXZlLCBib3RoIGZyb20gc2NlbmUgdGltZSB0IGFsb25lLgpleHBvcnQgZnVuY3Rpb24gYnVpbGQoVEhSRUUsIHBhcmFtcykgewogIGNvbnN0IGcgPSBuZXcgVEhSRUUuR3JvdXAoKTsKICBjb25zdCBtYXQgPSAoYykgPT4gbmV3IFRIUkVFLk1lc2hTdGFuZGFyZE1hdGVyaWFsKHsgY29sb3I6IGMsIHJvdWdobmVzczogMC44IH0pOwogIGNvbnN0IHNraW4gPSBtYXQocGFyYW1zLnNraW4pLCBjbG90aCA9IG1hdChwYXJhbXMuY2xvdGgpLCBkYXJrID0gbWF0KCIjMjIyMDJhIik7CiAgY29uc3QgYm9keSA9IG5ldyBUSFJFRS5NZXNoKG5ldyBUSFJFRS5DYXBzdWxlR2VvbWV0cnkoMC4yNCwgMC41LCA2LCAxNiksIGNsb3RoKTsgYm9keS5wb3NpdGlvbi55ID0gMS4wOyBnLmFkZChib2R5KTsKICBjb25zdCBoZWFkID0gbmV3IFRIUkVFLk1lc2gobmV3IFRIUkVFLlNwaGVyZUdlb21ldHJ5KDAuMiwgMjQsIDE2KSwgc2tpbik7IGhlYWQucG9zaXRpb24ueSA9IDEuNTU7IGcuYWRkKGhlYWQpOwogIGZvciAoY29uc3QgeCBvZiBbLTAuMDcsIDAuMDddKSB7IGNvbnN0IGUgPSBuZXcgVEhSRUUuTWVzaChuZXcgVEhSRUUuU3BoZXJlR2VvbWV0cnkoMC4wMywgMTAsIDgpLCBkYXJrKTsgZS5wb3NpdGlvbi5zZXQoeCwgMS41OCwgMC4xOCk7IGcuYWRkKGUpOyB9CiAgY29uc3QgbGltYiA9IChsZW4sIHIsIG0pID0+IHsgY29uc3QgcCA9IG5ldyBUSFJFRS5Hcm91cCgpOyBjb25zdCBsID0gbmV3IFRIUkVFLk1lc2gobmV3IFRIUkVFLkNhcHN1bGVHZW9tZXRyeShyLCBsZW4sIDQsIDEwKSwgbSk7IGwucG9zaXRpb24ueSA9IC1sZW4gLyAyIC0gcjsgcC5hZGQobCk7IHJldHVybiBwOyB9OwogIGNvbnN0IGFybUwgPSBsaW1iKDAuNDUsIDAuMDcsIGNsb3RoKSwgYXJtUiA9IGxpbWIoMC40NSwgMC4wNywgY2xvdGgpOwogIGFybUwucG9zaXRpb24uc2V0KC0wLjMyLCAxLjMyLCAwKTsgYXJtUi5wb3NpdGlvbi5zZXQoMC4zMiwgMS4zMiwgMCk7IGcuYWRkKGFybUwsIGFybVIpOwogIGNvbnN0IGxlZ0wgPSBsaW1iKDAuNDIsIDAuMDg1LCBkYXJrKSwgbGVnUiA9IGxpbWIoMC40MiwgMC4wODUsIGRhcmspOwogIGxlZ0wucG9zaXRpb24uc2V0KC0wLjEyLCAwLjYyLCAwKTsgbGVnUi5wb3NpdGlvbi5zZXQoMC4xMiwgMC42MiwgMCk7IGcuYWRkKGxlZ0wsIGxlZ1IpOwogIGcudXNlckRhdGEucGFydHMgPSB7IGJvZHksIGhlYWQsIGFybUwsIGFybVIsIGxlZ0wsIGxlZ1IgfTsKICByZXR1cm4gZzsKfQoKZXhwb3J0IGZ1bmN0aW9uIHVwZGF0ZShnLCB0LCBwYXJhbXMpIHsKICBjb25zdCBwID0gZy51c2VyRGF0YS5wYXJ0czsKICBjb25zdCB3YWxraW5nID0gdCA+PSBwYXJhbXMud2Fsa0Zyb20gJiYgdCA8PSBwYXJhbXMud2Fsa1RvOwogIGNvbnN0IHMgPSB3YWxraW5nID8gTWF0aC5zaW4oKHQgLSBwYXJhbXMud2Fsa0Zyb20pICogcGFyYW1zLnN0cmlkZSkgOiAwOwogIHAubGVnTC5yb3RhdGlvbi54ID0gcyAqIDAuNjsgcC5sZWdSLnJvdGF0aW9uLnggPSAtcyAqIDAuNjsKICBwLmFybUwucm90YXRpb24ueCA9IC1zICogMC41OyBwLmFybVIucm90YXRpb24ueCA9IHMgKiAwLjU7CiAgcC5ib2R5LnBvc2l0aW9uLnkgPSAxLjAgKyAod2Fsa2luZyA/IE1hdGguYWJzKHMpICogMC4wNCA6IDApOwogIHAuYXJtUi5yb3RhdGlvbi56ID0gMDsKICAvLyBXYXZlOiByYWlzZSB0aGUgcmlnaHQgYXJtIG92ZXIgMC40IHMsIHdhdmUgaXQsIGxvd2VyIGl0IG92ZXIgMC40IHMuCiAgY29uc3QgdzAgPSBwYXJhbXMud2F2ZUZyb20sIHcxID0gcGFyYW1zLndhdmVUbzsKICBpZiAodCA+IHcwICYmIHQgPCB3MSkgewogICAgY29uc3QgdXAgPSBNYXRoLm1pbigxLCAodCAtIHcwKSAvIDAuNCwgKHcxIC0gdCkgLyAwLjQpOwogICAgcC5hcm1SLnJvdGF0aW9uLnggPSAwOwogICAgcC5hcm1SLnJvdGF0aW9uLnogPSB1cCAqICgyLjUgKyBNYXRoLnNpbigodCAtIHcwKSAqIDkpICogMC4zNSk7CiAgfQogIHAuaGVhZC5yb3RhdGlvbi55ID0gMDsKfQo=",
   "fireflies.js": "data:text/javascript;charset=utf-8;base64,Ly8gRmlyZWZsaWVzOiBwb2ludHMgdGhhdCBkcmlmdCBhbmQgYmxpbmsgZnJvbSBzY2VuZSB0aW1lIHQgYWxvbmUsIGZhZGluZyBpbiBmcm9tIGZhZGVGcm9tLgpleHBvcnQgZnVuY3Rpb24gYnVpbGQoVEhSRUUsIHBhcmFtcywgY3R4KSB7CiAgY29uc3QgbiA9IE1hdGgubWF4KDEsIE1hdGgubWluKDUwMCwgTWF0aC5yb3VuZChwYXJhbXMuY291bnQpKSk7CiAgY29uc3Qgcm5kID0gY3R4LnJhbmRvbSg3KTsKICBjb25zdCBzZWVkcyA9IG5ldyBGbG9hdDMyQXJyYXkobiAqIDUpOwogIGZvciAobGV0IGkgPSAwOyBpIDwgc2VlZHMubGVuZ3RoOyBpKyspIHNlZWRzW2ldID0gcm5kKCk7CiAgY29uc3QgZ2VvbWV0cnkgPSBuZXcgVEhSRUUuQnVmZmVyR2VvbWV0cnkoKTsKICBnZW9tZXRyeS5zZXRBdHRyaWJ1dGUoInBvc2l0aW9uIiwgbmV3IFRIUkVFLkJ1ZmZlckF0dHJpYnV0ZShuZXcgRmxvYXQzMkFycmF5KG4gKiAzKSwgMykpOwogIGNvbnN0IGNvbG9yID0gbmV3IFRIUkVFLkNvbG9yKHBhcmFtcy5jb2xvcikubXVsdGlwbHlTY2FsYXIocGFyYW1zLmdsb3cpOwogIGNvbnN0IG1hdGVyaWFsID0gbmV3IFRIUkVFLlBvaW50c01hdGVyaWFsKHsgY29sb3IsIHNpemU6IHBhcmFtcy5zaXplLCB0cmFuc3BhcmVudDogdHJ1ZSwgb3BhY2l0eTogMCwgZGVwdGhXcml0ZTogZmFsc2UsIGJsZW5kaW5nOiBUSFJFRS5BZGRpdGl2ZUJsZW5kaW5nIH0pOwogIGNvbnN0IHBvaW50cyA9IG5ldyBUSFJFRS5Qb2ludHMoZ2VvbWV0cnksIG1hdGVyaWFsKTsKICBwb2ludHMuZnJ1c3R1bUN1bGxlZCA9IGZhbHNlOwogIHBvaW50cy51c2VyRGF0YS5zZWVkcyA9IHNlZWRzOwogIHJldHVybiBwb2ludHM7Cn0KCmV4cG9ydCBmdW5jdGlvbiB1cGRhdGUocG9pbnRzLCB0LCBwYXJhbXMpIHsKICBjb25zdCBzID0gcG9pbnRzLnVzZXJEYXRhLnNlZWRzLCBwb3MgPSBwb2ludHMuZ2VvbWV0cnkuYXR0cmlidXRlcy5wb3NpdGlvbjsKICBmb3IgKGxldCBpID0gMDsgaSA8IHBvcy5jb3VudDsgaSsrKSB7CiAgICBjb25zdCBrID0gaSAqIDUsIGEgPSB0ICogKDAuMyArIHNbayArIDNdICogMC40KSArIHNbayArIDRdICogNi4yODM7CiAgICBwb3Muc2V0WFlaKGksIChzW2tdIC0gMC41KSAqIHBhcmFtcy53aWR0aCArIE1hdGguc2luKGEpICogMC40LCAwLjQgKyBzW2sgKyAxXSAqIHBhcmFtcy5oZWlnaHQgKyBNYXRoLnNpbihhICogMS43KSAqIDAuMjUsIChzW2sgKyAyXSAtIDAuNSkgKiBwYXJhbXMuZGVwdGggKyBNYXRoLmNvcyhhKSAqIDAuNCk7CiAgfQogIHBvcy5uZWVkc1VwZGF0ZSA9IHRydWU7CiAgcG9pbnRzLm1hdGVyaWFsLm9wYWNpdHkgPSBNYXRoLm1heCgwLCBNYXRoLm1pbigxLCAodCAtIHBhcmFtcy5mYWRlRnJvbSkgLyBwYXJhbXMuZmFkZUZvcikpOwp9Cg=="
  }
 }
