@@ -9,11 +9,12 @@
  */
 import { cleanParamDecls, type HtmlClipParam } from "./htmlClipPackage";
 import {
-  lookTargetOf, modelAnimations, modelNodes, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_DEFAULT_LIGHTS, SCENE_DEFAULTS, SCENE_LOOPS,
+  cameraKeyOf, lookTargetOf, modelAnimations, sceneCameraDefs, modelNodes, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_DEFAULT_LIGHTS, SCENE_DEFAULTS, SCENE_LOOPS,
   stateAt, type SceneDoc, type SceneEase, type SceneEvent, type SceneLight, type SceneObject, type SceneShape, type SceneWorld, type Vec3,
 } from "./scene";
 import { getLookProp, SCENE_LOOK_CALLS, SCENE_LOOK_IDS, type SceneLookCall } from "./sceneLook";
 import { BUILTIN_CLIP_NAMES, SCENE_CHARACTER_CALLS, type SceneAnimationEntry } from "./sceneCharacter";
+import { SCENE_CAMERA_RIGS, SHOT_ANGLES, SHOT_HEIGHTS, SHOT_SIZES, type SceneCameraDef, type SceneShot } from "./sceneCamera";
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -270,9 +271,11 @@ function lookCalls(doc: SceneDoc, obj: string): [string, SceneLookCall][] | unde
 
 /** The calls an object (or the camera) offers: base functions (animation ones for models only), then its own functions. */
 export function sceneCalls(doc: SceneDoc, obj: string): SceneCallInfo[] {
-  if (obj === SCENE_CAMERA) {
+  if (cameraKeyOf(doc, obj)) {
     const d: Record<string, string> = { position: "Move the camera to [x, y, z].", moveTo: "Same as position.", lookAt: "Aim the camera at an object id or a point.", fov: "Field of view in degrees." };
-    return Object.keys(SCENE_CAMERA_FUNCTIONS).map((call) => ({ call, kind: "camera", description: d[call] ?? "" }));
+    // Scene Phase 3 (#352): every camera also has the rigs, lens and focus calls.
+    return [...Object.keys(SCENE_CAMERA_FUNCTIONS).map((call): SceneCallInfo => ({ call, kind: "camera", description: d[call] ?? "" })),
+      ...Object.entries(SCENE_CAMERA_RIGS).map(([call, r]): SceneCallInfo => ({ call, kind: "camera", description: r.description }))];
   }
   const look = lookCalls(doc, obj);
   if (look) return look.map(([call, c]) => ({ call, kind: "look" as const, description: c.description }));
@@ -295,7 +298,7 @@ export function sceneCalls(doc: SceneDoc, obj: string): SceneCallInfo[] {
 export type SceneArgField =
   | { name: string; kind: "vec3" | "scale"; label: string }
   /** An object id or a point; Scene Phase 2: or "camera" (camera), or an angle in degrees (angle); optional = may be left out. */
-  | { name: string; kind: "target"; label: string; camera?: boolean; angle?: boolean; optional?: boolean }
+  | { name: string; kind: "target"; label: string; camera?: boolean; angle?: boolean; optional?: boolean; numberLabel?: string }
   /** Scene Phase 2: a list of points (a walk path), an expression map, text, viseme keys. */
   | { name: string; kind: "points" | "expressions" | "text" | "visemes"; label: string; optional?: boolean }
   | { name: string; kind: "number"; label: string; min?: number; max?: number; step?: number; optional?: boolean }
@@ -306,9 +309,9 @@ export type SceneArgField =
 
 /** The argument fields of `call` on `obj`. */
 export function sceneCallArgs(doc: SceneDoc, obj: string, call: string): SceneArgField[] {
-  if (obj === SCENE_CAMERA) {
+  if (cameraKeyOf(doc, obj)) {
     const f = SCENE_CAMERA_FUNCTIONS[call];
-    if (!f) return [];
+    if (!f) return rigArgs(doc, call);
     if (f.prop === "fov") return [{ name: "value", kind: "number", label: "Field of view (°)", min: 2, max: 178, step: 1 }];
     if (f.prop === "target") return [{ name: "target", kind: "target", label: "Look at" }];
     return [{ name: f.arg, kind: "vec3", label: "Position" }];
@@ -396,15 +399,89 @@ function characterDefaultArgs(doc: SceneDoc, src: SceneObject, o: { position: Ve
   return undefined;
 }
 
+/** Scene Phase 3 (#352): the argument fields of a camera rig / lens call. */
+function rigArgs(doc: SceneDoc, call: string): SceneArgField[] {
+  const ids = objectsOf(doc).filter(isObj).map((o) => o.id);
+  switch (call) {
+    case "focalLength": return [{ name: "value", kind: "number", label: "Focal length (mm)", min: 4, max: 1200, step: 1 }];
+    case "fStop": return [{ name: "value", kind: "number", label: "f-stop", min: 0.7, max: 64, step: 0.1 }];
+    case "focus": return [{ name: "value", kind: "target", label: "Focus on", angle: true, numberLabel: "A distance" }];
+    case "rackFocus": return [{ name: "to", kind: "target", label: "Pull focus to", angle: true, numberLabel: "A distance" }, { name: "from", kind: "target", label: "From", angle: true, optional: true, numberLabel: "A distance" }];
+    case "dolly": return [{ name: "path", kind: "points", label: "Path (points)", optional: true }, { name: "distance", kind: "number", label: "Or distance (in +)", step: 0.1, optional: true }];
+    case "truck": return [{ name: "distance", kind: "number", label: "Distance (right +)", step: 0.1 }];
+    case "crane": return [{ name: "distance", kind: "number", label: "Distance (up +)", step: 0.1 }];
+    case "orbit": return [{ name: "target", kind: "target", label: "Around", optional: true }, { name: "to", kind: "number", label: "To angle (°)", step: 5 }, { name: "from", kind: "number", label: "From angle (°)", step: 5, optional: true },
+      { name: "radius", kind: "number", label: "Radius", min: 0.1, step: 0.1, optional: true }, { name: "height", kind: "number", label: "Height", step: 0.1, optional: true }];
+    case "follow": return [{ name: "target", kind: "select", label: "Follow", options: ids }, { name: "offset", kind: "vec3", label: "Offset" }, { name: "damping", kind: "number", label: "Smoothing (s)", min: 0, max: 5, step: 0.05, optional: true }];
+    case "handheld": return [{ name: "amplitude", kind: "number", label: "Amplitude", min: 0, max: 2, step: 0.005, optional: true }, { name: "frequency", kind: "number", label: "Frequency (Hz)", min: 0.1, max: 20, step: 0.1, optional: true }];
+    case "frame": return [{ name: "subject", kind: "select", label: "Subject", options: ids }, { name: "shot", kind: "select", label: "Shot", options: [...SHOT_SIZES], optional: true },
+      { name: "angle", kind: "select", label: "Angle", options: [...SHOT_ANGLES], optional: true }, { name: "height", kind: "select", label: "Height", options: [...SHOT_HEIGHTS], optional: true }];
+  }
+  return [];
+}
+/** Scene Phase 3: default arguments of a camera rig / lens call (from the camera at that time). */
+function rigDefaults(doc: SceneDoc, call: string, pose: { fov: number; position: Vec3; target: Vec3 }): Record<string, unknown> {
+  const first = objectsOf(doc).find((o) => isObj(o) && isObj(o.character)) ?? objectsOf(doc).find(isObj);
+  const d = Math.hypot(pose.target[0] - pose.position[0], pose.target[1] - pose.position[1], pose.target[2] - pose.position[2]);
+  switch (call) {
+    case "focalLength": return { value: 35 };
+    case "fStop": return { value: 2.8 };
+    case "focus": return { value: r3(d) || 5 };
+    case "rackFocus": return first ? { to: first.id } : { to: r3(d) || 5 };
+    case "dolly": return { distance: 1 };
+    case "truck": case "crane": return { distance: 1 };
+    case "orbit": { const a = Math.atan2(pose.position[0] - pose.target[0], pose.position[2] - pose.target[2]) * 180 / Math.PI; return { to: Math.round(a + 90) }; }
+    case "follow": return first ? { target: first.id, offset: vecR([pose.position[0] - (first.position?.[0] ?? 0), pose.position[1] - (first.position?.[1] ?? 0), pose.position[2] - (first.position?.[2] ?? 0)]) } : {};
+    case "handheld": return { amplitude: 0.03 };
+    case "frame": return first ? { subject: first.id, shot: "medium" } : {};
+  }
+  return {};
+}
+
+/** Scene Phase 3: add a camera at the default camera's pose at `at` (or a given one); returns its id. */
+export function addSceneCamera(doc: SceneDoc, at = 0, patch: Partial<SceneCameraDef> = {}): { doc: SceneDoc; id: string } {
+  const w = isObj(doc.world) ? doc.world : {};
+  const cams = Array.isArray(w.cameras) ? w.cameras : [];
+  const taken = new Set([...cams.map((c) => c.id), ...objectsOf(doc).filter(isObj).map((o) => o.id), ...lightIdsOf(doc), "camera", ...SCENE_LOOK_IDS]);
+  let id = patch.id && !taken.has(patch.id) ? patch.id : "cam2";
+  for (let k = 2; taken.has(id); k++) id = `cam${k}`;
+  const s = stateAt(doc, at);
+  const c: SceneCameraDef = clean({ position: vecR(s.camera.position), lookAt: vecR(s.camera.target), fov: r3(s.camera.fov), ...patch, id });
+  return { doc: { ...doc, world: { ...w, cameras: [...cams, c] } }, id };
+}
+/** Scene Phase 3: change camera `id` ("camera" = the default's start); `undefined` removes a field. */
+export function updateSceneCamera(doc: SceneDoc, id: string, patch: Partial<Omit<SceneCameraDef, "id">>): SceneDoc {
+  const w = isObj(doc.world) ? doc.world : {};
+  if (id === SCENE_CAMERA) { const cam = clean({ ...(isObj(w.camera) ? w.camera : {}), ...patch } as Record<string, unknown>); delete cam.name; return { ...doc, world: { ...w, camera: cam } }; }
+  const cams = Array.isArray(w.cameras) ? w.cameras : [];
+  if (!cams.some((c) => c.id === id)) return doc;
+  return { ...doc, world: { ...w, cameras: cams.map((c) => (c.id === id ? clean({ ...c, ...patch }) : c)) } };
+}
+/** Scene Phase 3: remove camera `id`, its events and its shots. */
+export function removeSceneCamera(doc: SceneDoc, id: string): SceneDoc {
+  const w = isObj(doc.world) ? doc.world : {};
+  const cams = (Array.isArray(w.cameras) ? w.cameras : []).filter((c) => c.id !== id);
+  const { cameras: _c, ...rest } = w; void _c;
+  let out: SceneDoc = { ...doc, world: cams.length ? { ...rest, cameras: cams } : rest, events: eventsOf(doc).filter((e) => e.obj !== id) };
+  if (Array.isArray(doc.shots)) { const shots = doc.shots.filter((x) => x.camera !== id); out = shots.length ? { ...out, shots } : (({ shots: _s, ...r }) => (void _s, r as SceneDoc))(out); }
+  return out;
+}
+/** Scene Phase 3: set the shots (sorted by time; an empty list removes them). */
+export function setSceneShots(doc: SceneDoc, shots: SceneShot[]): SceneDoc {
+  const sorted = shots.map((x, i) => ({ x, i })).sort((a, b) => a.x.at - b.x.at || a.i - b.i).map(({ x }) => clean({ ...x, at: roundSec(x.at) }));
+  return sorted.length ? { ...doc, shots: sorted } : (({ shots: _s, ...r }) => (void _s, r as SceneDoc))(doc);
+}
+
 /** Default arguments for a new `call` at `at`: the value the object (or camera) has there, so adding changes nothing until edited. */
 export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: number): Record<string, unknown> {
   const s = stateAt(doc, at);
-  if (obj === SCENE_CAMERA) {
+  if (cameraKeyOf(doc, obj)) {
     const f = SCENE_CAMERA_FUNCTIONS[call];
-    if (!f) return {};
-    if (f.prop === "fov") return { value: r3(s.camera.fov) };
-    if (f.prop === "target") return { target: vecR(s.camera.target) };
-    return { [f.arg]: vecR(s.camera.position) };
+    const pose = s.cameras?.find((c) => c.id === obj) ?? s.camera;
+    if (!f) return rigDefaults(doc, call, pose);
+    if (f.prop === "fov") return { value: r3(pose.fov) };
+    if (f.prop === "target") return { target: vecR(pose.target) };
+    return { [f.arg]: vecR(pose.position) };
   }
   const look = lookTargetOf(doc, obj);
   if (look) {
@@ -444,7 +521,7 @@ export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: nu
 
 /** Calls that change something over time (a `dur` and an ease make sense); the others switch at `at` (or fade). */
 export function callTweens(doc: SceneDoc, obj: string, call: string): boolean {
-  if (obj === SCENE_CAMERA) return !!SCENE_CAMERA_FUNCTIONS[call];
+  if (cameraKeyOf(doc, obj)) return !!SCENE_CAMERA_FUNCTIONS[call] || !!SCENE_CAMERA_RIGS[call];
   const look = lookTargetOf(doc, obj);
   if (look) return !!SCENE_LOOK_CALLS[look.kind][call];
   const co = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
@@ -514,6 +591,8 @@ export interface SceneTrack {
   id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "character" | "light" | "look" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
   /** P81b: a light track's index in the drawn lights. */
   light?: number;
+  /** Scene Phase 3: a camera track's camera id. */
+  camera?: string;
   /** Scene Phase 1 (#350): what events on this track name (a light's id, "post", "fog" or "sky"); unset = `id` (none for a light without an id). */
   obj?: string;
 }
@@ -531,6 +610,8 @@ export function sceneTracks(doc: SceneDoc, minSec = 0.4): SceneTrack[] {
     { id: SCENE_TRACK, label: "Scene", kind: "scene", detail: "name, length, background, lights", rows: 1, blocks: [] },
     { id: SCENE_CAMERA, label: "Camera", kind: "camera", detail: "position, look-at point, field of view", rows: 1, blocks: [] },
   ];
+  // Scene Phase 3: one track per extra camera (its events).
+  for (const c of sceneCameraDefs(doc).slice(1)) tracks.push({ id: c.id, label: c.name || c.id, kind: "camera", detail: "camera", rows: 1, blocks: [], camera: c.id });
   for (const o of objectsOf(doc)) {
     if (!isObj(o) || typeof o.id !== "string") continue;
     const script = isObj(o.script) && typeof o.script.file === "string" ? o.script.file : undefined;

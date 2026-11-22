@@ -132,7 +132,7 @@ describe("scene agent: world, new scenes, read models (P78)", () => {
     expect(ball.functions).toEqual(["setMood"]);
     expect(ball.calls.find((c) => c.call === "moveTo")).toMatchObject({ kind: "base", tweens: true, args: { position: "[x, y, z]" } });
     expect(ball.calls.find((c) => c.call === "setMood")).toMatchObject({ kind: "custom", args: { mood: 'select "calm" | "alert" (default "calm")' } });
-    expect(v.camera.calls.map((c) => c.call)).toEqual(["position", "moveTo", "lookAt", "fov"]);
+    expect(v.camera.calls.map((c) => c.call)).toEqual(["position", "moveTo", "lookAt", "fov", "focalLength", "focus", "fStop", "rackFocus", "dolly", "truck", "crane", "orbit", "follow", "handheld", "frame"]);
     expect(v.events.map((e) => e.index)).toEqual([0, 1, 2, 3, 4, 5]);
     const withFile = ok(applySceneTool("add_scene_object", sample(), { file: { name: "bot.glb", dataUrl: BOT } })).doc;
     expect(sceneForAgent(withFile).files!["bot.glb"]).toMatch(/^<data:model\/gltf-binary;base64,… \d+ chars>$/);

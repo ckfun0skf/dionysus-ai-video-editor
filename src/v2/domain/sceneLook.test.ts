@@ -198,9 +198,10 @@ describe("Scene Phase 1: the benchmark shot (epic #349)", () => {
     expect(at(8).lights.find((l) => l.id === "lantern")!.intensity).toBe(0.9);
     expect(at(14).lights.find((l) => l.id === "sun")!.color).toBe("#ff7a4a");
     expect(at(9.99).camera.position).not.toEqual(at(10).camera.position);
-    expect(at(10).camera.position).toEqual([3.4, 1.65, 3.6]);
-    expect(at(10.3).post!.dof!.focus).toBe(6.2);
-    expect(at(12).post!.dof!.focus).toBe(3.3);
+    // Phase 3: the close-up camera from 10 s (framed on the hero), focus pulled from the lantern to the hero's eyes.
+    expect(at(10).cameraId).toBe("close");
+    expect(at(10.3).post!.dof!.focus).toBeCloseTo(3.4, 1);
+    expect(at(12).post!.dof!.focus).toBeCloseTo(1.34, 1);
     expect(at(15).fog!.far).toBe(50);
   });
 });

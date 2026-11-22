@@ -228,7 +228,8 @@ environment); animated values never reload it.
 **Benchmark shot.** `src/v2/domain/__fixtures__/benchmarkShot.ts` (also `public/samples/scenes/benchmark-shot.scene.json`)
 is the epic's dusk village street, re-rendered at the end of every phase. Phase 1 renders:
 [before](benchmark/phase1-before.jpg) (the same shot without the Phase 1 fields) and [after](benchmark/phase1-after.jpg).
-Phase 2 (characters): [after](benchmark/phase2-after.jpg) (its "before" is Phase 1's after).
+Phase 2 (characters): [after](benchmark/phase2-after.jpg) (its "before" is Phase 1's after). Phase 3 (cameras):
+[after](benchmark/phase3-after.jpg) — a wide establishing shot, a handheld follow, an orbit and a close-up with a focus pull.
 
 ## Characters (Scene Phase 2, #351)
 
@@ -277,6 +278,42 @@ blended into walking / running by speed, then the sit pose by its weight, then g
 **Not yet** (later phases): foot IK on uneven ground, eye IK separate from the head, retargeting between rigs with
 very different rest poses beyond rest-rotation correction, and lip sync from a project audio asset by id (use the
 editor's audio file picker or give visemes).
+
+## Cinematography (Scene Phase 3, #352)
+
+Several cameras, cuts between them, lenses and camera moves. Every field is optional; a scene with one camera renders
+as before (its state has no new fields).
+
+| Field | Notes |
+|---|---|
+| `world.cameras[]` | `{ id, name?, position, lookAt, fov?, lens? }`: more cameras besides the default `camera` (`world.camera`). Ids are unique among objects, lights, post / fog / sky and cameras |
+| `lens` (on any camera, `world.camera` too) | `{ focalLength (mm, 4–1200), sensor (mm wide, default 36 = full frame), focus (a distance, or an object id — followed; a character's eyes), fStop (0.7–64) }`. A focal length replaces the fov (vertical fov of a 16:9 frame); focus and f-stop drive `world.post.dof` while the camera is seen (aperture ≈ 0.028 / f-stop) |
+| `shots[]` | `{ at, camera, name? }`: the camera seen from `at` on (sorted by time; before the first shot the default camera). One scene becomes a cut sequence |
+
+**Camera calls.** Every camera (`"obj": "camera"` or its id) has `position` / `moveTo`, `lookAt`, `fov` and:
+
+| Call | Arguments | What it does |
+|---|---|---|
+| `focalLength` | `value` (mm) | zoom (tweens the fov) |
+| `focus` / `fStop` | `value`: a distance or an object id / an f-stop | the lens's focus and aperture |
+| `rackFocus` | `to`, `from?` (distance or object) | pulls focus over `dur`, then keeps following the object |
+| `dolly` | `path` (points: a Catmull-Rom spline from where the camera is) or `distance` (along the view) | moves over `dur` |
+| `truck` / `crane` | `distance` | moves sideways (right +) / up, the aim moving with it |
+| `orbit` | `to` (degrees), `from?`, `target?` (object or point; default the aim), `radius?`, `height?` | circles the target over `dur` (an object target is followed; it glides onto the circle in 0.5 s) and holds the end |
+| `follow` | `target` (object), `offset?` (default where the camera is now), `damping?` (s, default 0.4) | follows at the offset, looking at it; smoothed with a weighted look-back over the subject's path (no state between frames); `dur` 0 = until the camera's next move |
+| `handheld` | `amplitude?` (default 0.03), `frequency?` (Hz, default 1.2), `seed?` | seeded smooth shake added on top, ramping in and out; `dur` 0 = until the next handheld (amplitude 0 stops) |
+| `frame` | `subject`, `shot?` (`wide`, `full`, `medium`, `closeup`, `extreme-closeup`), `angle?` (`front`, `left`, `right`, `back`, `three-quarter-left`, `three-quarter-right`), `height?` (`eye`, `low`, `high`, `overhead`) | composes the shot from the subject's height and facing where it is when the move ends, at the camera's fov; moves there over `dur` |
+
+All of them are computed from the document and `t` (camera chains may compute a value from the time itself and hold
+their end), so a frame is the same in preview, export and any seek order. `stateAt` gives `camera` (the seen one)
+and, with more cameras or shots, `cameraId` and `cameras` (every camera's pose). A character's `lookAt "camera"`
+looks into the camera being seen.
+
+**Editor.** Scene > Cameras and shots: the cameras (each with its own track and form — name, fov or focal length,
+sensor, position, aim, focus, f-stop, and every move in its add-event list), Add camera (from the view at the
+playhead), the shots (time and camera) and Cut at the playhead; a shot strip under the ruler shows which camera is seen
+when. **Not yet:** splitting a scene clip into shot sub-clips on the main timeline, a viewfinder per camera, and
+rule-of-thirds / safe-area overlays; the Edit view draws the camera being seen.
 
 ## Validation
 
@@ -422,6 +459,8 @@ the schemas) and AI guide RULE 79:
 | `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults); Phase 1: `post`, `fog`, `sky`, `environment`, `export` (each replaces the whole entry, `true` = defaults, `null` removes it). |
 | `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`, and (Phase 1) `lookAt`, `groundColor`, `shadow`; omit `light` to add one, `remove: true` to delete it. |
 | `set_scene_script` (P82) | Script objects: omit `objectId` to add one from `template` (`particles`, `shape`, `text`, `empty`) or `code` (with optional `id`, `params`, `position`); with `objectId` set its `code`, `template` (code and params) or `params` (replaces the map; `null` removes them), or `remove: true` to make it a plain shape. Code with static problems is refused with them listed. `list_scene_objects` gives each Script object's code and the templates. |
+| `set_scene_camera` (Phase 3) | Cameras: omit `camera` to add one (`id?`, `at`: from the view then, `name`, `position`, `lookAt`, `fov`, `lens`); `camera: <id>` (`"camera"` = the default) changes its start values; `remove: true` deletes it with its events and shots. |
+| `set_scene_shots` (Phase 3) | `shots: [{ at, camera, name? }]` replaces the cuts (sorted); `null` removes them. Camera moves and rigs are events on the camera's id. |
 | `set_scene_animation` (Phase 2) | The animation library: `name`, `file` (`{ url }` or `{ name, dataUrl }`, a .glb) adds or replaces a clip; `clip`, `stride`, `length`, `loop`, `mask`, `rig`; `remove: true` deletes it (refused while an event still uses it). Characters come from `add_scene_object` with `props: { character: {} }` (mannequin) or a `.vrm` / humanoid `.glb` `file`; their calls are ordinary events. |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 

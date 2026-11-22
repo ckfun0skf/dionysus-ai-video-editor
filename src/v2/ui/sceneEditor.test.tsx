@@ -371,4 +371,19 @@ describe("P82 scene editor: Script objects", () => {
     expect(t.q('[data-testid="event-form"]').textContent).toMatch(/Path \(points\)/);
     t.done();
   });
+  it("Scene Phase 3: the scene form adds a camera (its own track and form) and a cut; the shot strip shows the shots", async () => {
+    const t = await open();
+    await t.click(t.q('[data-testid="scene-add-camera"]'));
+    expect(t.work().world!.cameras![0]).toMatchObject({ id: "cam2" });
+    expect(t.q('[data-testid="camera-form"]').textContent).toMatch(/cam2/);
+    await t.typeIn(t.field("Focal length (mm)"), "50");
+    expect(t.work().world!.cameras![0].lens).toEqual({ focalLength: 50 });
+    const track = [...t.el.querySelectorAll<HTMLElement>(".v2-sed-track")].find((x) => x.querySelector(".v2-sed-tname span")?.textContent === "cam2")!;
+    expect(track.className).toMatch(/kind-camera/);
+    await t.click([...t.el.querySelectorAll<HTMLElement>(".v2-sed-tname")].find((b) => b.textContent === "Scene")!);
+    await t.click(t.q('[data-testid="scene-add-shot"]'));
+    expect(t.work().shots).toEqual([{ at: 0, camera: "cam2" }]);
+    expect(t.q('[data-testid="scene-shot-strip"]').textContent).toMatch(/cam2/);
+    t.done();
+  });
 });

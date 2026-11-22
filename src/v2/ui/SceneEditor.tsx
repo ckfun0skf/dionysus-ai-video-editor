@@ -14,6 +14,7 @@ import {
   fogBase, lookTargetOf, postBase, SCENE_AAS, SCENE_TONE_MAPPINGS, skyBase, updateSceneLook, type SceneMaterial, type SceneMaterialType,
   addSceneAnimation, addSceneCharacter, audioVisemeFrames, autoRig, BUILTIN_CLIP_NAMES, glbInfoOfDataUrl, removeSceneAnimation, sceneClipNames,
   visemesFromEnergy, type SceneCharacter,
+  addSceneCamera, cameraKeyOf, removeSceneCamera, sceneCameraDefs, sceneShots, setSceneShots, updateSceneCamera, type SceneLens,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -31,7 +32,9 @@ import { ConfirmDialog } from "./Timeline";
  */
 export type SceneSel = { kind: "scene" } | { kind: "camera" } | { kind: "light"; index: number } | { kind: "object"; id: string } | { kind: "event"; index: number }
   /** Scene Phase 1 (#350): world.post / fog / sky. */
-  | { kind: "look"; id: LookId };
+  | { kind: "look"; id: LookId }
+  /** Scene Phase 3 (#352): another camera (world.cameras) by id. */
+  | { kind: "cam"; id: string };
 type LookId = "post" | "fog" | "sky";
 
 export interface SceneEditorProps {
@@ -131,15 +134,15 @@ export function SceneEditor(props: SceneEditorProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   const charInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "look" ? `k${sel.id}` : sel.kind === "camera" ? "c" : "s";
+  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "look" ? `k${sel.id}` : sel.kind === "cam" ? `m${sel.id}` : sel.kind === "camera" ? "c" : "s";
   useEffect(() => { if (panelRef.current) panelRef.current.scrollTop = 0; }, [selKey]);
   // P80 (phone): a new selection keeps a matching sheet open (e.g. Add event → the new event's Timing), else closes it.
   useEffect(() => {
     setPart((x) => {
       if (!x) return x;
       const ok: Part[] = sel.kind === "event" ? ["timing", "args"] : sel.kind === "object" ? ["props", "model", "addEvent"] : sel.kind === "camera" ? ["camera", "addEvent"]
-        : sel.kind === "light" ? ["light", "addEvent"] : sel.kind === "look" ? ["look", "addEvent"] : ["scene", "lights", "add"];
-      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : sel.kind === "light" ? "light" : sel.kind === "look" ? "look" : sel.kind === "camera" ? "camera" : undefined;
+        : sel.kind === "light" ? ["light", "addEvent"] : sel.kind === "look" ? ["look", "addEvent"] : sel.kind === "cam" ? ["camera", "addEvent"] : ["scene", "lights", "add"];
+      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : sel.kind === "light" ? "light" : sel.kind === "look" ? "look" : sel.kind === "camera" || sel.kind === "cam" ? "camera" : undefined;
     });
   }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -472,7 +475,7 @@ export function SceneEditor(props: SceneEditorProps) {
   const step = pps >= 80 ? 0.5 : pps >= 40 ? 1 : 2;
   for (let s = 0; s <= span + 1e-9; s += step) ticks.push(Math.round(s * 1000) / 1000);
   const selObj = sel.kind === "object" ? doc.objects.find((o) => o.id === sel.id) : undefined;
-  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "look" ? { kind: "look", id: t.id as LookId }
+  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? (t.camera ? { kind: "cam", id: t.camera } : { kind: "camera" }) : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "look" ? { kind: "look", id: t.id as LookId }
     : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
   /** P81b: the camera and objects have events (the Scene track is settings); Scene Phase 1 (#350): so do lights with an id, post, fog and sky. */
   const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script" || t.kind === "character" || t.kind === "look" || (t.kind === "light" && !!t.obj);
@@ -498,9 +501,20 @@ export function SceneEditor(props: SceneEditorProps) {
             <span className="v2-sed-knob" style={{ left: localSec * pps }} aria-hidden />
           </div>
         </div>
+        {/* Scene Phase 3 (#352): the shot strip — which camera is seen when (tap a shot to edit the cameras and shots). */}
+        {sceneShots(doc).length > 0 && <div className="v2-sed-shotstrip" data-testid="scene-shot-strip" style={{ height: 22, display: "flex" }}>
+          <div className="v2-sed-corner" style={{ width: LABEL_W(mobile) }}><small>Shots</small></div>
+          <div style={{ position: "relative", width }}>
+            {(() => { const list = sceneShots(doc), all = list[0].at > 0 ? [{ at: 0, camera: SCENE_CAMERA }, ...list] : list; return all.map((x, i) => {
+              const end = i + 1 < all.length ? all[i + 1].at : span;
+              return <button key={i} type="button" className="v2-sed-shot" title={`${x.camera} from ${x.at}s`} onClick={() => { setSel({ kind: "scene" }); setPart(mobile ? "scene" : undefined); }}
+                style={{ position: "absolute", left: x.at * pps, width: Math.max(18, (end - x.at) * pps - 2), top: 2, height: 18, fontSize: 11, overflow: "hidden", whiteSpace: "nowrap", borderRadius: 4 }}><Ic g="camera" size={11} /> {x.camera}</button>;
+            }); })()}
+          </div>
+        </div>}
         {tracks.map((t) => {
-          const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "scene") || (sel.kind === "camera" && t.kind === "camera")
-            || (sel.kind === "light" && t.kind === "light" && sel.index === t.light) || (sel.kind === "look" && t.kind === "look" && sel.id === t.id);
+          const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "scene") || (sel.kind === "camera" && t.kind === "camera" && !t.camera)
+            || (sel.kind === "light" && t.kind === "light" && sel.index === t.light) || (sel.kind === "look" && t.kind === "look" && sel.id === t.id) || (sel.kind === "cam" && t.camera === sel.id);
           const tid = t.obj ?? t.id;
           const drop = draft?.target === tid && tid ? (draft.problem ? "is-nodrop" : "is-drop") : "";
           return <div key={t.id || "missing"} className={`v2-sed-track kind-${t.kind} ${on ? "is-sel" : ""} ${drop}`} style={{ height: t.rows * LANE + 4 }}>
@@ -548,9 +562,10 @@ export function SceneEditor(props: SceneEditorProps) {
     ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(ownerSel(doc, selEventNow.obj))} atNow={atNow} />
     : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} runIssues={scriptIssues.filter((x) => x.id === selObj.id)} />
       : sel.kind === "camera" ? <CameraForm doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} />
+        : sel.kind === "cam" ? <CameraForm key={`m${sel.id}`} id={sel.id} doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} onDeleted={() => setSel({ kind: "scene" })} />
         : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} atNow={atNow} onDeleted={() => setSel({ kind: "scene" })} />
           : sel.kind === "look" ? <LookForm key={`k${sel.id}`} doc={doc} id={sel.id} issues={issues} edit={edit} part={pt} atNow={atNow} onRemoved={() => setSel({ kind: "scene" })} />
-            : <SceneForm doc={doc} edit={edit} part={pt} issues={issues} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} onPickLook={(id) => setSel({ kind: "look", id })} />;
+            : <SceneForm doc={doc} edit={edit} part={pt} issues={issues} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} onPickLook={(id) => setSel({ kind: "look", id })} atNow={atNow} onPickCam={(id) => setSel({ kind: "cam", id })} />;
   const panel = (
     <div ref={panelRef} className="v2-sed-panel" aria-label="Edit selection">
       {form()}
@@ -701,6 +716,9 @@ export function SceneEditor(props: SceneEditorProps) {
     ...(lightHasPosition(selLight) ? [ctxTool("move3d", "Move", () => setView("edit"), { on: view === "edit", title: "Move it in the Edit view" })] : []),
     ...(selLight.id && sceneCalls(doc, selLight.id).length ? [ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a light change at the playhead (${atNow}s)` })] : []),
     ctxTool("🗑", "Delete", () => { const i = sel.index; void edit("delete light", (d) => removeSceneLight(d, i)); setSel({ kind: "scene" }); }, { danger: true, title: "Delete this light" }),
+  ] : sel.kind === "cam" ? [
+    ctxTool("camera", "Camera", () => open("camera"), { on: part === "camera", title: "This camera's start values and lens" }),
+    ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a camera move at the playhead (${atNow}s)` }),
   ] : sel.kind === "look" ? [
     ctxTool("effect", LOOK_NAME[sel.id], () => open("look"), { on: part === "look", title: `world.${sel.id} at 0 s` }),
     ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a change at the playhead (${atNow}s)` }),
@@ -842,6 +860,7 @@ const LOOK_IDS: LookId[] = ["post", "fog", "sky"];
 /** Where the editor goes when an event of `obj` is deleted: its camera, light, look or object. */
 function ownerSel(doc: SceneDoc, obj: string): SceneSel {
   if (obj === SCENE_CAMERA) return { kind: "camera" };
+  if (cameraKeyOf(doc, obj)) return { kind: "cam", id: obj };
   const look = lookTargetOf(doc, obj);
   if (look?.kind === "light") { const i = sceneLights(doc).lights.findIndex((l) => l.id === obj); return i >= 0 ? { kind: "light", index: i } : { kind: "scene" }; }
   if (look) return { kind: "look", id: look.kind as LookId };
@@ -861,7 +880,7 @@ function newLook(doc: SceneDoc, id: LookId): Record<string, unknown> {
 /** Read a picked file as a data: URL. */
 const fileDataUrl = (f: File) => new Promise<string>((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(r.error); r.readAsDataURL(f); });
 
-function SceneForm({ doc, edit, part, issues, onPickLight, onPickCamera, onPickLook }: { doc: SceneDoc; edit: Edit; part?: Part; issues: SceneIssue[]; onPickLight: (i: number) => void; onPickCamera: () => void; onPickLook: (id: LookId) => void }) {
+function SceneForm({ doc, edit, part, issues, atNow, onPickLight, onPickCamera, onPickLook, onPickCam }: { doc: SceneDoc; edit: Edit; part?: Part; issues: SceneIssue[]; atNow: number; onPickLight: (i: number) => void; onPickCamera: () => void; onPickLook: (id: LookId) => void; onPickCam: (id: string) => void }) {
   const w = worldOf(doc);
   const env = objOrUndef(w.environment);
   const envInput = useRef<HTMLInputElement>(null);
@@ -901,6 +920,7 @@ function SceneForm({ doc, edit, part, issues, onPickLight, onPickCamera, onPickL
         onCommit={(v) => edit("export supersampling", (d) => updateSceneLook(d, "export", v === "1" ? undefined : { supersample: Number(v) }))} />
       <Problems list={[...issuesAt(issues, "world.environment"), ...issuesAt(issues, "world.export")]} />
       <AnimationLibrary doc={doc} edit={edit} issues={issues} />
+      <CamerasAndShots doc={doc} edit={edit} issues={issues} atNow={atNow} onPickCamera={onPickCamera} onPickCam={onPickCam} />
     </>}
     {(all || part === "lights") && <>
       {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
@@ -919,29 +939,72 @@ function SceneForm({ doc, edit, part, issues, onPickLight, onPickCamera, onPickL
 }
 
 /** P81b: the camera: its start values (world.camera) and adding a camera move. */
-function CameraForm({ doc, issues, edit, part, atNow }: { doc: SceneDoc; issues: SceneIssue[]; edit: Edit; part?: Part; atNow: number }) {
-  const base = sceneCameraBase(doc);
+function CameraForm({ doc, issues, edit, part, atNow, id = SCENE_CAMERA, onDeleted }: { doc: SceneDoc; issues: SceneIssue[]; edit: Edit; part?: Part; atNow: number; id?: string; onDeleted?: () => void }) {
+  const def = sceneCameraDefs(doc).find((c) => c.id === id) ?? sceneCameraDefs(doc)[0];
+  const raw = id === SCENE_CAMERA ? (doc.world?.camera ?? {}) : (doc.world?.cameras ?? []).find((c) => c.id === id) ?? {};
+  const lens: SceneLens = raw.lens ?? {};
   const all = !part;
-  const calls = sceneCalls(doc, SCENE_CAMERA);
+  const calls = sceneCalls(doc, id);
   const [call, setCall] = useState("moveTo");
+  const put = (label: string, patch: Record<string, unknown>) => edit(label, (d) => updateSceneCamera(d, id, patch));
+  const putLens = (label: string, patch: Partial<SceneLens>) => { const next = Object.fromEntries(Object.entries({ ...lens, ...patch }).filter(([, v]) => v !== undefined)); return put(label, { lens: Object.keys(next).length ? next : undefined }); };
+  const path = id === SCENE_CAMERA ? "world.camera" : `world.cameras[${(doc.world?.cameras ?? []).findIndex((c) => c.id === id)}]`;
+  const ids = doc.objects.map((o) => o.id);
   return <div className="v2-sed-form" data-testid="camera-form">
-    {all && <h4><Ic g="camera" size={16} /> Camera</h4>}
+    {all && <h4><Ic g="camera" size={16} /> {id === SCENE_CAMERA ? "Camera" : def.name || id}</h4>}
     {(all || part === "camera") && <>
       {all && <h5>At 0 s</h5>}
-      <NumField label="Field of view (°)" value={base.fov} min={2} max={178} step={1} onCommit={(v) => edit("camera fov", (d) => updateSceneWorld(d, { camera: { fov: v } }))} />
-      <Vec3Field label="Position" value={base.position} onCommit={(v) => edit("camera position", (d) => updateSceneWorld(d, { camera: { position: v } }))} />
-      <Vec3Field label="Looks at" value={base.lookAt} onCommit={(v) => edit("camera target", (d) => updateSceneWorld(d, { camera: { lookAt: v } }))} />
-      <Problems list={issuesAt(issues, "world.camera")} />
-      <p className="v2-abnote">In the Edit view, drag the camera or its look-at point (the yellow dot). With no camera event selected a drag changes these start values; with Auto-key it adds or updates a camera move ending at the playhead.</p>
+      {id !== SCENE_CAMERA && <TextField label="Name" value={def.name ?? ""} onCommit={(v) => put("camera name", { name: v || undefined })} />}
+      {lens.focalLength === undefined && <NumField label="Field of view (°)" value={r1(def.fov)} min={2} max={178} step={1} onCommit={(v) => put("camera fov", { fov: v })} />}
+      <NumField label="Focal length (mm)" value={lens.focalLength} min={4} max={1200} step={1} optional onCommit={(v) => putLens("focal length", { focalLength: v })} />
+      {lens.focalLength !== undefined && <NumField label="Sensor width (mm)" value={lens.sensor ?? 36} min={4} max={100} step={0.5} onCommit={(v) => putLens("sensor", { sensor: v === 36 ? undefined : v })} />}
+      <Vec3Field label="Position" value={def.position} onCommit={(v) => put("camera position", { position: v })} />
+      <Vec3Field label="Looks at" value={def.target} onCommit={(v) => put("camera target", { lookAt: v })} />
+      <SelectField label="Focus on" value={typeof lens.focus === "string" ? lens.focus : lens.focus !== undefined ? "#d" : ""} options={["", "#d", ...ids]} labels={{ "": "— (post settings)", "#d": "A distance" }}
+        onCommit={(v) => putLens("focus", { focus: v === "" ? undefined : v === "#d" ? 5 : v })} />
+      {typeof lens.focus === "number" && <NumField label="Focus distance" value={lens.focus} min={0.01} step={0.1} onCommit={(v) => putLens("focus distance", { focus: v ?? 5 })} />}
+      <NumField label="f-stop" value={lens.fStop} min={0.7} max={64} step={0.1} optional onCommit={(v) => putLens("f-stop", { fStop: v })} />
+      <Problems list={issuesAt(issues, path)} />
+      <p className="v2-abnote">{id === SCENE_CAMERA ? "In the Edit view, drag the camera or its look-at point (the yellow dot). " : "Show this camera from a time on with a shot (Scene > Shots). "}Focus and f-stop drive the depth of field when the scene's post-processing has it.</p>
+      {all && id !== SCENE_CAMERA && <button type="button" className="v2-btn v2-sed-danger" onClick={() => { void edit("delete camera", (d) => removeSceneCamera(d, id)); onDeleted?.(); }}><Ic g="🗑" size={16} /> Delete camera</button>}
     </>}
     {(all || part === "addEvent") && <>
       <h5>Add a camera move at {atNow}s</h5>
       <div className="v2-sed-row">
         <select aria-label="Call" value={call} onChange={(e) => setCall(e.target.value)}>{calls.map((c) => <option key={c.call} value={c.call} title={c.description}>{c.call}</option>)}</select>
-        <button type="button" className="v2-btn" onClick={() => void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, SCENE_CAMERA, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
+        <button type="button" className="v2-btn" onClick={() => void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, id, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
       </div>
     </>}
   </div>;
+}
+const r1 = (x: number) => Math.round(x * 10) / 10;
+
+/** Scene Phase 3 (#352): the cameras and the shots (which camera is seen from when). */
+function CamerasAndShots({ doc, edit, issues, atNow, onPickCamera, onPickCam }: { doc: SceneDoc; edit: Edit; issues: SceneIssue[]; atNow: number; onPickCamera: () => void; onPickCam: (id: string) => void }) {
+  const cams = sceneCameraDefs(doc);
+  const shots = doc.shots ?? [];
+  const label = (id: string) => (id === SCENE_CAMERA ? "Camera" : cams.find((c) => c.id === id)?.name || id);
+  return <>
+    <h5><Ic g="camera" size={14} /> Cameras and shots</h5>
+    <div className="v2-sed-picklist" role="list" aria-label="Cameras">
+      {cams.map((c) => <button key={c.id} type="button" role="listitem" className="v2-btn v2-sed-pick" onClick={() => (c.id === SCENE_CAMERA ? onPickCamera() : onPickCam(c.id))}><Ic g="camera" size={16} /> <span>{label(c.id)}</span> <small>{r1(c.fov)}°</small></button>)}
+    </div>
+    <button type="button" className="v2-btn" data-testid="scene-add-camera" onClick={() => void edit("add camera", (d) => { const r = addSceneCamera(d, atNow); return { doc: r.doc, sel: { kind: "cam", id: r.id } }; })}><Ic g="＋" size={16} /> Add camera (from the view at {atNow}s)</button>
+    <div role="list" aria-label="Shots" className="v2-sed-shots">
+      {shots.map((x, i) => <span key={i} role="listitem" className="v2-sed-row">
+        <NumField label={`Shot ${i + 1} at (s)`} value={x.at} min={0} step={0.1} onCommit={(v) => edit("shot time", (d) => setSceneShots(d, (d.shots ?? []).map((y, k) => (k === i ? { ...y, at: v ?? 0 } : y))))} />
+        <SelectField label="Camera" value={x.camera} options={cams.map((c) => c.id)} labels={Object.fromEntries(cams.map((c) => [c.id, label(c.id)]))} onCommit={(v) => edit("shot camera", (d) => setSceneShots(d, (d.shots ?? []).map((y, k) => (k === i ? { ...y, camera: v } : y))))} />
+        <button type="button" className="v2-icon" aria-label={`Remove shot ${i + 1}`} onClick={() => void edit("remove shot", (d) => setSceneShots(d, (d.shots ?? []).filter((_, k) => k !== i)))}><Ic g="✕" size={14} /></button>
+      </span>)}
+    </div>
+    <button type="button" className="v2-btn" data-testid="scene-add-shot" onClick={() => void edit("add shot", (d) => {
+      const list = sceneShots(d), cur = list.filter((x) => x.at <= atNow).pop()?.camera ?? SCENE_CAMERA;
+      const ids = sceneCameraDefs(d).map((c) => c.id), next = ids[(ids.indexOf(cur) + 1) % ids.length];
+      return setSceneShots(d, [...(d.shots ?? []), { at: atNow, camera: next }]);
+    })}><Ic g="＋" size={16} /> Cut at {atNow}s</button>
+    <p className="v2-abnote">A shot shows a camera from its time on: one scene becomes a sequence of camera angles.</p>
+    <Problems list={issuesAt(issues, "shots")} />
+  </>;
 }
 
 /** P81b: one light (by index in the drawn list): id, type, colour, intensity, position. Lights are static. */
@@ -1362,10 +1425,10 @@ function ArgField({ field: f, value, objIds, onCommit }: { field: SceneArgField;
       const extra = [...(f.camera ? ["camera"] : []), ...(f.angle ? ["#angle"] : []), ...(f.optional ? ["#none"] : [])];
       const cur = point ? "" : angle ? "#angle" : value === undefined && f.optional ? "#none" : String(value ?? "");
       return <>
-        <SelectField label={f.label} value={cur} options={["", ...extra, ...objIds]} labels={{ "": "A point [x, y, z]", "#angle": "An angle (°)", "#none": "—", camera: "The camera" }}
-          onCommit={(v) => onCommit(v === "" ? [0, 0, 0] : v === "#angle" ? 0 : v === "#none" ? undefined : v)} />
+        <SelectField label={f.label} value={cur} options={["", ...extra, ...objIds]} labels={{ "": "A point [x, y, z]", "#angle": f.numberLabel ?? "An angle (°)", "#none": "—", camera: "The camera" }}
+          onCommit={(v) => onCommit(v === "" ? [0, 0, 0] : v === "#angle" ? (f.numberLabel ? 5 : 0) : v === "#none" ? undefined : v)} />
         {point && <Vec3Field label="Point" value={value} onCommit={onCommit} />}
-        {angle && <NumField label="Angle (°)" value={value} min={-360} max={360} step={5} onCommit={(v) => onCommit(v ?? 0)} />}
+        {angle && <NumField label={f.numberLabel ? "Distance" : "Angle (°)"} value={value} min={f.numberLabel ? 0.01 : -360} max={f.numberLabel ? 500 : 360} step={f.numberLabel ? 0.1 : 5} onCommit={(v) => onCommit(v ?? 0)} />}
       </>;
     }
     case "points": {

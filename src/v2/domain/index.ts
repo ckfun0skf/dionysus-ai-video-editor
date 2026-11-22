@@ -69,6 +69,7 @@ export type { SeriesLike } from "./storySeries";
 export * from "./scene";
 export * from "./sceneLook";
 export * from "./sceneCharacter";
+export * from "./sceneCamera";
 export * from "./glb";
 export * from "./sceneEdit";
 export * from "./sceneRetime";

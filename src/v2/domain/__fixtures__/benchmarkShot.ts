@@ -6,7 +6,8 @@
  * Phase 1 (#350) added the look (toon + outlines, rim light, bloom on the lantern / windows / sky, warm-to-dusk light
  * via light and sky events, fog depth, a DOF focus pull). Phase 2 (#351) swaps the stand-in for a character (the
  * built-in mannequin): it walks along the street (speed-matched, no foot sliding), stops, looks at the camera, smiles,
- * waves and says a line (lip sync), while a second character sits on a bench. Later phases swap in library assets. The same document is published as
+ * waves and says a line (lip sync), while a second character sits on a bench. Phase 3 (#352) cuts it into four camera
+ * angles inside the one scene: a wide establishing shot, a handheld follow, an orbit, and a close-up with a focus pull. The same document is published as
  * public/samples/scenes/benchmark-shot.scene.json (kept in sync by sceneLook.test.ts).
  */
 import type { SceneDoc } from "../scene";
@@ -49,6 +50,11 @@ export const BENCHMARK_SHOT: SceneDoc = {
   world: {
     background: "#6f6a86",
     camera: { fov: 40, position: [-1, 3.2, 12], lookAt: [0, 1.2, 0] },
+    cameras: [
+      { id: "follow", name: "Handheld follow", position: [-6.2, 1.5, 3.5], lookAt: [-5, 1, 0.6], lens: { focalLength: 28, focus: "hero", fStop: 8 } },
+      { id: "orbit", name: "Orbit", position: [1.6, 1.6, 4], lookAt: [1.6, 1, 0.6], lens: { focalLength: 35, focus: "hero", fStop: 4 } },
+      { id: "close", name: "Close-up", position: [2.2, 1.5, 2], lookAt: [1.6, 1.5, 0.6], lens: { focalLength: 50, focus: "lamp", fStop: 1.8 } },
+    ],
     lights: [
       { id: "skyfill", type: "hemisphere", color: "#a8b8ff", groundColor: "#3a2a30", intensity: 0.9 },
       { id: "sun", type: "directional", color: "#ffc890", intensity: 2.4, position: [-8, 6, 6], lookAt: [0, 0, 0], shadow: { mapSize: 2048, area: 12, radius: 3 } },
@@ -120,14 +126,14 @@ export const BENCHMARK_SHOT: SceneDoc = {
     { at: 5, obj: "lantern", call: "intensity", args: { value: 0.9 }, dur: 3, ease: "outCubic" },
     { at: 5, obj: "post", call: "exposure", args: { value: 0.75 }, dur: 9, ease: "linear" },
     // Camera: wide, a slow orbit, then a cut to a medium close-up with a focus pull from the lantern to the character.
-    { at: 0.5, obj: "camera", call: "moveTo", args: { position: [3, 3, 11] }, dur: 4.5, ease: "inOutSine" },
-    { at: 5, obj: "camera", call: "moveTo", args: { position: [6, 2.6, 8.5] }, dur: 4.9, ease: "inOutSine" },
-    { at: 10, obj: "camera", call: "moveTo", args: { position: [3.4, 1.65, 3.6] } },
-    { at: 10, obj: "camera", call: "lookAt", args: { target: [1.6, 1.45, 0.4] } },
-    { at: 10, obj: "camera", call: "fov", args: { value: 34 } },
-    { at: 10, obj: "post", call: "dofFocus", args: { value: 6.2 } },
-    { at: 10, obj: "post", call: "dofAperture", args: { value: 0.012 } },
-    { at: 10.6, obj: "post", call: "dofFocus", args: { value: 3.3 }, dur: 1.4, ease: "inOutCubic" },
+    // Cameras (Phase 3): a wide establishing shot, a handheld follow, an orbit, a close-up with a focus pull (the shots cut).
+    { at: 0.3, obj: "camera", call: "moveTo", args: { position: [1, 3, 11] }, dur: 3.5, ease: "inOutSine" },
+    { at: 3.5, obj: "follow", call: "follow", args: { target: "hero", offset: [-1.1, 1.45, 2.9], damping: 0.5 } },
+    { at: 3.5, obj: "follow", call: "handheld", args: { amplitude: 0.035, frequency: 1.1 } },
+    { at: 6.5, obj: "orbit", call: "orbit", args: { target: "hero", from: 75, to: 15, radius: 3.4, height: 0.5 }, dur: 3.5, ease: "inOutSine" },
+    { at: 10, obj: "close", call: "frame", args: { subject: "hero", shot: "closeup", angle: "front", height: "eye" } },
+    { at: 10.6, obj: "close", call: "rackFocus", args: { to: "hero" }, dur: 1.4, ease: "inOutCubic" },
   ],
+  shots: [{ at: 0, camera: "camera", name: "Wide" }, { at: 3.5, camera: "follow", name: "Follow" }, { at: 6.5, camera: "orbit", name: "Orbit" }, { at: 10, camera: "close", name: "Close-up" }],
   files: { "fireflies.js": scriptDataUrl(FIREFLIES) },
 };
