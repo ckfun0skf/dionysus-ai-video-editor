@@ -9,15 +9,16 @@
  * Warnings the edit touches are returned so the agent can fix them.
  */
 import {
-  addSceneModel, lookTargetOf, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_EASES, SCENE_FORMAT, SCENE_LIGHTS, SCENE_SHAPES,
+  addSceneModel, cameraKeyOf, lookTargetOf, sceneCameraDefs, sceneShots, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_EASES, SCENE_FORMAT, SCENE_LIGHTS, SCENE_SHAPES,
   SCENE_MIME, isVec3, sortedEvents, validateScene, type SceneDoc, type SceneEvent, type SceneIssue, type SceneLight, type SceneObject, type SceneShape,
 } from "./scene";
 import {
   addSceneLight, addSceneObject, callTweens, defaultCallArgs, lightIdProblem, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject,
-  addSceneAnimation, removeSceneAnimation, roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneLook, updateSceneObject, updateSceneWorld, type SceneArgField,
+  addSceneAnimation, addSceneCamera, removeSceneAnimation, removeSceneCamera, setSceneShots, updateSceneCamera, roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneLook, updateSceneObject, updateSceneWorld, type SceneArgField,
 } from "./sceneEdit";
 import { SCENE_LOOK_IDS } from "./sceneLook";
 import { BUILTIN_CLIP_NAMES, SCENE_CHARACTER_CALLS } from "./sceneCharacter";
+import { SCENE_CAMERA_RIGS } from "./sceneCamera";
 import { moveSceneEventTo } from "./sceneRetime";
 import { addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, sceneScriptCode, setSceneScriptCode, setSceneScriptParams } from "./sceneScript";
 import { SCENE_SCRIPT_MAX, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
@@ -29,7 +30,7 @@ export const sceneMediaRef = (blobKey: string): AssetVersion["media"] => ({ blob
 /** The tools that change a scene (the others read it). */
 export const SCENE_EDIT_TOOLS = [
   "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event",
-  "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation",
+  "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation", "set_scene_camera", "set_scene_shots",
 ] as const;
 export type SceneEditTool = (typeof SCENE_EDIT_TOOLS)[number];
 export const isSceneEditTool = (n: string): n is SceneEditTool => (SCENE_EDIT_TOOLS as readonly string[]).includes(n);
@@ -76,6 +77,8 @@ const argList = (fields: SceneArgField[]) => (fields.length ? fields.map((f) => 
 function needObject(doc: SceneDoc, id: unknown, camera = false): string | undefined {
   if (typeof id !== "string" || !id) return `Name an object. Objects: ${(camera ? sceneObjectIds(doc) : sceneObjectIds(doc).slice(1)).join(", ") || "none yet (add_scene_object)"}.`;
   if (id === SCENE_CAMERA) return camera ? undefined : `"camera" is not an object here; use set_scene_world for the camera's start, events for its moves.`;
+  // Scene Phase 3 (#352): the other cameras take events too.
+  if (cameraKeyOf(doc, id)) return camera ? undefined : `"${id}" is a camera: change it with set_scene_camera (its moves are events on "${id}").`;
   if (!objectsOf(doc).some((o) => isObj(o) && o.id === id)) {
     // Scene Phase 1 (#350): events may also name a light (with an id) or world.post / fog / sky.
     const look = lookTargetOf(doc, id);
@@ -365,6 +368,34 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       d = updateSceneLight(d, i, patch);
       return done(doc, d, { lightIndex: i, light: sceneLights(d).lights[i] }, [`world.lights[${i}]`]);
     }
+    case "set_scene_camera": {
+      // Scene Phase 3: add a camera (omit "camera"), change one ("camera": its id, "camera" = the default) or remove it.
+      const cams = sceneCameraDefs(doc);
+      const listing = `Cameras: ${cams.map((c) => c.id).join(", ")}.`;
+      const fields: Record<string, unknown> = {};
+      for (const k of ["name", "position", "lookAt", "fov", "lens"] as const) if (a[k] !== undefined) fields[k] = a[k] === null ? undefined : a[k];
+      let d = doc, id: string;
+      if (a.camera === undefined || a.camera === null) {
+        if (a.remove === true) return fail(`Name the camera to remove. ${listing}`);
+        if (a.id !== undefined && typeof a.id !== "string") return fail('"id" must be text.');
+        const r = addSceneCamera(doc, numOk(a.at) ? a.at : 0, { ...(typeof a.id === "string" ? { id: a.id } : {}), ...(fields as object) });
+        if (typeof a.id === "string" && r.id !== a.id) return fail(`"${a.id}" is taken (or reserved); pick another id.`);
+        d = r.doc; id = r.id;
+      } else {
+        if (typeof a.camera !== "string" || !cams.some((c) => c.id === a.camera)) return fail(`No camera ${JSON.stringify(a.camera)}. ${listing}`);
+        id = a.camera;
+        if (a.remove === true) { if (id === SCENE_CAMERA) return fail("The default camera can't be removed."); return done(doc, removeSceneCamera(doc, id), { removed: id, note: "Its events and shots went too." }, ["world", "shots"]); }
+        if (id === SCENE_CAMERA && fields.name !== undefined) return fail("The default camera has no name.");
+        d = updateSceneCamera(doc, id, fields as never);
+      }
+      return done(doc, d, { camera: id, cameras: sceneCameraDefs(d).map((c) => c.id) }, ["world"]);
+    }
+    case "set_scene_shots": {
+      if (a.shots === null) return done(doc, setSceneShots(doc, []), { shots: [] }, ["shots"]);
+      if (!Array.isArray(a.shots)) return fail(`"shots" must be a list of { at, camera, name? } (camera ids: ${sceneCameraDefs(doc).map((c) => c.id).join(", ")}), or null to remove them.`);
+      const d = setSceneShots(doc, a.shots as never);
+      return done(doc, d, { shots: d.shots ?? [] }, ["shots"]);
+    }
     case "set_scene_animation": {
       // Scene Phase 2 (#351): a library clip — add (file { url } or { name, dataUrl }) or change one, or remove it.
       if (typeof a.name !== "string" || !a.name) return fail(`Name the clip ("name"). Library: ${Object.keys(isObj(doc.animations) ? doc.animations : {}).join(", ") || "empty"}; built-in: ${BUILTIN_CLIP_NAMES.join(", ")}.`);
@@ -487,6 +518,10 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
     // Scene Phase 2 (#351): character calls (objects with "character"), the built-in clips and the library.
     characterCalls: Object.keys(SCENE_CHARACTER_CALLS),
     clips: { builtIn: BUILTIN_CLIP_NAMES, library: Object.keys(isObj(doc.animations) ? doc.animations : {}) },
+    // Scene Phase 3 (#352): every camera (start pose, lens, calls) and the shots.
+    cameras: sceneCameraDefs(doc).map((c) => ({ id: c.id, ...(c.name ? { name: c.name } : {}), fov: c.fov, position: c.position, lookAt: c.target, ...(c.lens ? { lens: c.lens } : {}) })),
+    cameraRigCalls: Object.keys(SCENE_CAMERA_RIGS),
+    shots: sceneShots(doc),
     cameraCalls: Object.keys(SCENE_CAMERA_FUNCTIONS),
   };
 }

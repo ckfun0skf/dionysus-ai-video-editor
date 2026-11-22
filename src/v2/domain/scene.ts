@@ -38,6 +38,7 @@ import {
   visemeKeysProblem, visemesAt, visemesFromText, walkProfile,
   type SceneAnimationEntry, type SceneCharacter, type SceneExpression, type SceneViseme, type SceneVisemeKey,
 } from "./sceneCharacter";
+import { focalToFov, framePose, fStopToAperture, SCENE_CAMERA_RIGS, shake, SHOT_ANGLES, SHOT_HEIGHTS, SHOT_SIZES, splineAt, type SceneCameraDef, type SceneLens, type SceneShot, type SceneShotAngle, type SceneShotHeight, type SceneShotSize } from "./sceneCamera";
 
 export const SCENE_FORMAT = "dionysus.scene/1" as const;
 /** MIME type of a scene asset version's blob. */
@@ -58,9 +59,10 @@ export const SCENE_LIGHTS: readonly SceneLightType[] = ["ambient", "hemisphere",
  * and point lights: true or { mapSize, bias, normalBias, radius, area }).
  */
 export interface SceneLight { id?: string; type: SceneLightType; color?: string; intensity?: number; position?: Vec3; groundColor?: string; lookAt?: Vec3; shadow?: boolean | SceneShadow }
-export interface SceneCamera { fov?: number; position?: Vec3; lookAt?: Vec3 }
+/** The default camera's start. Scene Phase 3 (#352): `lens` (focal length, sensor, focus, f-stop) instead of fov. */
+export interface SceneCamera { fov?: number; position?: Vec3; lookAt?: Vec3; lens?: SceneLens }
 /** Scene Phase 1 (#350): fog, sky, environment, post and export are optional (domain/sceneLook.ts). */
-export interface SceneWorld { background?: string; camera?: SceneCamera; lights?: SceneLight[]; fog?: SceneFog; sky?: SceneSky; environment?: SceneEnvironment; post?: ScenePost; export?: SceneExport }
+export interface SceneWorld { background?: string; camera?: SceneCamera; /** Scene Phase 3: more cameras, each with an id. */ cameras?: SceneCameraDef[]; lights?: SceneLight[]; fog?: SceneFog; sky?: SceneSky; environment?: SceneEnvironment; post?: ScenePost; export?: SceneExport }
 
 /** Base properties every object has (the evaluator's output per object). */
 export interface SceneProps { position: Vec3; rotation: Vec3; scale: Vec3; visible: boolean; opacity: number; color: string }
@@ -151,6 +153,8 @@ export interface SceneDoc {
   files?: Record<string, string>;
   /** Scene Phase 2 (#351): the animation library — clips from animation-only GLBs in `files`, retargeted onto characters. */
   animations?: Record<string, SceneAnimationEntry>;
+  /** Scene Phase 3 (#352): the camera seen from each time on (cuts), by camera id ("camera" = the default). */
+  shots?: SceneShot[];
 }
 
 export interface SceneIssue { level: "error" | "warning"; path: string; message: string }
@@ -290,8 +294,10 @@ export function validateScene(raw: unknown): SceneIssue[] {
         else {
           if (c.fov !== undefined && !(num(c.fov) && c.fov > 1 && c.fov < 179)) err("world.camera.fov", "must be a number of degrees between 1 and 179.");
           for (const k of ["position", "lookAt"] as const) if (c[k] !== undefined && !isVec3(c[k])) err(`world.camera.${k}`, "must be [x, y, z] numbers.");
+          if (c.lens !== undefined) validateLens(c.lens, "world.camera.lens", raw as unknown as SceneDoc, err);
         }
       }
+      if (w.cameras !== undefined) validateCameras(raw as unknown as SceneDoc, err);
       if (w.lights !== undefined) {
         if (!Array.isArray(w.lights)) err("world.lights", "must be a list.");
         else w.lights.forEach((l, i) => {
@@ -378,6 +384,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
     }
   });
   validateAnimations(raw as unknown as SceneDoc, files, err, warn);
+  if (raw.shots !== undefined) validateShots(raw as unknown as SceneDoc, err, warn);
   // events
   if (raw.events !== undefined) {
     if (!Array.isArray(raw.events)) err("events", "\"events\" must be a list.");
@@ -441,9 +448,11 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
   const args = (e.args ?? {}) as Record<string, unknown>;
   if (typeof e.obj !== "string") { err(`${p}.obj`, "must be an object id."); return; }
   if (typeof e.call !== "string") { err(`${p}.call`, "must be a function name."); return; }
-  if (e.obj === SCENE_CAMERA) {
+  if (e.obj === SCENE_CAMERA || cameraKeyOf(doc, e.obj)) {
     const f = SCENE_CAMERA_FUNCTIONS[e.call];
-    if (!f) { err(`${p}.call`, `The camera has no function "${e.call}" (${Object.keys(SCENE_CAMERA_FUNCTIONS).join(", ")}).`); return; }
+    // Scene Phase 3: rigs, lens and focus calls.
+    if (!f && SCENE_CAMERA_RIGS[e.call]) { validateRig(doc, e as unknown as SceneEvent, args, p, objects, err, warn); return; }
+    if (!f) { err(`${p}.call`, `The camera${e.obj === SCENE_CAMERA ? "" : ` "${e.obj}"`} has no function "${e.call}" (${[...Object.keys(SCENE_CAMERA_FUNCTIONS), ...Object.keys(SCENE_CAMERA_RIGS)].join(", ")}).`); return; }
     const v = args[f.arg] ?? (f.arg === "position" ? args.value : undefined);
     if (f.prop === "fov") { if (!(num(v) && v > 1 && v < 179)) err(`${p}.args.${f.arg}`, "must be degrees between 1 and 179."); }
     else if (f.prop === "target") { if (!isVec3(v) && !(typeof v === "string" && objects.has(v))) err(`${p}.args.target`, "must be an object id or [x, y, z]."); }
@@ -701,6 +710,9 @@ export interface SceneState {
   objects: SceneObjectState[];
   /** Scene Phase 1 (#350): every drawn light (the defaults when the scene has none) at `t`. */
   lights: SceneLightState[];
+  /** Scene Phase 3 (#352): with more cameras or shots — the active camera's id and every camera's pose at `t`. */
+  cameraId?: string;
+  cameras?: { id: string; fov: number; position: Vec3; target: Vec3 }[];
   /** Scene Phase 1: world.post / fog / sky at `t`, when the scene has them. */
   post?: ScenePostState;
   fog?: SceneFogState;
@@ -766,7 +778,12 @@ function eventTargets(doc: SceneDoc, e: SceneEvent): Targets {
 
 /** The properties one event writes (for overlap warnings). */
 function eventProps(doc: SceneDoc, e: SceneEvent): string[] {
-  if (e.obj === SCENE_CAMERA) { const f = SCENE_CAMERA_FUNCTIONS[e.call]; return f ? [f.prop] : []; }
+  if (e.obj === SCENE_CAMERA || cameraKeyOf(doc, e.obj)) {
+    const f = SCENE_CAMERA_FUNCTIONS[e.call];
+    if (f) return [f.prop];
+    const RIG_PROPS: Record<string, string[]> = { focalLength: ["fov"], focus: ["focus"], rackFocus: ["focus"], fStop: ["fStop"], dolly: ["position"], truck: ["position", "target"], crane: ["position", "target"], orbit: ["position", "target"], follow: ["position", "target"], frame: ["position", "target"] };
+    return RIG_PROPS[e.call] ?? [];
+  }
   const look = lookTargetOf(doc, e.obj);
   if (look) { const c = SCENE_LOOK_CALLS[look.kind][e.call]; return c ? [c.prop] : []; }
   const co = objOf(doc, e.obj);
@@ -792,7 +809,14 @@ type Val = Vec3 | number | boolean | string;
  * `curve` replaces the straight tween (walk paths): it gets the value at the segment's start and the eased progress.
  */
 type SegTo = Val | { lookAt: Vec3 | string; obj: string; yawOnly?: boolean } | { pointOf: string; y: number };
-interface Seg { at: number; dur: number; ease: (x: number) => number; to: SegTo; curve?: (from: Val, k: number, to: Val) => Val }
+interface Seg {
+  at: number; dur: number; ease: (x: number) => number; to: SegTo; curve?: (from: Val, k: number, to: Val) => Val;
+  /** Scene Phase 3: a value computed from the time itself (camera rigs), from the segment's start on (it holds the end). */
+  live?: (from: Val, time: number, env: ChainEnv) => Val;
+}
+/** What live segments may read at evaluation: other objects' positions and rotations, heights, a camera's fov. */
+interface ChainEnv { positionAt: (id: string, at: number) => Vec3; rotationAt: (id: string, at: number) => Vec3; heightOf: (id: string) => number; fovAt: (cam: string, at: number) => number }
+const ROUGH_ENV: ChainEnv = { positionAt: () => [0, 0, 0], rotationAt: () => [0, 0, 0], heightOf: () => 1.7, fovAt: () => SCENE_DEFAULTS.fov };
 
 const vec3Of = (v: number | Vec3): Vec3 => (typeof v === "number" ? [v, v, v] : [v[0], v[1], v[2]]);
 const hexToRgb = (h: string): Vec3 => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -819,11 +843,12 @@ export function lookRotation(from: Vec3, to: Vec3, fallback: Vec3): Vec3 {
  * Evaluate one property's segment chain at `t`. Segments are in event order; each starts from the value the chain has
  * at its own `at` (so a running tween is cut there).
  */
-function evalChain(base: Val, segs: Seg[], t: number, resolve: (s: Seg) => Val): Val {
+function evalChain(base: Val, segs: Seg[], t: number, resolve: (s: Seg) => Val, env: ChainEnv = ROUGH_ENV): Val {
   let v = base, cur: { seg: Seg; from: Val; to: Val } | undefined;
   const valueAt = (time: number): Val => {
     if (!cur) return v;
     const { seg, from, to } = cur;
+    if (seg.live) return seg.live(from, time, env);
     if (seg.dur <= 0 || time >= seg.at + seg.dur || typeof to === "boolean") return seg.curve && seg.dur > 0 ? seg.curve(from, 1, to) : to;
     const k = seg.ease(Math.max(0, (time - seg.at) / seg.dur));
     return seg.curve ? seg.curve(from, k, to) : mix(from, to, k);
@@ -856,7 +881,10 @@ interface HoldSeg { at: number; by?: string; hand?: "left" | "right"; drop?: boo
 interface Plan {
   props: Map<string, Map<string, Seg[]>>; anims: Map<string, AnimSeg[]>; nodes: Map<string, { at: number; nodes: Record<string, boolean> }[]>;
   chars: Map<string, CharPlan>; holds: Map<string, HoldSeg[]>;
+  /** Scene Phase 3: handheld shakes per camera key. */
+  shakes: Map<string, ShakeSeg[]>;
 }
+interface ShakeSeg { at: number; end: number; amp: number; freq: number; seed: string }
 const plans = new WeakMap<SceneDoc, Plan>();
 
 /** Scene Phase 2: a clip's length, loop, mask and stride (built-in or a library entry; library defaults 1 s, repeat, full, 1.3 m). */
@@ -890,6 +918,7 @@ function planOf(doc: SceneDoc): Plan {
   const anims = new Map<string, AnimSeg[]>();
   const nodes = new Map<string, { at: number; nodes: Record<string, boolean> }[]>();
   const chars = new Map<string, CharPlan>(), holds = new Map<string, HoldSeg[]>();
+  const shakes = new Map<string, ShakeSeg[]>();
   const charOf = (id: string) => { let c = chars.get(id); if (!c) chars.set(id, (c = { walks: [], looks: [], gestures: [], speech: [] })); return c; };
   const holdsOf = (id: string) => { let h = holds.get(id); if (!h) holds.set(id, (h = [])); return h; };
   // A property's value at `at` from the segments planned so far (late targets taken roughly: seats at their start).
@@ -1003,13 +1032,14 @@ function planOf(doc: SceneDoc): Plan {
   for (const { e } of sortedEvents(doc)) {
     const dur = num(e.dur) && e.dur > 0 ? e.dur : 0;
     const ease = SCENE_EASE[(e.ease ?? "linear") as SceneEase] ?? SCENE_EASE.linear;
-    if (e.obj === SCENE_CAMERA) {
+    const camKey = cameraKeyOf(doc, e.obj);
+    if (camKey) {
       const f = SCENE_CAMERA_FUNCTIONS[e.call];
-      if (!f) continue;
       const args = isObj(e.args) ? e.args : {};
+      if (!f) { planRig(doc, camKey, e, dur, ease, push, props, shakes); continue; }
       const v = args[f.arg] ?? (f.arg === "position" ? args.value : undefined);
       if (f.prop === "fov" ? num(v) && v > 1 && v < 179 : f.prop === "target" ? isVec3(v) || (typeof v === "string" && !!objOf(doc, v)) : isVec3(v))
-        push(SCENE_CAMERA, f.prop, { at: e.at, dur, ease, to: f.prop === "target" && typeof v === "string" ? { lookAt: v, obj: SCENE_CAMERA } : (v as Val) });
+        push(camKey, f.prop, { at: e.at, dur, ease, to: f.prop === "target" && typeof v === "string" ? { lookAt: v, obj: camKey } : (v as Val) });
       continue;
     }
     const look = lookTargetOf(doc, e.obj);
@@ -1035,7 +1065,7 @@ function planOf(doc: SceneDoc): Plan {
       else push(e.obj, k, { at: e.at, dur, ease, to: k === "scale" ? vec3Of(v as number | Vec3) : (v as Val) });
     }
   }
-  const plan = { props, anims, nodes, chars, holds };
+  const plan = { props, anims, nodes, chars, holds, shakes };
   plans.set(doc, plan);
   return plan;
 }
@@ -1060,6 +1090,260 @@ function animationAt(o: SceneObject, segs: AnimSeg[], t: number): SceneAnimState
     run(all[i - 1], 1 - k); run(cur, k);
   } else run(cur, 1);
   return out;
+}
+
+const dist = (a: Vec3, b: Vec3) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+const sub3 = (a: Vec3, b: Vec3): Vec3 => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+const add3 = (a: Vec3, b: Vec3): Vec3 => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+/** An object's height for framing: a character's, else its shape's size times its scale (roughly). */
+function objectHeight(o: SceneObject): number {
+  if (isCharacter(o)) return characterHeight(o);
+  const s = o.size, k = num(o.scale) ? o.scale : isVec3(o.scale) ? o.scale[1] : 1;
+  const h = num(s) ? (o.shape === "sphere" ? 2 * s : s) : Array.isArray(s) && s.length ? (o.shape === "box" ? (s[1] ?? s[0]) : o.shape === "sphere" ? 2 * s[0] : (s[1] ?? s[0])) : 1;
+  return Math.max(0.05, (num(h) ? h : 1) * k);
+}
+
+/** Scene Phase 3: where to focus on an object at `p`: a character's eyes, else the object's position. */
+const focusPoint = (doc: SceneDoc, id: string, p: Vec3): Vec3 => { const o = objOf(doc, id); return isCharacter(o) ? [p[0], p[1] + characterHeight(o) * 0.92, p[2]] : p; };
+
+/** Scene Phase 3 (#352): the key of a camera's chains for an event's obj: "camera" or a world.cameras id (else undefined). */
+export function cameraKeyOf(doc: Pick<SceneDoc, "objects" | "world">, id: unknown): string | undefined {
+  if (id === SCENE_CAMERA) return SCENE_CAMERA;
+  if (typeof id !== "string" || (Array.isArray(doc.objects) && doc.objects.some((o) => isObj(o) && o.id === id))) return undefined;
+  const cams = isObj(doc.world) && Array.isArray(doc.world.cameras) ? doc.world.cameras : [];
+  return cams.some((c) => isObj(c) && c.id === id) ? `\u0003cam:${id}` : undefined;
+}
+/** Scene Phase 3: every camera (the default first) with its start pose and lens. */
+export function sceneCameraDefs(doc: Pick<SceneDoc, "objects" | "world">): { id: string; key: string; name?: string; fov: number; position: Vec3; target: Vec3; lens?: SceneLens }[] {
+  const w = isObj(doc.world) ? doc.world : {};
+  const def = (id: string, key: string, c: Record<string, unknown>, name?: string) => {
+    const lens = isObj(c.lens) ? (c.lens as SceneLens) : undefined;
+    const fov = num(lens?.focalLength) && lens!.focalLength! > 0 ? focalToFov(lens!.focalLength!, num(lens?.sensor) && lens!.sensor! > 0 ? lens!.sensor! : 36) : num(c.fov) && c.fov > 1 && c.fov < 179 ? c.fov : SCENE_DEFAULTS.fov;
+    return { id, key, ...(name ? { name } : {}), fov, position: isVec3(c.position) ? c.position : SCENE_DEFAULTS.cameraPosition, target: isVec3(c.lookAt) ? c.lookAt : SCENE_DEFAULTS.cameraTarget, ...(lens ? { lens } : {}) };
+  };
+  const out = [def(SCENE_CAMERA, SCENE_CAMERA, isObj(w.camera) ? w.camera : {})];
+  for (const c of Array.isArray(w.cameras) ? w.cameras : []) {
+    if (!isObj(c) || typeof c.id !== "string" || c.id === SCENE_CAMERA || out.some((x) => x.id === c.id)) continue;
+    const key = cameraKeyOf(doc, c.id);
+    if (key) out.push(def(c.id, key, c, typeof c.name === "string" ? c.name : undefined));
+  }
+  return out;
+}
+/** Scene Phase 3: the valid shots, sorted by time (array order breaks ties). */
+export function sceneShots(doc: Pick<SceneDoc, "shots" | "objects" | "world">): SceneShot[] {
+  const list = Array.isArray(doc.shots) ? doc.shots : [];
+  return list.map((x, i) => ({ x, i })).filter(({ x }) => isObj(x) && num(x.at) && x.at >= 0 && typeof x.camera === "string" && !!cameraKeyOf(doc, x.camera))
+    .sort((a, b) => a.x.at - b.x.at || a.i - b.i).map(({ x }) => x);
+}
+
+/** Scene Phase 3: plan one camera rig / lens event into the camera's chains (values computed from time at evaluation). */
+function planRig(doc: SceneDoc, key: string, e: SceneEvent, dur: number, ease: (x: number) => number, push: (obj: string, prop: string, seg: Seg) => void, props: Map<string, Map<string, Seg[]>>, shakes: Map<string, ShakeSeg[]>) {
+  const args = isObj(e.args) ? e.args : {};
+  const defs = sceneCameraDefs(doc), d = defs.find((x) => x.key === key) ?? defs[0];
+  const chainAt = (prop: "position" | "target" | "fov", at: number): Val => evalChain(d[prop], props.get(key)?.get(prop) ?? [], at, (s) => {
+    const to = s.to; return to && typeof to === "object" && !Array.isArray(to) ? (prop === "target" && "lookAt" in to && isVec3(to.lookAt) ? to.lookAt : d[prop]) : (to as Val);
+  });
+  const k01 = (time: number) => (dur > 0 ? ease(Math.min(1, Math.max(0, (time - e.at) / dur))) : 1);
+  const live = (target: (time: number, env: ChainEnv, from: Val) => Val) => (from: Val, time: number, env: ChainEnv): Val => mix(from, target(time, env, from), k01(time));
+  const subjectPoint = (v: unknown, env: ChainEnv, time: number): Vec3 | undefined => {
+    if (isVec3(v)) return v;
+    if (typeof v === "string" && objOf(doc, v)) { const p = env.positionAt(v, time), o = objOf(doc, v)!; return isCharacter(o) ? [p[0], p[1] + characterHeight(o) * 0.62, p[2]] : p; }
+    return undefined;
+  };
+  switch (e.call) {
+    case "focalLength": {
+      const v = args.value;
+      if (num(v) && v > 0) push(key, "fov", { at: e.at, dur, ease, to: focalToFov(v, num(d.lens?.sensor) && d.lens!.sensor! > 0 ? d.lens!.sensor! : 36) });
+      return;
+    }
+    case "fStop": if (num(args.value) && args.value > 0) push(key, "fStop", { at: e.at, dur, ease, to: args.value }); return;
+    case "focus": case "rackFocus": {
+      const to = e.call === "focus" ? args.value : args.to, from = e.call === "rackFocus" ? args.from : undefined;
+      const distTo = (v: unknown, time: number, env: ChainEnv, cur: Val): number => {
+        if (num(v)) return v;
+        if (typeof v === "string" && objOf(doc, v)) { const camP = evalChain(d.position, props.get(key)?.get("position") ?? [], time, (s) => s.to as Val, env) as Vec3; return dist(camP, focusPoint(doc, v, env.positionAt(v, time))); }
+        return typeof cur === "number" ? cur : 6;
+      };
+      if (!(num(to) || (typeof to === "string" && objOf(doc, to)))) return;
+      push(key, "focus", { at: e.at, dur, ease, to: 0, live: (f, time, env) => mix(from !== undefined ? distTo(from, time, env, f) : f, distTo(to, time, env, f), k01(time)) });
+      return;
+    }
+    case "dolly": {
+      const pts = Array.isArray(args.path) && args.path.length && args.path.every(isVec3) ? (args.path as Vec3[]) : isVec3(args.path) ? [args.path as Vec3] : undefined;
+      if (pts) { push(key, "position", { at: e.at, dur, ease, to: pts[pts.length - 1], live: (f, time) => (dur > 0 ? splineAt([f as Vec3, ...pts], k01(time)) : pts[pts.length - 1]) }); return; }
+      if (num(args.distance)) {
+        const p0 = chainAt("position", e.at) as Vec3, t0 = chainAt("target", e.at) as Vec3;
+        const v = sub3(t0, p0), n = Math.hypot(...v) || 1;
+        push(key, "position", { at: e.at, dur, ease, to: add3(p0, v.map((x) => (x / n) * (args.distance as number)) as Vec3) });
+      }
+      return;
+    }
+    case "truck": case "crane": {
+      if (!num(args.distance)) return;
+      const p0 = chainAt("position", e.at) as Vec3, t0 = chainAt("target", e.at) as Vec3;
+      let off: Vec3;
+      if (e.call === "crane") off = [0, args.distance, 0];
+      else { const v = sub3(t0, p0), h = Math.hypot(v[0], v[2]) || 1; off = [(-v[2] / h) * args.distance, 0, (v[0] / h) * args.distance]; }
+      push(key, "position", { at: e.at, dur, ease, to: add3(p0, off) });
+      push(key, "target", { at: e.at, dur, ease, to: add3(t0, off) });
+      return;
+    }
+    case "orbit": {
+      if (!num(args.to)) return;
+      const toDeg = args.to, fromDeg = num(args.from) ? args.from : undefined;
+      const centerAt = (time: number, env: ChainEnv): Vec3 => subjectPoint(args.target, env, time) ?? (chainAt("target", e.at) as Vec3);
+      const posAt = (time: number, env: ChainEnv, from: Val): Vec3 => {
+        const c0 = centerAt(e.at, env), f = from as Vec3;
+        const r = num(args.radius) && args.radius > 0 ? args.radius : Math.hypot(f[0] - c0[0], f[2] - c0[2]) || 4;
+        const h = num(args.height) ? args.height : f[1] - c0[1];
+        const a0 = fromDeg ?? (Math.atan2(f[0] - c0[0], f[2] - c0[2]) * 180) / Math.PI;
+        const a = ((a0 + (toDeg - a0) * k01(time)) * Math.PI) / 180, c = centerAt(time, env);
+        return [c[0] + Math.sin(a) * r, c[1] + h, c[2] + Math.cos(a) * r];
+      };
+      push(key, "position", { at: e.at, dur, ease, to: 0, live: (f, time, env) => {
+        // Glide onto the circle within the first half second when it starts somewhere else.
+        const p = posAt(time, env, f), g = Math.min(1, (time - e.at) / 0.5);
+        return g < 1 ? mix(f, p, g * g * (3 - 2 * g)) : p;
+      } });
+      push(key, "target", { at: e.at, dur, ease, to: 0, live: (f, time, env) => mix(f, centerAt(time, env), Math.min(1, (time - e.at) / 0.5)) });
+      return;
+    }
+    case "follow": {
+      const subj = typeof args.target === "string" && objOf(doc, args.target) ? args.target : undefined;
+      if (!subj) return;
+      const damp = num(args.damping) && args.damping >= 0 ? args.damping : 0.4;
+      const span = dur > 0 ? dur : Infinity;
+      // Smoothed subject position: a weighted look-back over its path (no state between frames).
+      const smooth = (time: number, env: ChainEnv): Vec3 => {
+        if (damp <= 0) return env.positionAt(subj, time);
+        let w = 0; const acc: Vec3 = [0, 0, 0];
+        for (let j = 0; j < 8; j++) { const at = Math.max(e.at, time - (j * damp) / 4), k = Math.exp(-j / 2), p = env.positionAt(subj, at); acc[0] += p[0] * k; acc[1] += p[1] * k; acc[2] += p[2] * k; w += k; }
+        return [acc[0] / w, acc[1] / w, acc[2] / w];
+      };
+      push(key, "position", { at: e.at, dur: span, ease, to: 0, live: (f, time, env) => {
+        const off: Vec3 = isVec3(args.offset) ? args.offset : sub3(f as Vec3, env.positionAt(subj, e.at));
+        const g = Math.min(1, (time - e.at) / 0.6);
+        return mix(f, add3(smooth(time, env), off), g * g * (3 - 2 * g));
+      } });
+      push(key, "target", { at: e.at, dur: span, ease, to: 0, live: (f, time, env) => mix(f, subjectPoint(subj, env, time)!, Math.min(1, (time - e.at) / 0.6)) });
+      return;
+    }
+    case "handheld": {
+      let l = shakes.get(key); if (!l) shakes.set(key, (l = []));
+      for (const x of l) if (x.end > e.at) x.end = e.at; // a new handheld (or amplitude 0) ends the one before
+      l.push({ at: e.at, end: dur > 0 ? e.at + dur : Infinity, amp: num(args.amplitude) && args.amplitude >= 0 ? Math.min(2, args.amplitude) : 0.03, freq: num(args.frequency) && args.frequency > 0 ? Math.min(20, args.frequency) : 1.2, seed: `${key}:${args.seed ?? e.at}` });
+      return;
+    }
+    case "frame": {
+      const subj = typeof args.subject === "string" && objOf(doc, args.subject) ? args.subject : undefined;
+      if (!subj) return;
+      const shot = (SHOT_SIZES as readonly string[]).includes(String(args.shot)) ? args.shot as SceneShotSize : "medium";
+      const angle = (SHOT_ANGLES as readonly string[]).includes(String(args.angle)) ? args.angle as SceneShotAngle : "front";
+      const height = (SHOT_HEIGHTS as readonly string[]).includes(String(args.height)) ? args.height as SceneShotHeight : "eye";
+      // Framed where the subject is when the move ends, at the camera's fov then.
+      const pose = (env: ChainEnv) => { const end = e.at + dur; return framePose(env.positionAt(subj, end), env.heightOf(subj), env.rotationAt(subj, end)[1], env.fovAt(key, end), shot, angle, height); };
+      push(key, "position", { at: e.at, dur, ease, to: 0, live: live((_t, env) => pose(env).position) });
+      push(key, "target", { at: e.at, dur, ease, to: 0, live: live((_t, env) => pose(env).target) });
+      return;
+    }
+  }
+}
+
+/** Scene Phase 3: a lens (focal length, sensor, focus, f-stop). */
+function validateLens(v: unknown, p: string, doc: SceneDoc, err: (path: string, m: string) => void) {
+  if (!isObj(v)) { err(p, "must be { focalLength, sensor, focus, fStop }."); return; }
+  for (const [k, x] of Object.entries(v)) {
+    if (k === "focalLength") { if (!(num(x) && x >= 4 && x <= 1200)) err(`${p}.focalLength`, "must be millimetres from 4 to 1200."); }
+    else if (k === "sensor") { if (!(num(x) && x >= 4 && x <= 100)) err(`${p}.sensor`, "must be the sensor width in millimetres, 4 to 100 (36 = full frame)."); }
+    else if (k === "fStop") { if (!(num(x) && x >= 0.7 && x <= 64)) err(`${p}.fStop`, "must be an f-stop from 0.7 to 64."); }
+    else if (k === "focus") { if (!(num(x) && x > 0) && !(typeof x === "string" && objOf(doc, x))) err(`${p}.focus`, "must be a distance above 0 or an object id."); }
+    else err(`${p}.${k}`, "is not a lens field (focalLength, sensor, focus, fStop).");
+  }
+}
+/** Scene Phase 3: world.cameras. */
+function validateCameras(doc: SceneDoc, err: (path: string, m: string) => void) {
+  const w = doc.world as Record<string, unknown>;
+  if (!Array.isArray(w.cameras)) { err("world.cameras", "must be a list of { id, name?, position, lookAt, fov?, lens? }."); return; }
+  const seen = new Set<string>();
+  const objIds = new Set((Array.isArray(doc.objects) ? doc.objects : []).filter(isObj).map((o) => o.id));
+  const lightIds = new Set((Array.isArray(w.lights) ? w.lights : []).filter(isObj).map((l) => l.id).filter((x): x is string => typeof x === "string"));
+  w.cameras.forEach((c, i) => {
+    const p = `world.cameras[${i}]`;
+    if (!isObj(c)) { err(p, "must be an object."); return; }
+    if (typeof c.id !== "string" || !ID_RE.test(c.id)) err(`${p}.id`, "needs an \"id\" that starts with a letter and uses letters, digits, \"_\" or \"-\".");
+    else if (c.id === SCENE_CAMERA) err(`${p}.id`, `"${SCENE_CAMERA}" is the default camera (world.camera).`);
+    else if (seen.has(c.id)) err(`${p}.id`, `"${c.id}" is used twice.`);
+    else if (objIds.has(c.id) || lightIds.has(c.id) || SCENE_LOOK_IDS.includes(c.id)) err(`${p}.id`, `"${c.id}" is already the id of an object, a light or post / fog / sky.`);
+    else seen.add(c.id);
+    if (c.name !== undefined && typeof c.name !== "string") err(`${p}.name`, "must be a string.");
+    if (c.fov !== undefined && !(num(c.fov) && c.fov > 1 && c.fov < 179)) err(`${p}.fov`, "must be a number of degrees between 1 and 179.");
+    for (const k of ["position", "lookAt"] as const) if (c[k] !== undefined && !isVec3(c[k])) err(`${p}.${k}`, "must be [x, y, z] numbers.");
+    if (c.lens !== undefined) validateLens(c.lens, `${p}.lens`, doc, err);
+    for (const k of Object.keys(c)) if (!["id", "name", "position", "lookAt", "fov", "lens"].includes(k)) err(`${p}.${k}`, "is not a camera field (id, name, position, lookAt, fov, lens).");
+  });
+}
+/** Scene Phase 3: shots. */
+function validateShots(doc: SceneDoc, err: (path: string, m: string) => void, warn: (path: string, m: string) => void) {
+  const s = (doc as unknown as Record<string, unknown>).shots;
+  if (!Array.isArray(s)) { err("shots", "\"shots\" must be a list of { at, camera, name? }."); return; }
+  const cams = sceneCameraDefs(doc).map((c) => c.id);
+  let last = -1;
+  s.forEach((x, i) => {
+    const p = `shots[${i}]`;
+    if (!isObj(x)) { err(p, "must be { at, camera, name? }."); return; }
+    if (!num(x.at) || x.at < 0) err(`${p}.at`, "must be a number of seconds ≥ 0.");
+    else { if (x.at < last) warn(`${p}.at`, "is earlier than the shot before; shots are taken in time order."); last = x.at; }
+    if (typeof x.camera !== "string" || !cams.includes(x.camera)) err(`${p}.camera`, `must be a camera id (${cams.join(", ")}).`);
+    if (x.name !== undefined && typeof x.name !== "string") err(`${p}.name`, "must be a string.");
+  });
+  if (s.length && isObj(s[0]) && num(s[0].at) && s[0].at > 0) warn("shots[0].at", "The first shot starts after 0 s; the default camera is seen before it.");
+}
+/** Scene Phase 3: a camera rig / lens event. */
+function validateRig(doc: SceneDoc, e: SceneEvent, args: Record<string, unknown>, p: string, objects: Map<string, Record<string, unknown>>, err: (path: string, m: string) => void, warn: (path: string, m: string) => void) {
+  const rig = SCENE_CAMERA_RIGS[e.call];
+  for (const k of Object.keys(args)) if (!rig.args.includes(k)) err(`${p}.args.${k}`, `${e.call} takes ${rig.args.join(", ")}.`);
+  const obj = (v: unknown) => typeof v === "string" && objects.has(v);
+  const needDof = () => { const post = isObj(doc.world) && isObj(doc.world.post) ? doc.world.post : undefined; if (!(post && (post.dof === true || isObj(post.dof)))) warn(`${p}.call`, `world.post.dof is off, so "${e.call}" changes nothing you can see.`); };
+  switch (e.call) {
+    case "focalLength": if (!(num(args.value) && args.value >= 4 && args.value <= 1200)) err(`${p}.args.value`, "must be millimetres from 4 to 1200."); break;
+    case "fStop": if (!(num(args.value) && args.value >= 0.7 && args.value <= 64)) err(`${p}.args.value`, "must be an f-stop from 0.7 to 64."); else needDof(); break;
+    case "focus": if (!(num(args.value) && args.value > 0) && !obj(args.value)) err(`${p}.args.value`, "must be a distance above 0 or an object id."); else needDof(); break;
+    case "rackFocus":
+      if (!(num(args.to) && args.to > 0) && !obj(args.to)) err(`${p}.args.to`, "must be a distance above 0 or an object id.");
+      if (args.from !== undefined && !(num(args.from) && args.from > 0) && !obj(args.from)) err(`${p}.args.from`, "must be a distance above 0 or an object id.");
+      needDof();
+      break;
+    case "dolly":
+      if (args.path === undefined && args.distance === undefined) err(`${p}.args`, "dolly needs path (points) or distance.");
+      if (args.path !== undefined && !(isVec3(args.path) || (Array.isArray(args.path) && args.path.length > 0 && args.path.length <= 64 && args.path.every(isVec3)))) err(`${p}.args.path`, "must be a point or a list of points [x, y, z] (at most 64).");
+      if (args.distance !== undefined && !num(args.distance)) err(`${p}.args.distance`, "must be a number of units.");
+      break;
+    case "truck": case "crane": if (!num(args.distance)) err(`${p}.args.distance`, "must be a number of units."); break;
+    case "orbit":
+      if (!num(args.to)) err(`${p}.args.to`, "must be the end angle in degrees.");
+      if (args.from !== undefined && !num(args.from)) err(`${p}.args.from`, "must be an angle in degrees.");
+      if (args.target !== undefined && !isVec3(args.target) && !obj(args.target)) err(`${p}.args.target`, "must be an object id or [x, y, z].");
+      if (args.radius !== undefined && !(num(args.radius) && args.radius > 0)) err(`${p}.args.radius`, "must be a number above 0.");
+      if (args.height !== undefined && !num(args.height)) err(`${p}.args.height`, "must be a number.");
+      if (!(num(e.dur) && e.dur > 0)) warn(`${p}.dur`, "An orbit without dur jumps to its end angle.");
+      break;
+    case "follow":
+      if (!obj(args.target)) err(`${p}.args.target`, "must be an object id.");
+      if (args.offset !== undefined && !isVec3(args.offset)) err(`${p}.args.offset`, "must be [x, y, z] numbers.");
+      if (args.damping !== undefined && !(num(args.damping) && args.damping >= 0 && args.damping <= 5)) err(`${p}.args.damping`, "must be seconds from 0 to 5.");
+      break;
+    case "handheld":
+      if (args.amplitude !== undefined && !(num(args.amplitude) && args.amplitude >= 0 && args.amplitude <= 2)) err(`${p}.args.amplitude`, "must be units from 0 to 2.");
+      if (args.frequency !== undefined && !(num(args.frequency) && args.frequency > 0 && args.frequency <= 20)) err(`${p}.args.frequency`, "must be Hz above 0, at most 20.");
+      if (args.seed !== undefined && !num(args.seed) && typeof args.seed !== "string") err(`${p}.args.seed`, "must be a number or text.");
+      break;
+    case "frame":
+      if (!obj(args.subject)) err(`${p}.args.subject`, "must be an object id.");
+      if (args.shot !== undefined && !(SHOT_SIZES as readonly string[]).includes(String(args.shot))) err(`${p}.args.shot`, `must be one of ${SHOT_SIZES.join(", ")}.`);
+      if (args.angle !== undefined && !(SHOT_ANGLES as readonly string[]).includes(String(args.angle))) err(`${p}.args.angle`, `must be one of ${SHOT_ANGLES.join(", ")}.`);
+      if (args.height !== undefined && !(SHOT_HEIGHTS as readonly string[]).includes(String(args.height))) err(`${p}.args.height`, `must be one of ${SHOT_HEIGHTS.join(", ")}.`);
+      break;
+  }
 }
 
 /** Scene Phase 2: whether `call` is handled as a character call on a character object. */
@@ -1166,19 +1450,54 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
     } finally { depth--; }
   };
   const w = isObj(doc.world) ? doc.world : {};
-  const c = isObj(w.camera) ? w.camera : {};
-  const cam = plan.props.get(SCENE_CAMERA);
-  const fov0 = num(c.fov) && c.fov > 1 && c.fov < 179 ? c.fov : SCENE_DEFAULTS.fov;
-  const pos0 = isVec3(c.position) ? c.position : SCENE_DEFAULTS.cameraPosition;
-  const tgt0 = isVec3(c.lookAt) ? c.lookAt : SCENE_DEFAULTS.cameraTarget;
-  const camera = {
-    fov: evalChain(fov0, cam?.get("fov") ?? [], time, (s) => s.to as Val) as number,
-    position: evalChain(pos0, cam?.get("position") ?? [], time, (s) => s.to as Val) as Vec3,
-    target: evalChain(tgt0, cam?.get("target") ?? [], time, (s) => {
+  // Scene Phase 3: rotations and heights for camera rigs (frame, follow), and every camera's pose at any time.
+  const rotationAt = (id: string, at: number): Vec3 => {
+    const o = objOf(doc, id);
+    if (!o) return [0, 0, 0];
+    return evalChain(objBase(o).rotation, plan.props.get(id)?.get("rotation") ?? [], at, (s) => {
       const to = s.to;
-      return to && typeof to === "object" && !Array.isArray(to) && "lookAt" in to ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
-    }) as Vec3,
+      if (to && typeof to === "object" && !Array.isArray(to) && "lookAt" in to) { const r = lookRotation(positionAt(id, s.at + s.dur), typeof to.lookAt === "string" ? positionAt(to.lookAt, s.at + s.dur) : to.lookAt, objBase(o).rotation); return to.yawOnly ? [0, r[1], 0] : r; }
+      return Array.isArray(to) || typeof to !== "object" ? (to as Val) : objBase(o).rotation;
+    }) as Vec3;
   };
+  const heightOf = (id: string): number => { const o = objOf(doc, id); return o ? objectHeight(o) : 1; };
+  const camDefs = sceneCameraDefs(doc);
+  const fovAt = (key: string, at: number): number => { const d = camDefs.find((x) => x.key === key) ?? camDefs[0]; return evalChain(d.fov, plan.props.get(key)?.get("fov") ?? [], at, (s) => s.to as Val) as number; };
+  const env: ChainEnv = { positionAt, rotationAt, heightOf, fovAt };
+  const camPose = (d: (typeof camDefs)[number]) => {
+    const segs = plan.props.get(d.key);
+    const resolveTarget = (s: Seg): Val => { const to = s.to; return to && typeof to === "object" && !Array.isArray(to) && "lookAt" in to ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val); };
+    const pose = {
+      fov: evalChain(d.fov, segs?.get("fov") ?? [], time, (s) => s.to as Val, env) as number,
+      position: evalChain(d.position, segs?.get("position") ?? [], time, (s) => s.to as Val, env) as Vec3,
+      target: evalChain(d.target, segs?.get("target") ?? [], time, resolveTarget, env) as Vec3,
+    };
+    // Handheld: seeded noise added on top, ramping in and out over 0.4 s.
+    const sh = (plan.shakes.get(d.key) ?? []).filter((x) => x.at <= time && time < x.end).pop();
+    if (sh && sh.amp > 0) {
+      const env2 = Math.min(1, (time - sh.at) / 0.4, Number.isFinite(sh.end) ? (sh.end - time) / 0.4 : 1);
+      const a = shake(sh.seed, time, sh.freq), b = shake(`${sh.seed}:aim`, time, sh.freq * 0.8);
+      pose.position = [0, 1, 2].map((i) => pose.position[i] + a[i] * sh.amp * env2) as Vec3;
+      pose.target = [0, 1, 2].map((i) => pose.target[i] + b[i] * sh.amp * 0.6 * env2) as Vec3;
+    }
+    // Lens: focus (a distance, or an object followed) and f-stop.
+    const focusSegs = segs?.get("focus");
+    const focus0 = d.lens?.focus;
+    let focus: number | undefined;
+    if (focusSegs || focus0 !== undefined) {
+      const base = typeof focus0 === "string" ? dist(pose.position, focusPoint(doc, focus0, positionAt(focus0, time))) : num(focus0) ? focus0 : 6;
+      focus = evalChain(base, focusSegs ?? [], time, (s) => s.to as Val, env) as number;
+    }
+    const fSegs = segs?.get("fStop");
+    const fStop = fSegs || num(d.lens?.fStop) ? evalChain(num(d.lens?.fStop) ? d.lens!.fStop! : 2.8, fSegs ?? [], time, (s) => s.to as Val, env) as number : undefined;
+    return { ...pose, focus, fStop };
+  };
+  const shots = sceneShots(doc);
+  const activeId = shots.filter((x) => x.at <= time).pop()?.camera ?? SCENE_CAMERA;
+  const activeDef = camDefs.find((x) => x.id === activeId) ?? camDefs[0];
+  const activePose = camPose(activeDef);
+  const camera = { fov: activePose.fov, position: activePose.position, target: activePose.target };
+  const multi = camDefs.length > 1 || shots.length > 0;
   const objects = objs.map((o): SceneObjectState => {
     const b = objBase(o), segs = plan.props.get(o.id);
     const prop = <K extends ScenePropName>(k: K): SceneProps[K] => {
@@ -1258,7 +1577,11 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
   });
   const post = resolveGroup(lookKey("post"), postBase(w), "post");
   const fog = resolveGroup(lookKey("fog"), fogBase(w, background), "fog");
-  return { t: time, background, camera, objects, lights, ...(post ? { post } : {}), ...(fog ? { fog } : {}), ...(sky ? { sky } : {}) };
+  // Scene Phase 3: the active camera's lens drives the depth of field.
+  if (post?.dof && (activePose.focus !== undefined || activePose.fStop !== undefined))
+    post.dof = { ...post.dof, ...(activePose.focus !== undefined ? { focus: Math.max(0.01, activePose.focus) } : {}), ...(activePose.fStop !== undefined ? { aperture: Math.min(0.2, fStopToAperture(activePose.fStop)) } : {}) };
+  const cams = multi ? { cameraId: activeDef.id, cameras: camDefs.map((d) => { const x = d === activeDef ? activePose : camPose(d); return { id: d.id, fov: x.fov, position: x.position, target: x.target }; }) } : {};
+  return { t: time, background, camera, ...cams, objects, lights, ...(post ? { post } : {}), ...(fog ? { fog } : {}), ...(sky ? { sky } : {}) };
 }
 
 /** A short summary for the inspector and agents: objects with their functions, and the events in time order. */

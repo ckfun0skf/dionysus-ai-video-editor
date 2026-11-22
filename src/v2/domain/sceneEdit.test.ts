@@ -143,7 +143,7 @@ describe("scene edit: events (P76)", () => {
     expect(sceneCalls(r, "ball").map((c) => c.call)).toEqual(["position", "moveTo", "rotation", "lookAt", "scale", "visible", "opacity", "color"]);
     expect(sceneCalls(r, "bot").map((c) => c.call)).toContain("play");
     expect(sceneCalls(sample(), "ball").at(-1)).toMatchObject({ call: "setMood", kind: "custom", description: "Colour and size for a mood." });
-    expect(sceneCalls(r, "camera").map((c) => c.call)).toEqual(["position", "moveTo", "lookAt", "fov"]);
+    expect(sceneCalls(r, "camera").map((c) => c.call)).toEqual(["position", "moveTo", "lookAt", "fov", "focalLength", "focus", "fStop", "rackFocus", "dolly", "truck", "crane", "orbit", "follow", "handheld", "frame"]);
     expect(sceneCallArgs(r, "bot", "play")[0]).toEqual({ name: "clip", kind: "select", label: "Animation", options: ["Wave", "Spin", "Bounce"], free: true });
     expect(sceneCallArgs(r, "bot", "nodes")[0]).toMatchObject({ kind: "nodes", nodes: ["Bot", "Body", "Head", "Arm"] });
     expect(sceneCallArgs(sample(), "ball", "setMood")).toEqual([{ name: "mood", kind: "param", label: "mood", param: { type: "select", options: ["calm", "alert"], default: "calm" } }]);

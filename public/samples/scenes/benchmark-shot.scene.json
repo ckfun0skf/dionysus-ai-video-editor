@@ -17,6 +17,65 @@
     0
    ]
   },
+  "cameras": [
+   {
+    "id": "follow",
+    "name": "Handheld follow",
+    "position": [
+     -6.2,
+     1.5,
+     3.5
+    ],
+    "lookAt": [
+     -5,
+     1,
+     0.6
+    ],
+    "lens": {
+     "focalLength": 28,
+     "focus": "hero",
+     "fStop": 8
+    }
+   },
+   {
+    "id": "orbit",
+    "name": "Orbit",
+    "position": [
+     1.6,
+     1.6,
+     4
+    ],
+    "lookAt": [
+     1.6,
+     1,
+     0.6
+    ],
+    "lens": {
+     "focalLength": 35,
+     "focus": "hero",
+     "fStop": 4
+    }
+   },
+   {
+    "id": "close",
+    "name": "Close-up",
+    "position": [
+     2.2,
+     1.5,
+     2
+    ],
+    "lookAt": [
+     1.6,
+     1.5,
+     0.6
+    ],
+    "lens": {
+     "focalLength": 50,
+     "focus": "lamp",
+     "fStop": 1.8
+    }
+   }
+  ],
   "lights": [
    {
     "id": "skyfill",
@@ -750,90 +809,98 @@
    "ease": "linear"
   },
   {
-   "at": 0.5,
+   "at": 0.3,
    "obj": "camera",
    "call": "moveTo",
    "args": {
     "position": [
-     3,
+     1,
      3,
      11
     ]
    },
-   "dur": 4.5,
+   "dur": 3.5,
    "ease": "inOutSine"
   },
   {
-   "at": 5,
-   "obj": "camera",
-   "call": "moveTo",
+   "at": 3.5,
+   "obj": "follow",
+   "call": "follow",
    "args": {
-    "position": [
-     6,
-     2.6,
-     8.5
-    ]
-   },
-   "dur": 4.9,
-   "ease": "inOutSine"
-  },
-  {
-   "at": 10,
-   "obj": "camera",
-   "call": "moveTo",
-   "args": {
-    "position": [
-     3.4,
-     1.65,
-     3.6
-    ]
-   }
-  },
-  {
-   "at": 10,
-   "obj": "camera",
-   "call": "lookAt",
-   "args": {
-    "target": [
-     1.6,
+    "target": "hero",
+    "offset": [
+     -1.1,
      1.45,
-     0.4
-    ]
+     2.9
+    ],
+    "damping": 0.5
    }
   },
   {
-   "at": 10,
-   "obj": "camera",
-   "call": "fov",
+   "at": 3.5,
+   "obj": "follow",
+   "call": "handheld",
    "args": {
-    "value": 34
+    "amplitude": 0.035,
+    "frequency": 1.1
    }
   },
   {
-   "at": 10,
-   "obj": "post",
-   "call": "dofFocus",
+   "at": 6.5,
+   "obj": "orbit",
+   "call": "orbit",
    "args": {
-    "value": 6.2
-   }
+    "target": "hero",
+    "from": 75,
+    "to": 15,
+    "radius": 3.4,
+    "height": 0.5
+   },
+   "dur": 3.5,
+   "ease": "inOutSine"
   },
   {
    "at": 10,
-   "obj": "post",
-   "call": "dofAperture",
+   "obj": "close",
+   "call": "frame",
    "args": {
-    "value": 0.012
+    "subject": "hero",
+    "shot": "closeup",
+    "angle": "front",
+    "height": "eye"
    }
   },
   {
    "at": 10.6,
-   "obj": "post",
-   "call": "dofFocus",
+   "obj": "close",
+   "call": "rackFocus",
    "args": {
-    "value": 3.3
+    "to": "hero"
    },
    "dur": 1.4,
    "ease": "inOutCubic"
+  }
+ ],
+ "shots": [
+  {
+   "at": 0,
+   "camera": "camera",
+   "name": "Wide"
+  },
+  {
+   "at": 3.5,
+   "camera": "follow",
+   "name": "Follow"
+  },
+  {
+   "at": 6.5,
+   "camera": "orbit",
+   "name": "Orbit"
+  },
+  {
+   "at": 10,
+   "camera": "close",
+   "name": "Close-up"
   }
  ],
  "files": {
