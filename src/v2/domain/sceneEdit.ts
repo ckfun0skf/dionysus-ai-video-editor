@@ -13,6 +13,7 @@ import {
   stateAt, type SceneDoc, type SceneEase, type SceneEvent, type SceneLight, type SceneObject, type SceneShape, type SceneWorld, type Vec3,
 } from "./scene";
 import { getLookProp, SCENE_LOOK_CALLS, SCENE_LOOK_IDS, type SceneLookCall } from "./sceneLook";
+import { BUILTIN_CLIP_NAMES, SCENE_CHARACTER_CALLS, type SceneAnimationEntry } from "./sceneCharacter";
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -45,6 +46,47 @@ const PALETTE = ["#4fc3f7", "#ffb74d", "#81c784", "#e57373", "#ba68c8", "#fff176
 const SHAPE_SIZE: Record<SceneShape, number | number[]> = { box: 1, sphere: 0.5, cylinder: [0.4, 1], cone: [0.5, 1], torus: [0.5, 0.15], plane: [2, 2] };
 
 /** A new primitive object in front of the camera (beside the others), with a colour from a small palette. */
+/** Scene Phase 2 (#351): add a character (the built-in mannequin), standing on the floor in front, facing the camera. */
+export function addSceneCharacter(doc: SceneDoc, body: { height?: number; cloth?: string } = {}): { doc: SceneDoc; id: string } {
+  const objects = objectsOf(doc);
+  const taken = new Set(objects.map((o) => (isObj(o) ? o.id : "")));
+  let id = "character";
+  for (let k = 2; taken.has(id); k++) id = `character-${k}`;
+  const n = objects.filter((o) => isObj(o) && isObj(o.character)).length;
+  const obj: SceneObject = { id, position: [[0, -1.2, 1.2, -2.4, 2.4][n % 5], 0, 0.5], character: { body: { height: body.height ?? 1.7, cloth: body.cloth ?? PALETTE[n % PALETTE.length] } } };
+  return { doc: { ...doc, objects: [...objects, obj] }, id };
+}
+
+/** Scene Phase 2: add (or replace) a library clip from an animation GLB; returns its name. */
+export function addSceneAnimation(doc: SceneDoc, fileName: string, dataUrl: string, name?: string, extra: Partial<SceneAnimationEntry> = {}): { doc: SceneDoc; name: string } {
+  const files = { ...(isObj(doc.files) ? doc.files : {}) };
+  const clean = fileName.replace(/[^A-Za-z0-9 _.()-]/g, "_").replace(/^[^A-Za-z0-9]+/, "") || "animation.glb";
+  let file = clean;
+  for (let k = 2; files[file] !== undefined && files[file] !== dataUrl; k++) file = clean.replace(/(\.[^.]+)?$/, `-${k}$1`);
+  files[file] = dataUrl;
+  const lib = { ...(isObj(doc.animations) ? doc.animations : {}) };
+  let n = (name || clean.replace(/\.[^.]+$/, "")).replace(/[^A-Za-z0-9_-]/g, "-").replace(/^[^A-Za-z]+/, "").slice(0, 48) || "clip";
+  if (!name) for (let k = 2; lib[n] !== undefined || BUILTIN_CLIP_NAMES.includes(n); k++) n = `${n.replace(/-\d+$/, "")}-${k}`;
+  lib[n] = clean2({ file, ...extra });
+  return { doc: { ...doc, files, animations: lib }, name: n };
+}
+const clean2 = <T extends object>(o: T): T => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as T;
+
+/** Scene Phase 2: remove a library clip (its file too when nothing else uses it). */
+export function removeSceneAnimation(doc: SceneDoc, name: string): SceneDoc {
+  const lib = { ...(isObj(doc.animations) ? doc.animations : {}) };
+  const entry = lib[name];
+  if (!entry) return doc;
+  delete lib[name];
+  let out: SceneDoc = Object.keys(lib).length ? { ...doc, animations: lib } : (({ animations: _a, ...r }) => (void _a, r as SceneDoc))(doc);
+  const used = Object.values(lib).some((a) => a.file === entry.file) || objectsOf(out).some((o) => isObj(o) && o.model === entry.file);
+  if (!used && isObj(out.files) && out.files[entry.file] !== undefined) {
+    const { [entry.file]: _f, ...files } = out.files; void _f;
+    out = Object.keys(files).length ? { ...out, files } : (({ files: _x, ...r }) => (void _x, r as SceneDoc))(out);
+  }
+  return out;
+}
+
 export function addSceneObject(doc: SceneDoc, shape: SceneShape = "box"): { doc: SceneDoc; id: string } {
   const objects = objectsOf(doc);
   const id = freeObjectId(doc, shape);
@@ -214,7 +256,7 @@ export function removeSceneLight(doc: SceneDoc, i: number): SceneDoc {
 // ---------------------------------------------------------------- events
 
 /** What one call offers in the editor. */
-export interface SceneCallInfo { call: string; kind: "base" | "custom" | "camera" | "look"; description: string }
+export interface SceneCallInfo { call: string; kind: "base" | "custom" | "camera" | "look" | "character"; description: string }
 
 /** Scene Phase 1 (#350): the calls of a light (with an id), "post", "fog" or "sky" (only the effects the scene has). */
 function lookCalls(doc: SceneDoc, obj: string): [string, SceneLookCall][] | undefined {
@@ -237,15 +279,25 @@ export function sceneCalls(doc: SceneDoc, obj: string): SceneCallInfo[] {
   const o = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
   if (!o) return [];
   const model = typeof o.model === "string";
-  const base = Object.entries(SCENE_BASE_FUNCTIONS).filter(([, f]) => model || (f.prop !== "animation" && f.prop !== "nodes"))
-    .map(([call, f]) => ({ call, kind: "base" as const, description: f.description }));
+  // Scene Phase 2 (#351): a character's lookAt moves its head (turnTo turns the body); play / stop take any clip.
+  const char = isObj(o.character);
+  const base = Object.entries(SCENE_BASE_FUNCTIONS).filter(([call, f]) => char ? call !== "lookAt" && call !== "color" && f.prop !== "animation" && (model || f.prop !== "nodes") : model || (f.prop !== "animation" && f.prop !== "nodes"))
+    .map(([call, f]): SceneCallInfo => ({ call, kind: "base", description: f.description }));
+  if (char) {
+    base.push(...Object.entries(SCENE_CHARACTER_CALLS).map(([call, c]) => ({ call, kind: "character" as const, description: c.description })));
+    base.push({ call: "play", kind: "character" as const, description: "Play a full-body clip (built-in or library) instead of idling; speed, loop, from, fade." }, { call: "stop", kind: "character" as const, description: "Back to idling, fading over fade (s, else dur)." });
+  }
   const own = isObj(o.functions) ? Object.entries(o.functions).map(([call, f]) => ({ call, kind: "custom" as const, description: isObj(f) && typeof f.description === "string" ? f.description : "Custom function." })) : [];
   return [...base, ...own];
 }
 
 /** One argument field of a call, for the event form. */
 export type SceneArgField =
-  | { name: string; kind: "vec3" | "scale" | "target"; label: string }
+  | { name: string; kind: "vec3" | "scale"; label: string }
+  /** An object id or a point; Scene Phase 2: or "camera" (camera), or an angle in degrees (angle); optional = may be left out. */
+  | { name: string; kind: "target"; label: string; camera?: boolean; angle?: boolean; optional?: boolean }
+  /** Scene Phase 2: a list of points (a walk path), an expression map, text, viseme keys. */
+  | { name: string; kind: "points" | "expressions" | "text" | "visemes"; label: string; optional?: boolean }
   | { name: string; kind: "number"; label: string; min?: number; max?: number; step?: number; optional?: boolean }
   | { name: string; kind: "bool" | "color"; label: string }
   | { name: string; kind: "select"; label: string; options: string[]; optional?: boolean; free?: boolean }
@@ -268,6 +320,7 @@ export function sceneCallArgs(doc: SceneDoc, obj: string, call: string): SceneAr
     return c.kind === "number" ? [{ name: c.arg, kind: "number", label: c.label, min: c.min, max: c.max, step: c.step }] : [{ name: c.arg, kind: c.kind, label: c.label }];
   }
   const o = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
+  if (o && isObj(o.character)) { const ch = characterCallArgs(doc, call); if (ch) return ch; }
   const base = SCENE_BASE_FUNCTIONS[call];
   if (base) {
     switch (call) {
@@ -295,6 +348,54 @@ export function sceneCallArgs(doc: SceneDoc, obj: string, call: string): SceneAr
   return Object.entries(cleanParamDecls(f.params ?? {})).map(([name, param]) => ({ name, kind: "param" as const, label: param.label || name, param }));
 }
 
+/** Scene Phase 2 (#351): every clip a character can play: built-in, then the scene's library. */
+export const sceneClipNames = (doc: SceneDoc): string[] => [...BUILTIN_CLIP_NAMES, ...Object.keys(isObj(doc.animations) ? doc.animations : {}).filter((n) => !BUILTIN_CLIP_NAMES.includes(n))];
+
+/** Scene Phase 2: the argument fields of a character call (undefined for the other calls). */
+function characterCallArgs(doc: SceneDoc, call: string): SceneArgField[] | undefined {
+  const clips = sceneClipNames(doc);
+  switch (call) {
+    case "walkTo": case "runTo": return [{ name: "path", kind: "points", label: "Path (points)" }, { name: "speed", kind: "number", label: "Speed (m/s)", min: 0.1, max: 12, step: 0.1, optional: true }];
+    case "turnTo": return [{ name: "target", kind: "target", label: "Turn to", angle: true }];
+    case "lookAt": return [{ name: "target", kind: "target", label: "Look at", camera: true }, { name: "weight", kind: "number", label: "Weight", min: 0, max: 1, step: 0.05, optional: true }];
+    case "sit": return [{ name: "seat", kind: "target", label: "Seat", optional: true }, { name: "facing", kind: "number", label: "Facing (°)", min: -360, max: 360, step: 5, optional: true }];
+    case "stand": return [];
+    case "gesture": return [{ name: "clip", kind: "select", label: "Clip", options: clips }, { name: "fade", kind: "number", label: "Fade (s)", min: 0, step: 0.05, optional: true }];
+    case "expression": return [{ name: "value", kind: "expressions", label: "Expressions" }];
+    case "speak": return [{ name: "text", kind: "text", label: "Text", optional: true }, { name: "visemes", kind: "visemes", label: "Visemes (from audio)", optional: true }];
+    case "pickUp": return [{ name: "object", kind: "select", label: "Object", options: objectsOf(doc).filter((x) => isObj(x) && !isObj(x.character)).map((x) => x.id) }, { name: "hand", kind: "select", label: "Hand", options: ["right", "left"], optional: true }];
+    case "drop": return [{ name: "object", kind: "select", label: "Object", options: objectsOf(doc).filter((x) => isObj(x) && !isObj(x.character)).map((x) => x.id) }];
+    case "play": return [
+      { name: "clip", kind: "select", label: "Clip", options: clips },
+      { name: "speed", kind: "number", label: "Speed", min: 0, step: 0.1, optional: true },
+      { name: "loop", kind: "select", label: "Loop", options: [...SCENE_LOOPS], optional: true },
+      { name: "from", kind: "number", label: "Start at (s)", min: 0, step: 0.1, optional: true },
+      { name: "fade", kind: "number", label: "Fade (s)", min: 0, step: 0.1, optional: true },
+    ];
+    case "stop": return [{ name: "fade", kind: "number", label: "Fade (s)", min: 0, step: 0.1, optional: true }];
+  }
+  return undefined;
+}
+
+/** Scene Phase 2: default arguments of a character call (what the character has at `at`, or a sensible start). */
+function characterDefaultArgs(doc: SceneDoc, src: SceneObject, o: { position: Vec3; rotation: Vec3 }, call: string): Record<string, unknown> | undefined {
+  const yaw = (o.rotation[1] * Math.PI) / 180;
+  switch (call) {
+    case "walkTo": case "runTo": return { path: [vecR([o.position[0] + Math.sin(yaw) * 2, o.position[1], o.position[2] + Math.cos(yaw) * 2])] };
+    case "turnTo": return { target: r3(o.rotation[1] + 90) };
+    case "lookAt": return { target: SCENE_CAMERA };
+    case "sit": { const seat = objectsOf(doc).find((x) => isObj(x) && x.id !== src.id && !isObj(x.character)); return seat ? { seat: seat.id } : { seat: vecR(o.position) }; }
+    case "stand": return {};
+    case "gesture": return { clip: "wave" };
+    case "expression": return { value: { happy: 1 } };
+    case "speak": return { text: "Hello!" };
+    case "pickUp": case "drop": { const x = objectsOf(doc).find((y) => isObj(y) && y.id !== src.id && !isObj(y.character)); return x ? { object: x.id } : {}; }
+    case "play": return { clip: "talk" };
+    case "stop": return {};
+  }
+  return undefined;
+}
+
 /** Default arguments for a new `call` at `at`: the value the object (or camera) has there, so adding changes nothing until edited. */
 export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: number): Record<string, unknown> {
   const s = stateAt(doc, at);
@@ -317,6 +418,7 @@ export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: nu
   const o = s.objects.find((x) => x.id === obj);
   const src = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
   if (!o || !src) return {};
+  if (isObj(src.character)) { const ch = characterDefaultArgs(doc, src, o, call); if (ch) return ch; }
   switch (call) {
     case "position": return { value: vecR(o.position) };
     case "moveTo": return { position: vecR(o.position) };
@@ -345,6 +447,8 @@ export function callTweens(doc: SceneDoc, obj: string, call: string): boolean {
   if (obj === SCENE_CAMERA) return !!SCENE_CAMERA_FUNCTIONS[call];
   const look = lookTargetOf(doc, obj);
   if (look) return !!SCENE_LOOK_CALLS[look.kind][call];
+  const co = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
+  if (co && isObj(co.character)) { const c = SCENE_CHARACTER_CALLS[call]; if (c) return c.tweens; if (call === "play" || call === "stop") return true; }
   const base = SCENE_BASE_FUNCTIONS[call];
   if (base) return base.prop !== "visible" && base.prop !== "nodes";
   return true;
@@ -407,7 +511,7 @@ export function duplicateSceneEvent(doc: SceneDoc, i: number): { doc: SceneDoc; 
 export interface SceneBlock { index: number; at: number; dur: number; end: number; call: string; row: number }
 export interface SceneTrack {
   /** The object id (`camera` for the camera; "#scene", "#light-<i>" and "" (unknown objects) never take events). */
-  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "light" | "look" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
+  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "character" | "light" | "look" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
   /** P81b: a light track's index in the drawn lights. */
   light?: number;
   /** Scene Phase 1 (#350): what events on this track name (a light's id, "post", "fog" or "sky"); unset = `id` (none for a light without an id). */
@@ -430,8 +534,9 @@ export function sceneTracks(doc: SceneDoc, minSec = 0.4): SceneTrack[] {
   for (const o of objectsOf(doc)) {
     if (!isObj(o) || typeof o.id !== "string") continue;
     const script = isObj(o.script) && typeof o.script.file === "string" ? o.script.file : undefined;
-    tracks.push({ id: o.id, label: typeof o.name === "string" && o.name ? o.name : o.id, kind: script ? "script" : typeof o.model === "string" ? "model" : "shape",
-      detail: script ? `script ${script}` : typeof o.model === "string" ? o.model : o.shape ?? "box", rows: 1, blocks: [] });
+    const char = isObj(o.character);
+    tracks.push({ id: o.id, label: typeof o.name === "string" && o.name ? o.name : o.id, kind: char ? "character" : script ? "script" : typeof o.model === "string" ? "model" : "shape",
+      detail: char ? `character${typeof o.model === "string" ? ` ${o.model}` : ""}` : script ? `script ${script}` : typeof o.model === "string" ? o.model : o.shape ?? "box", rows: 1, blocks: [] });
   }
   const byId = new Map(tracks.map((t) => [t.id, t]));
   const { lights, defaults } = sceneLights(doc);

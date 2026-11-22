@@ -50,7 +50,7 @@ async function resolveFile(file: unknown): Promise<unknown | { error: string }> 
   if (!ok.ok) return { error: `"file.url": ${ok.error}` };
   let name = typeof f.name === "string" && f.name ? f.name : "";
   if (!name) { try { name = decodeURIComponent(new URL(ok.url).pathname.split("/").pop() ?? ""); } catch { name = ""; } }
-  if (!/\.glb$/i.test(name)) return { error: `"file": the model needs a .glb name; give "name" (e.g. "robot.glb")${name ? ` — "${name}" is not one` : ""}.` };
+  if (!/\.(glb|vrm)$/i.test(name)) return { error: `"file": the model needs a .glb (or .vrm) name; give "name" (e.g. "robot.glb")${name ? ` — "${name}" is not one` : ""}.` };
   let res: Response;
   try { res = await fetch(ok.url, { credentials: "omit" }); } catch (e) { return { error: `Couldn't fetch ${ok.url.slice(0, 120)}: ${(e as Error).message || "network error"} (the server must allow this site with CORS).` }; }
   if (!res.ok) return { error: `Couldn't fetch ${ok.url.slice(0, 120)}: HTTP ${res.status}.` };

@@ -1,6 +1,6 @@
 import type { SceneDoc } from "../domain/scene";
 import { writeManifest } from "../domain/htmlClipPackage";
-import { SCENE_BUILD_JS, sceneFileUse, scenePageKey } from "./scenePage";
+import { characterDataTag, SCENE_BUILD_JS, sceneFileUse, scenePageKey } from "./scenePage";
 
 /**
  * P81a: the scene editor's Edit view page. A second instance of the scene clip's page (render/scenePage.ts: the same
@@ -109,6 +109,7 @@ function apply(s) {
     if (dragging && n.node === tc.object) continue;
     applyObject(n, o, s.t);
   }
+  applyHolds(s.objects.filter((o) => !(dragging && nodes.get(o.id) && nodes.get(o.id).node === tc.object)));
 }
 function setOpts() {
   tc.setMode(opts.mode);
@@ -173,6 +174,7 @@ addEventListener("message", (e) => {
 reportScript = () => post({ type: "scene-edit:script-issues", issues: scriptIssues.slice() });
 try { await loadModels(dionysus.ctx); } catch (err) { console.error(err); }
 try { await loadScripts(dionysus.ctx); } catch (err) { console.error(err); }
+try { await loadAnimations(dionysus.ctx); } catch (err) { console.error(err); }
 try { await loadLook(dionysus.ctx); } catch (err) { console.error(err); }
 for (const [id, n] of nodes) n.node.userData.sceneId = id;
 setOpts(); size();
@@ -203,10 +205,10 @@ export function sceneEditPage(doc: SceneDoc | undefined): string {
 <html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}</style></head>
 <body><canvas id="c" tabindex="0"></canvas>
 <script type="application/json" id="dionysus-scene">${json}</script>
-<script type="module">
+${characterDataTag(doc)}<script type="module">
 ${SCENE_BUILD_JS}${SCENE_EDIT_JS}</script></body></html>
 `;
-  const { models, scripts, look, environment } = sceneFileUse(rest);
+  const { models, scripts, look, environment, animations, vrm } = sceneFileUse(rest);
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models ? ["three-gltf"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment ? used : {} });
+  return writeManifest(page, { libs: ["three", "three-orbit", "three-transform", ...(models || animations ? ["three-gltf"] : []), ...(vrm ? ["three-vrm"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment || animations ? used : {} });
 }

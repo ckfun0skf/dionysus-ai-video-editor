@@ -3,50 +3,14 @@
  *   A stylized village street at dusk. A character walks from left to right past a lantern-lit house, stops, turns to
  *   camera and waves. The camera starts wide, orbits slowly, then cuts to a medium close-up with a focus pull.
  *   Fireflies appear as the light fades.
- * Phase 1 (#350) version: primitives and Script-object stand-ins with the Phase 1 look (toon + outlines, rim light,
- * bloom on the lantern / windows / sky, warm-to-dusk light change via light and sky events, fog depth, a DOF focus
- * pull). Later phases swap in real characters and library assets. The same document is published as
+ * Phase 1 (#350) added the look (toon + outlines, rim light, bloom on the lantern / windows / sky, warm-to-dusk light
+ * via light and sky events, fog depth, a DOF focus pull). Phase 2 (#351) swaps the stand-in for a character (the
+ * built-in mannequin): it walks along the street (speed-matched, no foot sliding), stops, looks at the camera, smiles,
+ * waves and says a line (lip sync), while a second character sits on a bench. Later phases swap in library assets. The same document is published as
  * public/samples/scenes/benchmark-shot.scene.json (kept in sync by sceneLook.test.ts).
  */
 import type { SceneDoc } from "../scene";
 import { scriptDataUrl } from "../sceneScriptCode";
-
-/** The stand-in character: body, head with eyes, arms on shoulder pivots, legs; walk cycle and wave from t alone. */
-const HERO = `// Stand-in character: a walk cycle while walking and a wave, both from scene time t alone.
-export function build(THREE, params) {
-  const g = new THREE.Group();
-  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.8 });
-  const skin = mat(params.skin), cloth = mat(params.cloth), dark = mat("#22202a");
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 0.5, 6, 16), cloth); body.position.y = 1.0; g.add(body);
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.2, 24, 16), skin); head.position.y = 1.55; g.add(head);
-  for (const x of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.03, 10, 8), dark); e.position.set(x, 1.58, 0.18); g.add(e); }
-  const limb = (len, r, m) => { const p = new THREE.Group(); const l = new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 4, 10), m); l.position.y = -len / 2 - r; p.add(l); return p; };
-  const armL = limb(0.45, 0.07, cloth), armR = limb(0.45, 0.07, cloth);
-  armL.position.set(-0.32, 1.32, 0); armR.position.set(0.32, 1.32, 0); g.add(armL, armR);
-  const legL = limb(0.42, 0.085, dark), legR = limb(0.42, 0.085, dark);
-  legL.position.set(-0.12, 0.62, 0); legR.position.set(0.12, 0.62, 0); g.add(legL, legR);
-  g.userData.parts = { body, head, armL, armR, legL, legR };
-  return g;
-}
-
-export function update(g, t, params) {
-  const p = g.userData.parts;
-  const walking = t >= params.walkFrom && t <= params.walkTo;
-  const s = walking ? Math.sin((t - params.walkFrom) * params.stride) : 0;
-  p.legL.rotation.x = s * 0.6; p.legR.rotation.x = -s * 0.6;
-  p.armL.rotation.x = -s * 0.5; p.armR.rotation.x = s * 0.5;
-  p.body.position.y = 1.0 + (walking ? Math.abs(s) * 0.04 : 0);
-  p.armR.rotation.z = 0;
-  // Wave: raise the right arm over 0.4 s, wave it, lower it over 0.4 s.
-  const w0 = params.waveFrom, w1 = params.waveTo;
-  if (t > w0 && t < w1) {
-    const up = Math.min(1, (t - w0) / 0.4, (w1 - t) / 0.4);
-    p.armR.rotation.x = 0;
-    p.armR.rotation.z = up * (2.5 + Math.sin((t - w0) * 9) * 0.35);
-  }
-  p.head.rotation.y = 0;
-}
-`;
 
 /** Fireflies: seeded points drifting around the house, fading in as the light fades. */
 const FIREFLIES = `// Fireflies: points that drift and blink from scene time t alone, fading in from fadeFrom.
@@ -116,9 +80,15 @@ export const BENCHMARK_SHOT: SceneDoc = {
     { id: "trunk2", shape: "cylinder", size: [0.15, 1.2], color: "#6b4a32", position: [-7.5, 0.6, -1.8], material: toonOutline },
     { id: "crown2", shape: "cone", size: [1.2, 2.8], color: "#46733c", position: [-7.5, 2.6, -1.8], material: toonOutline },
     {
-      id: "hero", name: "Character (stand-in)", shape: "cylinder", size: [0.25, 1.6], position: [-5, 0, 0.6], rotation: [0, 90, 0],
-      script: { file: "hero.js", params: { skin: "#f2c9a0", cloth: "#3d6fb6", walkFrom: 0.5, walkTo: 6.5, stride: 7, waveFrom: 8, waveTo: 10.6 } },
-      material: { type: "toon", steps: 3, outline: { width: 0.012 }, rim: { color: "#ffd0a0", strength: 0.25, power: 4 } },
+      id: "hero", name: "Hero", position: [-5, 0, 0.6], rotation: [0, 90, 0],
+      character: { body: { height: 1.7, skin: "#f2c9a0", cloth: "#3d6fb6", pants: "#2c3140", hair: "#4a2e1e" } },
+      material: { type: "toon", steps: 3, outline: { width: 0.008 }, rim: { color: "#ffd0a0", strength: 0.25, power: 4 } },
+    },
+    { id: "bench", name: "Bench", shape: "box", size: [1.4, 0.45, 0.45], color: "#7a5236", position: [-2.4, 0.225, -1.5], material: toonOutline },
+    {
+      id: "elder", name: "Elder", position: [-2.4, 0, -1.2], rotation: [0, 0, 0],
+      character: { body: { height: 1.6, skin: "#e3b896", cloth: "#7d4e8c", pants: "#3a3340", hair: "#d8d8d8" }, idle: "idle" },
+      material: { type: "toon", steps: 3, outline: { width: 0.008 } },
     },
     {
       id: "fireflies", position: [0.5, 0, -0.5],
@@ -127,8 +97,16 @@ export const BENCHMARK_SHOT: SceneDoc = {
   ],
   events: [
     // The character walks left to right past the house, stops, turns to camera and waves (the wave is in its script).
-    { at: 0.5, obj: "hero", call: "moveTo", args: { position: [1.6, 0, 0.6] }, dur: 6, ease: "linear" },
-    { at: 7, obj: "hero", call: "rotation", args: { value: [0, 24, 0] }, dur: 0.8, ease: "inOutSine" },
+    { at: 0, obj: "elder", call: "sit", args: { seat: "bench", facing: 0 } },
+    { at: 0.5, obj: "hero", call: "walkTo", args: { path: [[-1, 0, 0.7], [1.6, 0, 0.6]], speed: 1.25 } },
+    { at: 3, obj: "elder", call: "lookAt", args: { target: "hero" }, dur: 0.8 },
+    { at: 6.6, obj: "hero", call: "turnTo", args: { target: 28 }, dur: 0.7 },
+    { at: 7, obj: "hero", call: "lookAt", args: { target: "camera" }, dur: 0.6 },
+    { at: 7.4, obj: "hero", call: "expression", args: { value: { happy: 1 } }, dur: 0.5 },
+    { at: 8, obj: "hero", call: "gesture", args: { clip: "wave" } },
+    { at: 8.2, obj: "hero", call: "speak", args: { text: "Good evening!" }, dur: 1.1 },
+    { at: 9, obj: "elder", call: "gesture", args: { clip: "nod" } },
+    { at: 10.5, obj: "hero", call: "gesture", args: { clip: "talk" }, dur: 3 },
     // Warm to dusk: the sun sets (it places the "sun" light), its light reddens and fades; fog and sky darken.
     { at: 2, obj: "sky", call: "sunElevation", args: { value: -1.5 }, dur: 12, ease: "inOutSine" },
     { at: 2, obj: "sky", call: "rayleigh", args: { value: 3.2 }, dur: 12, ease: "linear" },
@@ -151,5 +129,5 @@ export const BENCHMARK_SHOT: SceneDoc = {
     { at: 10, obj: "post", call: "dofAperture", args: { value: 0.012 } },
     { at: 10.6, obj: "post", call: "dofFocus", args: { value: 3.3 }, dur: 1.4, ease: "inOutCubic" },
   ],
-  files: { "hero.js": scriptDataUrl(HERO), "fireflies.js": scriptDataUrl(FIREFLIES) },
+  files: { "fireflies.js": scriptDataUrl(FIREFLIES) },
 };

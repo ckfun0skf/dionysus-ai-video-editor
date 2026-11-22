@@ -59,6 +59,14 @@ export const HTML_LIBRARIES: readonly HtmlLibrary[] = [
     integrity: "sha384-nm2otDl837p6dOMGYQMS865Ka526KufeVXeuA6zKiPrZ/dcjMcNsKpTDdBHv3RPN",
     license: "vendor/three-LICENSE.txt", requires: ["three"], editorOnly: true,
   },
+  {
+    // Scene Phase 2 (#351): the VRM loader plugin for VRoid characters (@pixiv/three-vrm, MIT), bundled by
+    // scripts/vendor-three-vrm.mjs. Built-in pages only; loaded only by scenes with a .vrm character.
+    id: "three-vrm", name: "three-vrm (VRM loader)", version: "3.4.5", specifier: "three/addons/dionysus-vrm.js",
+    path: "vendor/three-vrm-3.4.5.min.js",
+    integrity: "sha384-NDWBcFvU+/d+uA8US9LBdGgknF4xv5J5lvjvY+kHhBtNB13jjRv30pw1/oXrHEDN",
+    license: "vendor/three-vrm-LICENSE.txt", requires: ["three", "three-gltf"], editorOnly: true,
+  },
 ];
 /** The libraries clips may use (the editor-only ones left out). */
 export const CLIP_HTML_LIBRARIES: readonly HtmlLibrary[] = HTML_LIBRARIES.filter((l) => !l.editorOnly);

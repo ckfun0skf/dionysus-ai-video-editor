@@ -45,7 +45,7 @@ describe("P81a Edit view page", () => {
 
   it("the editor-only libraries are not offered to clips (picker, AI prompts, lint, detection)", () => {
     const editorOnly = HTML_LIBRARIES.filter((l) => l.editorOnly).map((l) => l.id);
-    expect(editorOnly).toEqual(["three-orbit", "three-transform", "three-look"]);
+    expect(editorOnly).toEqual(["three-orbit", "three-transform", "three-look", "three-vrm"]);
     expect(CLIP_HTML_LIBRARIES.map((l) => l.id)).toEqual(["three", "three-gltf"]);
     expect(CLIP_LIBRARIES.map((l) => l.id)).toEqual(["three", "three-gltf"]);
     const clip = 'import * as T from "three"; import { OrbitControls } from "three/addons/controls/OrbitControls.js";';

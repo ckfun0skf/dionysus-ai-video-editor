@@ -1,5 +1,7 @@
 import type { SceneDoc } from "../domain/scene";
 import { lookStructure } from "../domain/sceneLook";
+import { autoRig, BUILTIN_CLIPS, HUMAN_BONES, UPPER_BONES } from "../domain/sceneCharacter";
+import { glbInfoOfDataUrl } from "../domain/glb";
 import { writeManifest } from "../domain/htmlClipPackage";
 
 /**
@@ -55,6 +57,338 @@ onmessage = async (e) => {
   } catch (_) { /* reported by the page */ }
   postMessage({ type: "done", seq: d.seq });
 };
+`;
+
+/**
+ * Scene Phase 2 (#351): characters in the page. Every frame a character's state (layers, look, expressions) from the
+ * pure evaluator becomes a pose on the **normalized humanoid** (T-pose, facing +z, rest rotations identity): each layer
+ * is sampled (built-in clips from their keys, library clips from their GLB's tracks converted to normalized), full
+ * layers are blended by weight, upper-body layers override the bones they move, the head turns to the look target.
+ * The pose is then mapped onto the rig — the mannequin directly, VRM through its normalized bones, a GLB through each
+ * bone's rest rotation — and the face is set (VRM expressions, GLB morph targets or the mannequin's face). Nothing is
+ * carried between frames. Held objects follow the hand bone (applyHolds, after every object is posed).
+ */
+export const SCENE_CHARACTER_JS = `const HB = CHAR.bones || [];
+const UPPER = new Set(CHAR.upper || []);
+const NPARENT = { spine: "hips", chest: "spine", upperChest: "chest", neck: "upperChest", head: "neck", leftEye: "head", rightEye: "head",
+  leftShoulder: "upperChest", leftUpperArm: "leftShoulder", leftLowerArm: "leftUpperArm", leftHand: "leftLowerArm",
+  rightShoulder: "upperChest", rightUpperArm: "rightShoulder", rightLowerArm: "rightUpperArm", rightHand: "rightLowerArm",
+  leftUpperLeg: "hips", leftLowerLeg: "leftUpperLeg", leftFoot: "leftLowerLeg", leftToes: "leftFoot",
+  rightUpperLeg: "hips", rightLowerLeg: "rightUpperLeg", rightFoot: "rightLowerLeg", rightToes: "rightFoot" };
+const qE = new THREE.Euler(), qTmp = new THREE.Quaternion(), qTmp2 = new THREE.Quaternion(), vTmp = new THREE.Vector3();
+const keyQuats = new WeakMap();
+// A clip's local time: looped, ping-ponged or held (as the evaluator's unwrapped time asks).
+function wrapTime(t, len, loop) {
+  if (!(len > 0)) return 0;
+  if (loop === "once") return Math.min(Math.max(0, t), len);
+  if (loop === "pingpong") { const c = t % (2 * len); return c <= len ? c : 2 * len - c; }
+  return ((t % len) + len) % len;
+}
+// One built-in clip at time t: { bone: Quaternion } (normalized locals) and the hips offset (metres for 1.7 m).
+function sampleBuiltin(clip, t) {
+  const time = wrapTime(t, clip.length, clip.loop), out = { q: {}, hips: null, keyed: clip.keyed };
+  for (const b in clip.bones) {
+    const keys = clip.bones[b];
+    let qs = keyQuats.get(keys);
+    if (!qs) { qs = keys.map((k) => new THREE.Quaternion().setFromEuler(qE.set(k[1] * D, k[2] * D, k[3] * D, "XYZ"))); keyQuats.set(keys, qs); }
+    let i = 0; while (i + 1 < keys.length && keys[i + 1][0] <= time) i++;
+    const a = keys[i], z = keys[Math.min(i + 1, keys.length - 1)];
+    const f = z[0] > a[0] ? (time - a[0]) / (z[0] - a[0]) : 0;
+    out.q[b] = qs[i].clone().slerp(qs[Math.min(i + 1, keys.length - 1)], Math.min(1, Math.max(0, f)));
+  }
+  if (clip.hips) {
+    const keys = clip.hips; let i = 0; while (i + 1 < keys.length && keys[i + 1][0] <= time) i++;
+    const a = keys[i], z = keys[Math.min(i + 1, keys.length - 1)];
+    const f = z[0] > a[0] ? Math.min(1, Math.max(0, (time - a[0]) / (z[0] - a[0]))) : 0;
+    out.hips = new THREE.Vector3(a[1] + (z[1] - a[1]) * f, a[2] + (z[2] - a[2]) * f, a[3] + (z[3] - a[3]) * f);
+  }
+  return out;
+}
+for (const name in CHAR.clips || {}) { const c = CHAR.clips[name]; c.keyed = new Set(Object.keys(c.bones)); }
+// Library clips (animation-only GLBs): each is sampled from its tracks and converted to normalized locals.
+const library = new Map();
+async function loadAnimations(ctx) {
+  const lib = doc.animations && typeof doc.animations === "object" ? doc.animations : {};
+  const names = Object.keys(lib);
+  if (!names.length) return;
+  const GLTF = "three/addons/loaders/GLTFLoader.js";
+  const { GLTFLoader } = await import(GLTF);
+  const loader = new GLTFLoader();
+  const files = new Map();
+  for (const name of names) {
+    const a = lib[name]; if (!a || typeof a.file !== "string") continue;
+    const url = ctx.asset(a.file); if (!url) continue;
+    let gltf = files.get(a.file);
+    if (!gltf) { try { gltf = await loader.loadAsync(url); files.set(a.file, gltf); } catch (err) { console.error(err); continue; } }
+    const clip = (gltf.animations || []).find((c) => !a.clip || c.name === a.clip);
+    const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    if (!clip || !root) continue;
+    const rig = (CHAR.libraryRigs || {})[name] || {};
+    library.set(name, makeLibrarySampler(clip, root, rig, a));
+  }
+}
+const sanitize = (n) => THREE.PropertyBinding.sanitizeNodeName(n);
+function makeLibrarySampler(clip, root, rig, entry) {
+  root.updateMatrixWorld(true);
+  const rootInv = root.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const bones = {};
+  for (const b of HB) {
+    const name = rig[b]; if (!name) continue;
+    const node = root.getObjectByName(sanitize(name)); if (!node) continue;
+    // The chain of nodes from the root to this bone, each with its rest local rotation and its rotation track.
+    const chain = [];
+    for (let x = node; x && x !== root; x = x.parent) chain.unshift(x);
+    bones[b] = { node, chain, rest: rootInv.clone().multiply(node.getWorldQuaternion(new THREE.Quaternion())) };
+  }
+  const tracks = new Map();
+  for (const tr of clip.tracks) { const m = /^(.*)\\.(quaternion|position)$/.exec(tr.name); if (m) tracks.set(m[1] + "." + m[2], tr.createInterpolant()); }
+  const hips = bones.hips;
+  const hipsPos = hips && tracks.get(hips.node.name + ".position");
+  const hipsRest = hips ? hips.node.position.clone() : null;
+  const hipsH = hips ? Math.max(1e-3, hips.node.getWorldPosition(new THREE.Vector3()).y - root.getWorldPosition(new THREE.Vector3()).y) : 1;
+  const length = entry.length > 0 ? entry.length : clip.duration || 1;
+  return {
+    length, loop: entry.loop || "repeat", upper: entry.mask === "upper",
+    sample(t) {
+      const time = wrapTime(t, length, this.loop);
+      const world = {}, q = {};
+      const localAt = (x) => { const it = tracks.get(x.name + ".quaternion"); return it ? qTmp.fromArray(it.evaluate(time)) : x.quaternion; };
+      for (const b of HB) {
+        const x = bones[b]; if (!x) continue;
+        const w = new THREE.Quaternion();
+        for (const n of x.chain) w.multiply(localAt(n));
+        world[b] = w.multiply(x.rest.clone().invert()); // normalized world rotation (w and rest are both relative to the root)
+      }
+      // Normalized locals along the humanoid hierarchy (a missing bone takes its parent's world rotation).
+      const nw = {};
+      for (const b of HB) {
+        const p = NPARENT[b], pw = p ? nw[p] || new THREE.Quaternion() : new THREE.Quaternion();
+        nw[b] = world[b] || pw.clone();
+        q[b] = pw.clone().invert().multiply(nw[b]);
+      }
+      let off = null;
+      if (hipsPos && hipsRest) {
+        const p = new THREE.Vector3().fromArray(hipsPos.evaluate(time)).sub(hipsRest);
+        p.applyQuaternion(rootInvMul(rootInv, hips.node.parent.getWorldQuaternion(new THREE.Quaternion())));
+        const s = hips.node.parent.getWorldScale(new THREE.Vector3());
+        off = new THREE.Vector3(0, (p.y * s.y) / hipsH * 0.92, 0); // in place: root motion is the walk's job
+      }
+      return { q, hips: off, keyed: this.upper ? UPPER : null };
+    },
+  };
+}
+const rootInvMul = (inv, q) => inv.clone().multiply(q);
+// The normalized pose for a character's layers: full layers blended by weight, then upper-body layers on top.
+function blendLayers(layers) {
+  const q = {}, hips = new THREE.Vector3();
+  let sum = 0;
+  const sampleOf = (l) => {
+    const lib = library.get(l.clip);
+    if (lib) return lib.sample(l.time);
+    const b = (CHAR.clips || {})[l.clip];
+    return b ? sampleBuiltin(b, l.time) : null;
+  };
+  for (const l of layers) {
+    if (l.mask !== "full") continue;
+    const s = sampleOf(l); if (!s) continue;
+    sum += l.weight;
+    const k = l.weight / sum;
+    for (const b of HB) {
+      const v = s.q[b] || qTmp2.identity();
+      q[b] = q[b] ? q[b].slerp(v, k) : v.clone();
+    }
+    if (s.hips) hips.lerp(s.hips, k); else hips.multiplyScalar(1 - k);
+  }
+  for (const l of layers) {
+    if (l.mask !== "upper") continue;
+    const s = sampleOf(l); if (!s) continue;
+    for (const b of HB) {
+      if (!UPPER.has(b) || !s.q[b] || (s.keyed && !s.keyed.has(b))) continue;
+      q[b] = (q[b] || new THREE.Quaternion()).slerp(s.q[b], l.weight);
+    }
+  }
+  return { q, hips };
+}
+// Head and neck turn towards the look target (yaw ±75°, pitch ±35°), 35 % neck and 65 % head, by the weight.
+function applyHeadLook(n, pose, look) {
+  if (!look || !(look.weight > 0)) return;
+  const root = n.node;
+  root.updateMatrixWorld(true);
+  const local = root.worldToLocal(vTmp.set(look.target[0], look.target[1], look.target[2]));
+  const sy = root.scale.y || 1;
+  const head = n.char.height * 0.92 / sy;
+  const dx = local.x, dy = local.y - head, dz = local.z;
+  const yaw = Math.max(-75, Math.min(75, Math.atan2(dx, dz) / D)) * look.weight;
+  const pitch = Math.max(-35, Math.min(35, Math.atan2(dy, Math.hypot(dx, dz)) / D)) * look.weight;
+  for (const [b, k] of [["neck", 0.35], ["head", 0.65]]) {
+    const add = new THREE.Quaternion().setFromEuler(qE.set(-pitch * k * D, yaw * k * D, 0, "YXZ"));
+    pose.q[b] = (pose.q[b] || new THREE.Quaternion()).premultiply(add);
+  }
+}
+// Put the normalized pose on the rig.
+function applyPose(n, pose) {
+  const c = n.char;
+  if (c.kind === "mannequin" || c.kind === "vrm") {
+    for (const b of HB) { const node = c.bone(b); if (node) node.quaternion.copy(pose.q[b] || qTmp.identity()); }
+    const hips = c.bone("hips");
+    if (hips) hips.position.copy(c.hipsRest).addScaledVector(pose.hips, c.hipsScale);
+    if (c.kind === "vrm") c.vrm.humanoid.update();
+    return;
+  }
+  // A GLB rig: each bone's world rotation = normalized world × its rest world rotation (relative to the model root).
+  const nw = {};
+  const root = c.root;
+  root.updateMatrixWorld(true);
+  const rootQ = root.getWorldQuaternion(new THREE.Quaternion());
+  for (const b of HB) {
+    const p = NPARENT[b], pw = p ? nw[p] : null;
+    nw[b] = (pw ? pw.clone() : new THREE.Quaternion()).multiply(pose.q[b] || qTmp.identity());
+    const x = c.bones[b]; if (!x) continue;
+    const target = rootQ.clone().multiply(nw[b]).multiply(x.rest);
+    const parentQ = x.node.parent.getWorldQuaternion(new THREE.Quaternion());
+    x.node.quaternion.copy(parentQ.invert().multiply(target));
+    x.node.updateMatrixWorld(true);
+  }
+  const hips = c.bones.hips;
+  if (hips && pose.hips) {
+    const v = pose.hips.clone().multiplyScalar(c.hipsScale);
+    const pm = new THREE.Matrix4().copy(root.matrixWorld).invert().multiply(hips.node.parent.matrixWorld).invert();
+    v.applyMatrix3(new THREE.Matrix3().setFromMatrix4(pm));
+    hips.node.position.copy(hips.pos).add(v);
+  }
+}
+// Expressions: VRM presets, GLB morph targets (by name, with common aliases), or the mannequin's face.
+const EXPR_ALIASES = { happy: ["happy", "joy", "smile", "fun"], angry: ["angry", "anger"], sad: ["sad", "sorrow"], surprised: ["surprised", "surprise"],
+  relaxed: ["relaxed", "relax"], blink: ["blink", "eyesclosed", "eyeclose", "eye_close"], aa: ["aa", "a", "viseme_aa", "mouth_a"], ih: ["ih", "i", "viseme_i", "mouth_i"],
+  ou: ["ou", "u", "viseme_u", "mouth_u"], ee: ["ee", "e", "viseme_e", "mouth_e"], oh: ["oh", "o", "viseme_o", "mouth_o"] };
+function applyFace(n, ex) {
+  const c = n.char;
+  if (c.kind === "vrm") {
+    const em = c.vrm.expressionManager; if (!em) return;
+    for (const k in EXPR_ALIASES) { try { em.setValue(k, ex[k] || 0); } catch (_) {} }
+    em.update();
+    return;
+  }
+  if (c.kind === "mannequin") {
+    const f = c.face, blink = ex.blink || 0, sur = ex.surprised || 0;
+    for (const e of f.eyes) { e.scale.set(1 + sur * 0.3, Math.max(0.08, (1 - blink * 0.92) * (1 + sur * 0.35)), 1); }
+    const open = Math.min(1, (ex.aa || 0) + (ex.oh || 0) * 0.8 + (ex.ou || 0) * 0.55 + (ex.ih || 0) * 0.45 + (ex.ee || 0) * 0.35 + sur * 0.6);
+    const smile = (ex.happy || 0) + (ex.relaxed || 0) * 0.5 - (ex.sad || 0) - (ex.angry || 0) * 0.6;
+    f.mouth.scale.set(1 + (ex.happy || 0) * 0.35 + (ex.ee || 0) * 0.25 - (ex.ou || 0) * 0.35, Math.max(0.15, 0.35 + open * 1.6), 1);
+    f.smile.visible = open < 0.25; f.smile.scale.set(1, Math.max(0.05, Math.abs(smile)), 1); f.smile.rotation.z = smile >= 0 ? Math.PI : 0;
+    f.mouth.visible = !f.smile.visible || open >= 0.25;
+    for (const [i, b] of f.brows.entries()) b.rotation.z = (i ? 1 : -1) * ((ex.angry || 0) * 0.45 - (ex.sad || 0) * 0.35);
+    return;
+  }
+  for (const m of c.morphs) {
+    const dict = m.morphTargetDictionary, inf = m.morphTargetInfluences;
+    for (const k in EXPR_ALIASES) { const i = c.morphIndex.get(m) && c.morphIndex.get(m)[k]; if (i !== undefined) inf[i] = ex[k] || 0; }
+    void dict;
+  }
+}
+function poseCharacter(n, cs) {
+  const pose = blendLayers(cs.layers || []);
+  applyHeadLook(n, pose, cs.look);
+  applyPose(n, pose);
+  applyFace(n, cs.expressions || {});
+}
+// Held objects follow the hand bone: its world transform, a little out along the hand.
+function applyHolds(list) {
+  for (const o of list) {
+    if (!o.held) continue;
+    const by = nodes.get(o.held.by), n = nodes.get(o.id);
+    if (!by || !by.char || !n) continue;
+    const hand = by.char.bone(o.held.hand === "left" ? "leftHand" : "rightHand");
+    if (!hand) continue;
+    by.node.updateMatrixWorld(true);
+    hand.getWorldPosition(n.node.position);
+    const out = new THREE.Vector3(o.held.hand === "left" ? 0.08 : -0.08, -0.04, 0.04).multiplyScalar(by.char.height / 1.7);
+    n.node.position.add(out.applyQuaternion(hand.getWorldQuaternion(new THREE.Quaternion())));
+    n.node.quaternion.copy(by.node.quaternion);
+  }
+}
+// The rig of a model character: VRM normalized bones, or a GLB's bones by the bone map (each with its rest rotation).
+function setupModelRig(o, root, vrm) {
+  root.updateMatrixWorld(true);
+  const height = (typeof o.size === "number" && o.size > 0) ? o.size : 1.7;
+  if (vrm && vrm.humanoid) {
+    const bone = (b) => vrm.humanoid.getNormalizedBoneNode(b);
+    const hips = bone("hips");
+    const hipsY = hips ? hips.getWorldPosition(new THREE.Vector3()).y - root.getWorldPosition(new THREE.Vector3()).y : 0.92;
+    return { kind: "vrm", vrm, bone, height, hipsRest: hips ? hips.position.clone() : new THREE.Vector3(), hipsScale: Math.max(1e-3, hipsY / Math.max(1e-3, root.getWorldScale(vTmp).y)) / 0.92 };
+  }
+  const map = (CHAR.rigs || {})[o.id] || {};
+  const rootInv = root.getWorldQuaternion(new THREE.Quaternion()).invert();
+  const bones = {};
+  for (const b of HB) {
+    const name = map[b]; if (!name) continue;
+    const node = root.getObjectByName(sanitize(name)); if (!node) continue;
+    bones[b] = { node, rest: rootInv.clone().multiply(node.getWorldQuaternion(new THREE.Quaternion())), pos: node.position.clone() };
+  }
+  const hipsNode = bones.hips && bones.hips.node;
+  const hipsY = hipsNode ? (hipsNode.getWorldPosition(new THREE.Vector3()).y - root.getWorldPosition(new THREE.Vector3()).y) / Math.max(1e-6, root.getWorldScale(vTmp).y) : 0.92;
+  const morphs = [], morphIndex = new Map();
+  root.traverse((m) => {
+    if (!m.isMesh || !m.morphTargetDictionary) return;
+    const idx = {};
+    for (const k in EXPR_ALIASES) for (const alias of EXPR_ALIASES[k]) {
+      const hit = Object.keys(m.morphTargetDictionary).find((x) => x.toLowerCase().replace(/^(fcl_all_|fcl_mth_|fcl_eye_|blendshape\\d*\\.)/, "") === alias);
+      if (hit !== undefined) { idx[k] = m.morphTargetDictionary[hit]; break; }
+    }
+    if (Object.keys(idx).length) { morphs.push(m); morphIndex.set(m, idx); }
+  });
+  return { kind: "glb", root, bones, height, hipsScale: hipsY / 0.92, morphs, morphIndex, bone: (b) => (bones[b] ? bones[b].node : null) };
+}
+// The built-in mannequin: a stylized wooden-doll body of capsules on a normalized rig (T-pose, facing +z), with a face.
+function buildMannequin(o) {
+  const body = (o.character && o.character.body) || {};
+  const h = typeof body.height === "number" && body.height > 0 ? body.height : 1.7, s = h / 1.7;
+  const mat = (c) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.75, metalness: 0.02 });
+  const skin = mat(body.skin || "#e8c4a0"), cloth = mat(body.cloth || "#4a7bd0"), pants = mat(body.pants || "#2f3542"), hair = mat(body.hair || "#3b2a20"), shoes = mat(body.shoes || "#1e1e24"), dark = new THREE.MeshBasicMaterial({ color: 0x1a1414 });
+  const root = new THREE.Group(); root.rotation.order = "XYZ";
+  const bones = {};
+  const bone = (name, parent, x, y, z) => { const b = new THREE.Group(); b.name = name; b.position.set(x * s, y * s, z * s); (parent ? bones[parent] : root).add(b); bones[name] = b; return b; };
+  // A capsule from a bone towards its child (along dir), radius r.
+  const limb = (b, len, r, dir, m) => {
+    const g = new THREE.CapsuleGeometry(r * s, Math.max(0.001, len * s - 2 * r * s), 6, 14);
+    const mesh = new THREE.Mesh(g, m);
+    if (dir === "x") { mesh.rotation.z = Math.PI / 2; mesh.position.x = (len * s) / 2; }
+    else if (dir === "-x") { mesh.rotation.z = Math.PI / 2; mesh.position.x = -(len * s) / 2; }
+    else if (dir === "-y") mesh.position.y = -(len * s) / 2;
+    else mesh.position.y = (len * s) / 2;
+    b.add(mesh); return mesh;
+  };
+  bone("hips", null, 0, 0.92, 0);
+  bone("spine", "hips", 0, 0.1, 0); bone("chest", "spine", 0, 0.16, 0); bone("neck", "chest", 0, 0.2, 0); bone("head", "neck", 0, 0.09, 0);
+  for (const [side, sx] of [["left", 1], ["right", -1]]) {
+    bone(side + "UpperArm", "chest", 0.17 * sx, 0.14, 0); bone(side + "LowerArm", side + "UpperArm", 0.27 * sx, 0, 0); bone(side + "Hand", side + "LowerArm", 0.25 * sx, 0, 0);
+    bone(side + "UpperLeg", "hips", 0.095 * sx, -0.06, 0); bone(side + "LowerLeg", side + "UpperLeg", 0, -0.41, 0); bone(side + "Foot", side + "LowerLeg", 0, -0.41, 0);
+    const d = sx > 0 ? "x" : "-x";
+    limb(bones[side + "UpperArm"], 0.27, 0.05, d, cloth); limb(bones[side + "LowerArm"], 0.25, 0.042, d, skin);
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.05 * s, 12, 10), skin); hand.position.x = 0.04 * sx * s; hand.scale.set(1.2, 0.8, 1); bones[side + "Hand"].add(hand);
+    limb(bones[side + "UpperLeg"], 0.41, 0.07, "-y", pants); limb(bones[side + "LowerLeg"], 0.41, 0.055, "-y", pants);
+    const foot = new THREE.Mesh(new THREE.BoxGeometry(0.1 * s, 0.07 * s, 0.24 * s), shoes); foot.position.set(0, -0.035 * s, 0.05 * s); bones[side + "Foot"].add(foot);
+    const joint = new THREE.Mesh(new THREE.SphereGeometry(0.058 * s, 12, 10), cloth); bones[side + "UpperArm"].add(joint);
+  }
+  const pelvis = new THREE.Mesh(new THREE.CapsuleGeometry(0.13 * s, 0.06 * s, 6, 14), pants); pelvis.rotation.z = Math.PI / 2; pelvis.scale.set(1, 1, 0.75); bones.hips.add(pelvis);
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.15 * s, 0.22 * s, 6, 16), cloth); torso.position.y = 0.12 * s; torso.scale.set(1.05, 1, 0.68); bones.spine.add(torso);
+  limb(bones.neck, 0.1, 0.045, "y", skin);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.115 * s, 28, 20), skin); head.position.y = 0.1 * s; head.scale.set(0.92, 1.05, 0.98); bones.head.add(head);
+  const cap = new THREE.Mesh(new THREE.SphereGeometry(0.122 * s, 28, 14, 0, Math.PI * 2, 0, Math.PI * 0.5), hair); cap.position.set(0, 0.11 * s, -0.012 * s); cap.rotation.x = -0.62; cap.scale.set(0.96, 1.05, 1.04); bones.head.add(cap);
+  // The face (+z): eyes, brows, a mouth (open) and a smile line.
+  const eyes = [-1, 1].map((sx) => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.016 * s, 10, 8), dark); e.position.set(0.04 * sx * s, 0.115 * s, 0.103 * s); e.scale.z = 0.5; bones.head.add(e); return e; });
+  const brows = [-1, 1].map((sx) => { const b = new THREE.Mesh(new THREE.BoxGeometry(0.035 * s, 0.006 * s, 0.006 * s), dark); b.position.set(0.042 * sx * s, 0.145 * s, 0.1 * s); bones.head.add(b); return b; });
+  const mouth = new THREE.Mesh(new THREE.SphereGeometry(0.022 * s, 14, 10), dark); mouth.position.set(0, 0.058 * s, 0.104 * s); mouth.scale.z = 0.3; bones.head.add(mouth);
+  const smile = new THREE.Mesh(new THREE.TorusGeometry(0.024 * s, 0.0045 * s, 6, 16, Math.PI), dark); smile.position.set(0, 0.066 * s, 0.106 * s); bones.head.add(smile);
+  for (const b of Object.values(bones)) b.userData.bone = true;
+  const mats = [];
+  const spec = matSpec(o);
+  styleTree(root, spec, null);
+  root.traverse((m) => { if (m.isMesh) for (const x of Array.isArray(m.material) ? m.material : [m.material]) mats.push({ m: x, opacity: x.opacity, transparent: x.transparent }); });
+  if (shadows) root.traverse((m) => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } });
+  const char = { kind: "mannequin", height: h, bone: (b) => bones[b] || null, hipsRest: bones.hips.position.clone(), hipsScale: s, face: { eyes, brows, mouth, smile } };
+  return { node: root, tint: false, mats, char };
+}
 `;
 
 /** P81a: the part shared with the Edit view page: renderer, world, lights, objects, models and poses (no frame loop). */
@@ -241,7 +575,17 @@ const geometry = (o) => {
 // opacity applies to, with the material's own opacity and transparency; "tint" = the shape's colour applies.
 const nodes = new Map();
 const objects = (Array.isArray(doc.objects) ? doc.objects : []).filter((o) => o && typeof o.id === "string");
+// Scene Phase 2 (#351): characters — the built-in clips, the humanoid rig and each model's bone map (from the editor).
+const CHAR = JSON.parse((document.getElementById("dionysus-character") || {}).textContent || "{}");
+let vrmUtils = null;
 for (const o of objects) {
+  if (o.character && !(typeof o.model === "string" && o.model)) {
+    // The built-in mannequin (a character with no model).
+    const mq = buildMannequin(o);
+    scene.add(mq.node);
+    nodes.set(o.id, mq);
+    continue;
+  }
   const side = o.shape === "plane" ? THREE.DoubleSide : THREE.FrontSide;
   const spec = matSpec(o);
   const base = new THREE.MeshStandardMaterial({ color: 0xcccccc, roughness: 0.55, metalness: 0.1, side });
@@ -265,12 +609,19 @@ async function loadModels(ctx) {
   const GLTF = "three/addons/loaders/GLTFLoader.js";
   const { GLTFLoader } = await import(GLTF);
   const loader = new GLTFLoader();
+  // Scene Phase 2 (#351): VRM characters load through the vendored three-vrm plugin (only pages with one list it).
+  if (list.some((o) => o.character && /\\.vrm$/i.test(o.model))) {
+    try { const VRMSPEC = "three/addons/dionysus-vrm.js"; const m = await import(VRMSPEC); loader.register((p) => new m.VRMLoaderPlugin(p)); vrmUtils = m.VRMUtils; }
+    catch (err) { console.error(err); }
+  }
   for (const o of list) {
     const url = ctx.asset(o.model);
     if (!url) continue;
     let gltf;
     try { gltf = await loader.loadAsync(url); } catch (e) { console.error(e); continue; }
-    const root = gltf.scene || (gltf.scenes && gltf.scenes[0]);
+    const vrm = gltf.userData && gltf.userData.vrm;
+    if (vrm && vrmUtils) vrmUtils.rotateVRM0(vrm); // VRM 0.x faces -z; turn it to +z like VRM 1.0 and the mannequin
+    const root = vrm ? vrm.scene : gltf.scene || (gltf.scenes && gltf.scenes[0]);
     if (!root) continue;
     const group = new THREE.Group(); group.rotation.order = "XYZ";
     const inner = new THREE.Group(); inner.add(root); group.add(inner);
@@ -296,7 +647,9 @@ async function loadModels(ctx) {
     // Parts by node name with the file's own visibility, so a frame can put back what it doesn't set.
     const parts = new Map();
     root.traverse((n) => { if (n.name && !parts.has(n.name)) parts.set(n.name, { n, visible: n.visible }); });
-    nodes.set(o.id, { node: group, tint: false, mats, mixer: new THREE.AnimationMixer(root), clips, parts });
+    const entry = { node: group, tint: false, mats, mixer: new THREE.AnimationMixer(root), clips, parts };
+    if (o.character) { entry.char = setupModelRig(o, root, vrm); entry.mixer = null; }
+    nodes.set(o.id, entry);
   }
 }
 // The pose for this frame from the clips the evaluator sends: every action is reset and the mixer is set to 1 s with
@@ -434,7 +787,9 @@ function applyObject(n, o, t) {
   pose(n, o.animation);
   if (n.parts) for (const [name, x] of n.parts) x.n.visible = o.nodes && name in o.nodes ? !!o.nodes[name] : x.visible;
   if (n.script) { runScript(n, t); fadeTree(n.script.obj, o.opacity); }
+  if (n.char && o.character) poseCharacter(n, o.character);
 }
+${SCENE_CHARACTER_JS}
 `;
 /** The frame part: draw the state the editor sends for each time, from the scene's camera. */
 /**
@@ -486,8 +841,13 @@ async function initPost() {
   if (aa === "fxaa") { x.fxaa = new L.ShaderPass(L.FXAAShader); composer.addPass(x.fxaa); }
   else if (aa === "smaa") {
     x.smaa = new L.SMAAPass(w, h); composer.addPass(x.smaa);
-    // Its lookup textures are images: wait for them so the first frame is anti-aliased like the rest.
-    await Promise.all([x.smaa.areaTexture, x.smaa.searchTexture].map((t) => (t && t.image && t.image.decode ? t.image.decode().catch(() => {}) : null)));
+    // Its lookup textures are images (data: URLs): wait for them to load so the first frame is anti-aliased like the
+    // rest. The load event, not decode(): decode() may never settle in a background page (an export must not hang).
+    const loaded = (img) => new Promise((ok) => {
+      if (!img || img.complete) { ok(); return; }
+      img.addEventListener("load", ok, { once: true }); img.addEventListener("error", ok, { once: true });
+    });
+    await Promise.all([x.smaa.areaTexture, x.smaa.searchTexture].map((t) => loaded(t && t.image)));
     for (const t of [x.smaa.areaTexture, x.smaa.searchTexture]) if (t) t.needsUpdate = true;
   }
   post = x;
@@ -522,7 +882,7 @@ function renderPost(s, rw, rh, ss, t) {
 }
 `;
 const SCENE_CLIP_JS = `dionysus.clip({
-  init: async (ctx) => { await loadModels(ctx); await loadScripts(ctx); await loadLook(ctx); await initPost(); },
+  init: async (ctx) => { await loadModels(ctx); await loadScripts(ctx); await loadAnimations(ctx); await loadLook(ctx); await initPost(); },
   render(t, ctx) {
     const s = ctx.inputs && ctx.inputs.scene;
     if (!s) return;
@@ -539,6 +899,7 @@ const SCENE_CLIP_JS = `dionysus.clip({
     camera.updateProjectionMatrix();
     const time = typeof s.t === "number" ? s.t : t;
     for (const o of s.objects) { const n = nodes.get(o.id); if (n) applyObject(n, o, time); }
+    applyHolds(s.objects);
     if (post) renderPost(s, rw, rh, ss, time);
     else renderer.render(scene, camera);
   },
@@ -559,13 +920,13 @@ export function scenePage(doc: SceneDoc | undefined): string {
 <html><head><meta charset="utf-8"><style>html,body{margin:0;height:100%;background:#000;overflow:hidden}canvas{display:block;width:100%;height:100%}</style></head>
 <body><canvas id="c"></canvas>
 <script type="application/json" id="dionysus-scene">${json}</script>
-<script type="module">
+${characterDataTag(doc)}<script type="module">
 ${SCENE_RUNTIME_JS}</script></body></html>
 `;
-  const { models, scripts, look, environment } = sceneFileUse(rest);
-  if (!models && !scripts && !look && !environment) return page;
+  const { models, scripts, look, environment, animations, vrm } = sceneFileUse(rest);
+  if (!models && !scripts && !look && !environment && !animations) return page;
   const used = files && typeof files === "object" ? Object.fromEntries(Object.entries(files).filter(([, d]) => typeof d === "string")) : {};
-  return writeManifest(page, { libs: ["three", ...(models ? ["three-gltf"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment ? used : {} });
+  return writeManifest(page, { libs: ["three", ...(models || animations ? ["three-gltf"] : []), ...(vrm ? ["three-vrm"] : []), ...(look ? ["three-look"] : [])], files: models || scripts || environment || animations ? used : {} });
 }
 
 /**
@@ -573,7 +934,7 @@ ${SCENE_RUNTIME_JS}</script></body></html>
  * (#350): `look` = it needs the vendored look addons (post-processing, sky, or an .hdr environment), `environment` =
  * it has an environment map file.
  */
-export function sceneFileUse(doc: Pick<SceneDoc, "objects"> & { world?: SceneDoc["world"] }): { models: boolean; scripts: boolean; look: boolean; environment: boolean } {
+export function sceneFileUse(doc: Pick<SceneDoc, "objects"> & { world?: SceneDoc["world"]; animations?: SceneDoc["animations"] }): { models: boolean; scripts: boolean; look: boolean; environment: boolean; animations: boolean; vrm: boolean } {
   const list = Array.isArray(doc.objects) ? doc.objects : [];
   const w = doc.world && typeof doc.world === "object" ? doc.world : {};
   const env = w.environment && typeof w.environment === "object" && typeof w.environment.file === "string" ? w.environment.file : "";
@@ -583,6 +944,9 @@ export function sceneFileUse(doc: Pick<SceneDoc, "objects"> & { world?: SceneDoc
     scripts: list.some((o) => o && o.script && typeof o.script === "object" && typeof o.script.file === "string"),
     look: isObj(w.post) || isObj(w.sky) || /\.hdr$/i.test(env),
     environment: !!env,
+    // Scene Phase 2 (#351): library clips (GLTFLoader and their files) and VRM characters (three-vrm).
+    animations: isObj(doc.animations) && Object.keys(doc.animations as object).length > 0,
+    vrm: list.some((o) => o && isObj(o.character) && typeof o.model === "string" && /\.vrm$/i.test(o.model)),
   };
 }
 
@@ -599,13 +963,35 @@ export function scenePageKey(doc: SceneDoc | undefined): string {
   const hit = pageKeys.get(doc);
   if (hit !== undefined) return hit;
   const lights = doc.world && typeof doc.world === "object" ? doc.world.lights : undefined;
-  const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model, o.script ?? null] : null));
+  const objects = (Array.isArray(doc.objects) ? doc.objects : []).map((o) => (o && typeof o === "object" ? [o.id, o.shape, o.size, o.model, o.script ?? null, o.character ? [o.character.rig ?? null, o.character.body ?? null] : null] : null));
   const files = doc.files && typeof doc.files === "object" ? Object.entries(doc.files).map(([n, d]) => [n, typeof d === "string" ? `${d.length}:${hashText(d)}` : null]) : [];
   // Scene Phase 1 (#350): which look parts the page builds (materials, post passes, fog type, sky, environment).
   const look = lookStructure(doc.world, doc.objects);
-  const key = JSON.stringify([lights ?? null, objects, files, look]);
+  const anims = doc.animations && typeof doc.animations === "object" ? doc.animations : null;
+  const key = JSON.stringify([lights ?? null, objects, files, look, anims]);
   pageKeys.set(doc, key);
   return key;
+}
+/**
+ * Scene Phase 2 (#351): the character data the page reads: the built-in clips, the humanoid bones (in hierarchy order),
+ * the upper-body bones, and each GLB character's and library clip's bone map (its `rig`, else auto-detected from the
+ * file's node names). Only scenes with characters or library clips get it.
+ */
+export function characterDataTag(doc: SceneDoc | undefined): string {
+  const objects = doc && Array.isArray(doc.objects) ? doc.objects : [];
+  const lib = doc && doc.animations && typeof doc.animations === "object" ? doc.animations : {};
+  if (!objects.some((o) => o && o.character && typeof o.character === "object") && !Object.keys(lib).length) return "";
+  const files = doc && doc.files && typeof doc.files === "object" ? doc.files : {};
+  const rigOf = (rig: unknown, file: string | undefined) => {
+    if (rig && typeof rig === "object") return rig;
+    const url = file ? files[file] : undefined;
+    const names = typeof url === "string" ? glbInfoOfDataUrl(url)?.nodeNames : undefined;
+    return names ? autoRig(names).rig : {};
+  };
+  const rigs = Object.fromEntries(objects.filter((o) => o && o.character && typeof o.model === "string" && /\.glb$/i.test(o.model)).map((o) => [o.id, rigOf(o.character!.rig, o.model)]));
+  const libraryRigs = Object.fromEntries(Object.entries(lib).filter(([, a]) => a && typeof a.file === "string").map(([n, a]) => [n, rigOf(a.rig, a.file)]));
+  const data = { clips: BUILTIN_CLIPS, bones: HUMAN_BONES, upper: UPPER_BONES, rigs, libraryRigs };
+  return `<script type="application/json" id="dionysus-character">${JSON.stringify(data).replace(/</g, "\\u003c")}</script>\n`;
 }
 /** FNV-1a over the text (32-bit, hex). */
 function hashText(s: string): string {

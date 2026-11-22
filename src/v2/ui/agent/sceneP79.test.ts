@@ -170,7 +170,7 @@ describe("P79 GLB models from a URL", () => {
     const err = async (file: Record<string, unknown>) => { const r = await call("add_scene_object", { clipId: a, file }); expect(r.ok).toBe(false); return r.text; };
     expect(await err({ url: "http://example.com/bot.glb" })).toMatch(/file\.url/);
     expect(await err({ url: "file:///tmp/bot.glb" })).toMatch(/file\.url/);
-    expect(await err({ url: "https://cdn.example/bot.gltf" })).toMatch(/needs a \.glb name/);
+    expect(await err({ url: "https://cdn.example/bot.gltf" })).toMatch(/needs a \.glb \(or \.vrm\) name/);
     expect(await err({ url: "https://cdn.example/bot.glb" })).toMatch(/not a binary glTF/);
     expect(await err({ url: "https://cdn.example/bot.glb", dataUrl: "data:," })).toMatch(/not both/);
     stub(glb, 404);

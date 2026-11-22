@@ -228,6 +228,55 @@ environment); animated values never reload it.
 **Benchmark shot.** `src/v2/domain/__fixtures__/benchmarkShot.ts` (also `public/samples/scenes/benchmark-shot.scene.json`)
 is the epic's dusk village street, re-rendered at the end of every phase. Phase 1 renders:
 [before](benchmark/phase1-before.jpg) (the same shot without the Phase 1 fields) and [after](benchmark/phase1-after.jpg).
+Phase 2 (characters): [after](benchmark/phase2-after.jpg) (its "before" is Phase 1's after).
+
+## Characters (Scene Phase 2, #351)
+
+An object with `character` is a humanoid. Every field is optional; a scene without characters renders as before.
+
+| Field | Notes |
+|---|---|
+| `character.body` | the **built-in mannequin** (an object with no `model`): `{ height (units, default 1.7), skin, cloth, pants, hair, shoes }` — a stylized wooden-doll body with a face (eyes, brows, mouth) |
+| `model` + `character` | a **VRM** (`.vrm`, VRoid Studio; loaded with the vendored three-vrm, VRM 0.x turned to face +z) or a **humanoid GLB** (`.glb`) |
+| `character.rig` | GLB only: `"auto"` (default: Mixamo names, `pelvis` / `upperarm_l` / `thigh_r`… are recognised) or `{ "<humanoid bone>": "<node name>" }` with VRM bone names (`hips`, `spine`, `chest`, `upperChest`, `neck`, `head`, `left/rightShoulder`, `UpperArm`, `LowerArm`, `Hand`, `UpperLeg`, `LowerLeg`, `Foot`, `Toes`, `Eye`). Missing required bones are warned about |
+| `character.idle` / `walk` / `run` | the clips used for idling and locomotion (default the built-in `idle`, `walk`, `run`) |
+| `character.blink` | automatic blinking, seeded by the object's id (default `true`) |
+| `character.expressions` | expressions from 0 s: `happy`, `angry`, `sad`, `surprised`, `relaxed`, `blink` and the visemes `aa`, `ih`, `ou`, `ee`, `oh` (0–1) |
+
+**Animation.** Clips are defined on a **normalized humanoid** (T-pose, facing +z, y up, every rest rotation identity)
+and mapped onto each rig: the mannequin directly, a VRM through its normalized bones, a GLB through each bone's rest
+rotation. Built-in clips: `idle` (4 s loop), `walk` (1 s cycle, 1.3 m per cycle at 1.7 m tall), `run` (0.7 s, 2.6 m),
+`sit` (a pose), and the upper-body gestures `wave`, `nod`, `point`, `talk`. The **animation library**
+(`animations: { "<name>": { file, clip?, rig?, stride?, length?, loop?, mask? } }`) adds clips from animation-only GLBs
+in `files` (e.g. Mixamo exports, FBX converted to GLB): their tracks are converted to the normalized humanoid
+(`rig` maps the file's bones, `"auto"` by default) and the hips keep only their height (root motion is the walk's job);
+`stride` is metres per cycle for a walk or run, `mask: "upper"` makes it a gesture.
+
+**Character calls** (events on a character; the base calls `position` / `moveTo`, `rotation`, `scale`, `visible`,
+`opacity` still work, and a character's `lookAt` moves the head):
+
+| Call | Arguments | What it does |
+|---|---|---|
+| `walkTo` / `runTo` | `path` (a point or a list of points; y is ignored), `speed?` (m/s, default 1.3 / 3.6) | walks along the floor with a trapezoid speed profile; the cycle's time is the distance walked over its stride (scaled by height), so feet don't slide; the body turns towards the path within half a second and rounds corners. No `dur`: its length comes from the distance. A later move cuts it |
+| `turnTo` | `target`: object id, point or degrees | turns the body (yaw) over `dur` (default 0.6 s) |
+| `lookAt` | `target`: object id, point or `"camera"` (followed live; a character's head height for a character), `weight?` 0–1 | head and neck turn (yaw ±75°, pitch ±35°), blending from the previous look over `dur`; weight 0 looks ahead again |
+| `sit` / `stand` | `seat?` (object id or point), `facing?` (degrees or object id; default the seat's rotation) | moves to the seat and blends into the sit pose over `dur` (default 0.8 s), and back |
+| `gesture` | `clip`, `fade?` (default 0.25 s) | plays the clip on the upper body over walking or idling, for `dur` (default the clip's length) |
+| `play` / `stop` | `clip`, `speed?`, `loop?`, `from?`, `fade?` | a full-body clip instead of idling (cross-fades like model clips) |
+| `expression` | `value`: `{ happy: 1, … }` | tweens expressions over `dur` |
+| `speak` | `text` or `visemes` (`[[seconds, aa \| ih \| ou \| ee \| oh, weight], …]`) | lip sync over `dur`: visemes from the text's syllables spread over `dur` (vowels pick the viseme; CJK characters count one each), or precomputed visemes. The editor's **From audio file…** decodes a file and computes visemes from its energy and low / high band shares (`audioVisemeFrames`, `visemesFromEnergy`, pure), stored in the event |
+| `pickUp` / `drop` | `object`, `hand?` (right / left); drop `position?` | the object follows the hand bone until dropped; drop puts it down (default in front of the character) |
+
+**State.** `stateAt` gives each character `{ height, layers: [{ clip, time, weight, loop, mask }], look?: { target,
+weight }, expressions }` and each held object `held: { by, hand }`. Layers bottom to top: `play` clips (else idle),
+blended into walking / running by speed, then the sit pose by its weight, then gestures (upper body).
+
+**Faces.** VRM: its expressions (presets). GLB: morph targets matched by name (`happy` / `joy` / `smile`, `blink` /
+`eyesClosed`, `aa` / `a` / `viseme_aa`, …). Mannequin: eyes close and widen, brows tilt, the mouth opens and smiles.
+
+**Not yet** (later phases): foot IK on uneven ground, eye IK separate from the head, retargeting between rigs with
+very different rest poses beyond rest-rotation correction, and lip sync from a project audio asset by id (use the
+editor's audio file picker or give visemes).
 
 ## Validation
 
@@ -373,6 +422,7 @@ the schemas) and AI guide RULE 79:
 | `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults); Phase 1: `post`, `fog`, `sky`, `environment`, `export` (each replaces the whole entry, `true` = defaults, `null` removes it). |
 | `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`, and (Phase 1) `lookAt`, `groundColor`, `shadow`; omit `light` to add one, `remove: true` to delete it. |
 | `set_scene_script` (P82) | Script objects: omit `objectId` to add one from `template` (`particles`, `shape`, `text`, `empty`) or `code` (with optional `id`, `params`, `position`); with `objectId` set its `code`, `template` (code and params) or `params` (replaces the map; `null` removes them), or `remove: true` to make it a plain shape. Code with static problems is refused with them listed. `list_scene_objects` gives each Script object's code and the templates. |
+| `set_scene_animation` (Phase 2) | The animation library: `name`, `file` (`{ url }` or `{ name, dataUrl }`, a .glb) adds or replaces a clip; `clip`, `stride`, `length`, `loop`, `mask`, `rig`; `remove: true` deletes it (refused while an event still uses it). Characters come from `add_scene_object` with `props: { character: {} }` (mannequin) or a `.vrm` / humanoid `.glb` `file`; their calls are ordinary events. |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 
 Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message

@@ -353,4 +353,22 @@ describe("P82 scene editor: Script objects", () => {
     expect(t.el.querySelector('textarea[aria-label="Script code"]')).toBeTruthy();
     t.done();
   });
+  it("Scene Phase 2: Add object > Mannequin adds a character with its own track; its + adds a walk, and the form edits its body", async () => {
+    const t = await open();
+    await t.click(t.button(/^Add object$/));
+    await t.click(t.q('[data-testid="scene-add-character"]'));
+    const o = t.work().objects.at(-1)!;
+    expect(o).toMatchObject({ id: "character", character: { body: { height: 1.7 } } });
+    const track = [...t.el.querySelectorAll<HTMLElement>(".v2-sed-track")].find((x) => x.querySelector(".v2-sed-tname span")?.textContent === "character")!;
+    expect(track.className).toMatch(/kind-character/);
+    expect(t.q('[data-testid="object-form"]').textContent).toMatch(/Character/);
+    await t.typeIn(t.field("Height"), "1.4");
+    expect(t.work().objects.at(-1)!.character!.body!.height).toBe(1.4);
+    await t.click(track.querySelector(".v2-sed-tadd")!);
+    const ev = t.work().events!.at(-1)!;
+    expect(ev).toMatchObject({ obj: "character", call: "walkTo" });
+    expect(ev.dur).toBeUndefined(); // a walk's length comes from the distance
+    expect(t.q('[data-testid="event-form"]').textContent).toMatch(/Path \(points\)/);
+    t.done();
+  });
 });

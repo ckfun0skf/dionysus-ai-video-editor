@@ -15,7 +15,7 @@ describe("Scene Phase 1 (#350): the scene pages", () => {
     expect(readManifest(scenePage(SAMPLE_SCENE))).toEqual({});
     const m = readManifest(scenePage(BENCHMARK_SHOT));
     expect(m.libs).toEqual(["three", "three-look"]);
-    expect(Object.keys(m.files ?? {})).toEqual(["hero.js", "fireflies.js"]);
+    expect(Object.keys(m.files ?? {})).toEqual(["fireflies.js"]);
     expect(readManifest(sceneEditPage(BENCHMARK_SHOT)).libs).toEqual(["three", "three-orbit", "three-transform", "three-look"]);
     // Toon materials or fog alone need no addon; an .hdr environment does.
     const toon: SceneDoc = { format: "dionysus.scene/1", world: { fog: {} }, objects: [{ id: "a", material: "toon" }] };

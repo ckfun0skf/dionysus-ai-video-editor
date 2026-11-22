@@ -33,6 +33,11 @@ import {
   type SceneEnvironment, type SceneExport, type SceneFog, type SceneFogState, type SceneLightState, type SceneLookTarget, type SceneMaterial,
   type SceneMaterialType, type ScenePost, type ScenePostState, type SceneShadow, type SceneSky, type SceneSkyState,
 } from "./sceneLook";
+import {
+  autoRig, BUILTIN_CLIPS, blendYaw, blinkAt, expressionsProblem, floorPath, HUMAN_BONES, pathPoints, SCENE_CHARACTER_CALLS, SCENE_EXPRESSIONS,
+  visemeKeysProblem, visemesAt, visemesFromText, walkProfile,
+  type SceneAnimationEntry, type SceneCharacter, type SceneExpression, type SceneViseme, type SceneVisemeKey,
+} from "./sceneCharacter";
 
 export const SCENE_FORMAT = "dionysus.scene/1" as const;
 /** MIME type of a scene asset version's blob. */
@@ -117,6 +122,12 @@ export interface SceneObject {
    * outline, rim } (domain/sceneLook.ts). A Script object opts in by having one.
    */
   material?: SceneMaterialType | SceneMaterial;
+  /**
+   * Scene Phase 2 (#351): a humanoid character — the built-in mannequin (no model), a VRM model or a humanoid GLB —
+   * with walkTo / runTo, turnTo, lookAt (head and eyes), sit / stand, gesture, expression, speak, pickUp / drop and
+   * play / stop (domain/sceneCharacter.ts).
+   */
+  character?: SceneCharacter;
   functions?: Record<string, SceneFunction>;
 }
 
@@ -138,6 +149,8 @@ export interface SceneDoc {
   events?: SceneEvent[];
   /** Embedded files by name (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package. */
   files?: Record<string, string>;
+  /** Scene Phase 2 (#351): the animation library — clips from animation-only GLBs in `files`, retargeted onto characters. */
+  animations?: Record<string, SceneAnimationEntry>;
 }
 
 export interface SceneIssue { level: "error" | "warning"; path: string; message: string }
@@ -322,8 +335,8 @@ export function validateScene(raw: unknown): SceneIssue[] {
     if (o.model !== undefined) {
       if (typeof o.model !== "string" || !o.model) err(`${p}.model`, "must be a file name.");
       else if (typeof files[o.model] !== "string") warn(`${p}.model`, `"${o.model}" is not in "files"; the object is drawn as a ${fallback}.`);
-      else if (!/\.(glb|gltf)$/i.test(o.model)) warn(`${p}.model`, `"${o.model}" is not a .glb or .gltf file; it may not load (then a ${fallback} is drawn).`);
-      else if (/\.glb$/i.test(o.model) && !glbInfoOfDataUrl(files[o.model] as string)) warn(`${p}.model`, `"${o.model}" is not a readable GLB; the object is drawn as a ${fallback}.`);
+      else if (!/\.(glb|gltf)$/i.test(o.model) && !(/\.vrm$/i.test(o.model) && isObj(o.character))) warn(`${p}.model`, `"${o.model}" is not a .glb or .gltf file (or a .vrm character); it may not load (then a ${fallback} is drawn).`);
+      else if (/\.(glb|vrm)$/i.test(o.model) && !glbInfoOfDataUrl(files[o.model] as string)) warn(`${p}.model`, `"${o.model}" is not a readable GLB; the object is drawn as a ${fallback}.`);
     }
     if (o.animation !== undefined) {
       const a = animOf(o.animation);
@@ -355,6 +368,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
     }
     if (o.name !== undefined && typeof o.name !== "string") err(`${p}.name`, "must be a string.");
     if (o.material !== undefined) validateMaterial(o.material, `${p}.material`, err);
+    if (o.character !== undefined) validateCharacter(raw as unknown as SceneDoc, o, p, err, warn);
     if (typeof id === "string" && SCENE_LOOK_IDS.includes(id) && isObj(raw.world) && raw.world[id] !== undefined)
       warn(`${p}.id`, `An object is called "${id}", so events on "${id}" change the object, not world.${id}; rename the object to animate world.${id}.`);
     for (const prop of SCENE_PROPS) if (o[prop] !== undefined) { const why = propProblem(prop, o[prop]); if (why) err(`${p}.${prop}`, `${why}.`); }
@@ -363,6 +377,7 @@ export function validateScene(raw: unknown): SceneIssue[] {
       else for (const [fn, f] of Object.entries(o.functions)) validateFunction(f, fn, `${p}.functions.${fn}`, err, typeof o.model === "string" ? o.model : undefined, raw as unknown as SceneDoc, warn);
     }
   });
+  validateAnimations(raw as unknown as SceneDoc, files, err, warn);
   // events
   if (raw.events !== undefined) {
     if (!Array.isArray(raw.events)) err("events", "\"events\" must be a list.");
@@ -442,6 +457,7 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
     err(`${p}.obj`, `There is no object "${e.obj}".`);
     return;
   }
+  if (isObj(o.character) && isCharacterCall(e.call)) { validateCharacterEvent(doc, e as unknown as SceneEvent, args, p, objects, err); return; }
   const base = SCENE_BASE_FUNCTIONS[e.call];
   if (base) {
     const v = args[base.arg] ?? (base.arg === "position" ? args.value : undefined);
@@ -471,6 +487,131 @@ function validateEvent(e: unknown, p: string, objects: Map<string, Record<string
     if (!d) { err(`${p}.args.${k}`, `"${e.call}" has no param "${k}".`); continue; }
     const c = checkParamValue(d, v);
     if (c.value === undefined || c.clamped) err(`${p}.args.${k}`, c.problem ?? "has the wrong type.");
+  }
+}
+
+/** Scene Phase 2 (#351): an object's `character`. */
+function validateCharacter(doc: SceneDoc, o: Record<string, unknown>, p: string, err: (path: string, m: string) => void, warn: (path: string, m: string) => void) {
+  const c = o.character, cp = `${p}.character`;
+  if (!isObj(c)) { err(cp, "must be { rig?, body?, idle?, walk?, run?, blink?, expressions? }."); return; }
+  const known = ["rig", "body", "idle", "walk", "run", "blink", "expressions"];
+  for (const k of Object.keys(c)) if (!known.includes(k)) err(`${cp}.${k}`, `is not a character field (${known.join(", ")}).`);
+  if (o.script !== undefined) err(cp, "A Script object can't be a character (use the mannequin, a .vrm or a humanoid .glb).");
+  if (c.rig !== undefined && c.rig !== "auto") {
+    if (!isObj(c.rig)) err(`${cp}.rig`, "must be \"auto\" or { humanoid bone: node name }.");
+    else for (const [b, n] of Object.entries(c.rig)) {
+      if (!(HUMAN_BONES as readonly string[]).includes(b)) err(`${cp}.rig.${b}`, `is not a humanoid bone (${HUMAN_BONES.join(", ")}).`);
+      else if (typeof n !== "string" || !n) err(`${cp}.rig.${b}`, "must be a node name.");
+    }
+  }
+  if (c.body !== undefined) {
+    if (!isObj(c.body)) err(`${cp}.body`, "must be { height, skin, cloth, pants, hair, shoes }.");
+    else for (const [k, v] of Object.entries(c.body)) {
+      if (k === "height") { if (!(num(v) && v >= 0.3 && v <= 4)) err(`${cp}.body.height`, "must be a number of units from 0.3 to 4."); }
+      else if (["skin", "cloth", "pants", "hair", "shoes"].includes(k)) { if (!isSceneColor(v)) err(`${cp}.body.${k}`, "must be a colour like \"#ffcc00\"."); }
+      else err(`${cp}.body.${k}`, "is not a body field (height, skin, cloth, pants, hair, shoes).");
+    }
+    if (typeof o.model === "string") warn(`${cp}.body`, "A model character keeps the model's look; body applies to the mannequin only.");
+  }
+  for (const k of ["idle", "walk", "run"] as const) {
+    if (c[k] === undefined) continue;
+    if (typeof c[k] !== "string" || !c[k]) err(`${cp}.${k}`, "must be a clip name.");
+    else if (!sceneClipInfo(doc, c[k] as string).known) warn(`${cp}.${k}`, `"${c[k]}" is not a built-in clip (${Object.keys(BUILTIN_CLIPS).join(", ")}) or in "animations".`);
+  }
+  if (c.blink !== undefined && typeof c.blink !== "boolean") err(`${cp}.blink`, "must be true or false.");
+  if (c.expressions !== undefined) { const why = expressionsProblem(c.expressions); if (why) err(`${cp}.expressions`, `${why}.`); }
+  // A humanoid GLB needs the required bones (VRM models carry their own humanoid).
+  const files = isObj(doc.files) ? doc.files : {};
+  if (typeof o.model === "string" && /\.glb$/i.test(o.model) && typeof files[o.model] === "string") {
+    const names = glbInfoOfDataUrl(files[o.model] as string)?.nodeNames;
+    if (names) {
+      const rig: Record<string, string | undefined> = isObj(c.rig) ? c.rig as Record<string, string> : autoRig(names).rig;
+      const missing = ["hips", "spine", "head", "leftUpperArm", "leftLowerArm", "rightUpperArm", "rightLowerArm", "leftUpperLeg", "leftLowerLeg", "rightUpperLeg", "rightLowerLeg"].filter((b) => !rig[b] || !names.includes(rig[b]!));
+      if (missing.length) warn(`${cp}.rig`, `"${o.model}" has no ${missing.join(", ")} bone${missing.length > 1 ? "s" : ""} the rig can find; those parts won't move (map them in "rig").`);
+    }
+  }
+}
+
+/** Scene Phase 2: the animation library (`animations`). */
+function validateAnimations(doc: SceneDoc, files: Record<string, unknown>, err: (path: string, m: string) => void, warn: (path: string, m: string) => void) {
+  const a = (doc as unknown as Record<string, unknown>).animations;
+  if (a === undefined) return;
+  if (!isObj(a)) { err("animations", "\"animations\" must be an object of clip name → { file, clip?, rig?, stride?, length?, loop?, mask? }."); return; }
+  for (const [name, x] of Object.entries(a)) {
+    const p = `animations.${name}`;
+    if (!ID_RE.test(name)) err(p, "Clip names start with a letter and use letters, digits, \"_\" or \"-\".");
+    if (BUILTIN_CLIPS[name]) warn(p, `"${name}" is also a built-in clip; this library clip is used instead.`);
+    if (!isObj(x) || typeof x.file !== "string" || !x.file) { err(p, "must be { \"file\": \"<name>.glb\", clip?, rig?, stride?, length?, loop?, mask? }."); continue; }
+    const known = ["file", "clip", "rig", "stride", "length", "loop", "mask"];
+    for (const k of Object.keys(x)) if (!known.includes(k)) err(`${p}.${k}`, `is not a field (${known.join(", ")}).`);
+    if (typeof files[x.file] !== "string") { warn(`${p}.file`, `"${x.file}" is not in "files"; the clip does nothing.`); continue; }
+    const info = glbInfoOfDataUrl(files[x.file] as string);
+    if (!info) warn(`${p}.file`, `"${x.file}" is not a readable GLB.`);
+    else {
+      const clips = info.animations.map((c) => c.name);
+      if (x.clip !== undefined && (typeof x.clip !== "string" || !clips.includes(x.clip))) warn(`${p}.clip`, `"${x.file}" has no animation ${JSON.stringify(x.clip)} (it has ${clips.map((c) => `"${c}"`).join(", ") || "none"}).`);
+      else if (!clips.length) warn(`${p}.file`, `"${x.file}" has no animations.`);
+    }
+    if (x.stride !== undefined && !(num(x.stride) && x.stride > 0)) err(`${p}.stride`, "must be metres per cycle above 0.");
+    if (x.length !== undefined && !(num(x.length) && x.length > 0)) err(`${p}.length`, "must be seconds above 0.");
+    if (x.loop !== undefined && !(SCENE_LOOPS as readonly string[]).includes(String(x.loop))) err(`${p}.loop`, `must be one of ${SCENE_LOOPS.join(", ")}.`);
+    if (x.mask !== undefined && x.mask !== "full" && x.mask !== "upper") err(`${p}.mask`, "must be \"full\" or \"upper\".");
+    if (x.rig !== undefined && x.rig !== "auto" && !isObj(x.rig)) err(`${p}.rig`, "must be \"auto\" or { humanoid bone: node name }.");
+  }
+}
+
+/** Scene Phase 2: an event of a character call. */
+function validateCharacterEvent(doc: SceneDoc, e: SceneEvent, args: Record<string, unknown>, p: string, objects: Map<string, Record<string, unknown>>, err: (path: string, m: string) => void) {
+  const ARGS: Record<string, string[]> = {
+    walkTo: ["path", "speed"], runTo: ["path", "speed"], turnTo: ["target"], lookAt: ["target", "weight"], sit: ["seat", "facing"], stand: [],
+    gesture: ["clip", "fade"], expression: ["value"], speak: ["text", "visemes"], pickUp: ["object", "hand"], drop: ["object", "position"],
+    play: ["clip", "speed", "loop", "from", "fade"], stop: ["fade"],
+  };
+  for (const k of Object.keys(args)) if (!ARGS[e.call].includes(k)) err(`${p}.args.${k}`, `${e.call} takes ${ARGS[e.call].join(", ") || "no arguments"}.`);
+  const other = (v: unknown) => typeof v === "string" && v !== e.obj && objects.has(v);
+  const clipKnown = (v: unknown, path: string) => {
+    if (typeof v !== "string" || !v) { err(path, "must be a clip name."); return; }
+    if (!sceneClipInfo(doc, v).known) err(path, `"${v}" is not a built-in clip (${Object.keys(BUILTIN_CLIPS).join(", ")}) or in "animations".`);
+  };
+  switch (e.call) {
+    case "walkTo": case "runTo":
+      if (!pathPoints(args.path)) err(`${p}.args.path`, "must be a point [x, y, z] or a list of points (at most 256).");
+      if (args.speed !== undefined && !(num(args.speed) && args.speed > 0 && args.speed <= 12)) err(`${p}.args.speed`, "must be metres per second above 0, at most 12.");
+      break;
+    case "turnTo": if (!num(args.target) && !isVec3(args.target) && !other(args.target)) err(`${p}.args.target`, "must be another object id, [x, y, z] or an angle in degrees."); break;
+    case "lookAt":
+      if (args.target !== SCENE_CAMERA && !isVec3(args.target) && !other(args.target)) err(`${p}.args.target`, "must be another object id, [x, y, z] or \"camera\".");
+      if (args.weight !== undefined && !(num(args.weight) && args.weight >= 0 && args.weight <= 1)) err(`${p}.args.weight`, "must be a number from 0 to 1.");
+      break;
+    case "sit":
+      if (args.seat !== undefined && !isVec3(args.seat) && !other(args.seat)) err(`${p}.args.seat`, "must be another object id or [x, y, z].");
+      if (args.facing !== undefined && !num(args.facing) && !other(args.facing)) err(`${p}.args.facing`, "must be an angle in degrees or an object id.");
+      break;
+    case "gesture":
+      clipKnown(args.clip, `${p}.args.clip`);
+      if (args.fade !== undefined && !(num(args.fade) && args.fade >= 0)) err(`${p}.args.fade`, "must be seconds ≥ 0.");
+      break;
+    case "expression": { const why = expressionsProblem(args.value); if (why) err(`${p}.args.value`, `${why}.`); break; }
+    case "speak":
+      if (args.text === undefined && args.visemes === undefined) err(`${p}.args`, "speak needs text or visemes.");
+      if (args.text !== undefined && typeof args.text !== "string") err(`${p}.args.text`, "must be text.");
+      if (args.visemes !== undefined) { const why = visemeKeysProblem(args.visemes); if (why) err(`${p}.args.visemes`, `${why}.`); }
+      break;
+    case "pickUp": case "drop": {
+      if (!other(args.object)) err(`${p}.args.object`, "must be another object's id.");
+      else if (isObj(objects.get(args.object as string)?.character)) err(`${p}.args.object`, "A character can't be picked up.");
+      if (e.call === "pickUp" && args.hand !== undefined && args.hand !== "left" && args.hand !== "right") err(`${p}.args.hand`, "must be \"left\" or \"right\".");
+      if (e.call === "drop" && args.position !== undefined && !isVec3(args.position)) err(`${p}.args.position`, "must be [x, y, z] numbers.");
+      break;
+    }
+    case "play": {
+      clipKnown(args.clip, `${p}.args.clip`);
+      const a = animOf({ clip: args.clip, speed: args.speed, loop: args.loop, from: args.from });
+      if (a.problem && typeof args.clip === "string") err(`${p}.args`, `${a.problem}.`);
+      if (args.fade !== undefined && !(num(args.fade) && args.fade >= 0)) err(`${p}.args.fade`, "must be seconds ≥ 0.");
+      break;
+    }
+    case "stop": if (args.fade !== undefined && !(num(args.fade) && args.fade >= 0)) err(`${p}.args.fade`, "must be seconds ≥ 0."); break;
   }
 }
 
@@ -540,6 +681,18 @@ export interface SceneObjectState extends SceneProps {
   animation?: SceneAnimState[];
   /** Model objects with `nodes` set somewhere (P75): parts shown or hidden at `t`, by node name. */
   nodes?: Record<string, boolean>;
+  /** Scene Phase 2: a character's pose layers, look target and expressions at `t`. */
+  character?: SceneCharacterState;
+  /** Scene Phase 2: held in a character's hand at `t` (the page puts it in the hand). */
+  held?: { by: string; hand: "left" | "right" };
+}
+/** Scene Phase 2: one pose layer of a character (a built-in or library clip at its local time). */
+export interface SceneCharacterLayer { clip: string; time: number; weight: number; loop: SceneLoop; mask: "full" | "upper" }
+export interface SceneCharacterState {
+  height: number;
+  layers: SceneCharacterLayer[];
+  look?: { target: Vec3; weight: number };
+  expressions: Partial<Record<SceneExpression, number>>;
 }
 export interface SceneState {
   t: number;
@@ -616,11 +769,30 @@ function eventProps(doc: SceneDoc, e: SceneEvent): string[] {
   if (e.obj === SCENE_CAMERA) { const f = SCENE_CAMERA_FUNCTIONS[e.call]; return f ? [f.prop] : []; }
   const look = lookTargetOf(doc, e.obj);
   if (look) { const c = SCENE_LOOK_CALLS[look.kind][e.call]; return c ? [c.prop] : []; }
+  const co = objOf(doc, e.obj);
+  if (isCharacter(co) && isCharacterCall(e.call)) {
+    const args = isObj(e.args) ? e.args : {};
+    switch (e.call) {
+      case "walkTo": case "runTo": return ["position", "rotation"];
+      case "sit": return ["position", "rotation", "sit"];
+      case "stand": return ["sit"];
+      case "turnTo": return ["rotation"];
+      case "lookAt": return ["look"];
+      case "expression": return isObj(args.value) ? Object.keys(args.value).map((k) => `expr:${k}`) : [];
+      default: return [];
+    }
+  }
   return Object.keys(eventTargets(doc, e)).map((k) => (k === "lookAt" ? "rotation" : k));
 }
 
 type Val = Vec3 | number | boolean | string;
-interface Seg { at: number; dur: number; ease: (x: number) => number; to: Val | { lookAt: Vec3 | string; obj: string } }
+/**
+ * A segment of one property's chain. `to` may be resolved late: `{ lookAt }` (face a target where it is when the event
+ * ends; `yawOnly` keeps the pitch at 0), `{ pointOf }` (an object's position then, at height `y`). Scene Phase 2:
+ * `curve` replaces the straight tween (walk paths): it gets the value at the segment's start and the eased progress.
+ */
+type SegTo = Val | { lookAt: Vec3 | string; obj: string; yawOnly?: boolean } | { pointOf: string; y: number };
+interface Seg { at: number; dur: number; ease: (x: number) => number; to: SegTo; curve?: (from: Val, k: number, to: Val) => Val }
 
 const vec3Of = (v: number | Vec3): Vec3 => (typeof v === "number" ? [v, v, v] : [v[0], v[1], v[2]]);
 const hexToRgb = (h: string): Vec3 => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
@@ -652,8 +824,9 @@ function evalChain(base: Val, segs: Seg[], t: number, resolve: (s: Seg) => Val):
   const valueAt = (time: number): Val => {
     if (!cur) return v;
     const { seg, from, to } = cur;
-    if (seg.dur <= 0 || time >= seg.at + seg.dur || typeof to === "boolean") return to;
-    return mix(from, to, seg.ease(Math.max(0, (time - seg.at) / seg.dur)));
+    if (seg.dur <= 0 || time >= seg.at + seg.dur || typeof to === "boolean") return seg.curve && seg.dur > 0 ? seg.curve(from, 1, to) : to;
+    const k = seg.ease(Math.max(0, (time - seg.at) / seg.dur));
+    return seg.curve ? seg.curve(from, k, to) : mix(from, to, k);
   };
   for (const seg of segs) {
     if (seg.at > t) break;
@@ -675,8 +848,36 @@ const objBase = (o: SceneObject): SceneProps => ({
 
 /** Per object and property, its segments (and the camera's), built once per document. */
 interface AnimSeg { at: number; fade: number; ease: (x: number) => number; anim: Required<SceneAnimation> | null }
-interface Plan { props: Map<string, Map<string, Seg[]>>; anims: Map<string, AnimSeg[]>; nodes: Map<string, { at: number; nodes: Record<string, boolean> }[]> }
+/** Scene Phase 2: per character, its walks, looks, gestures and speech; per held object, its pick-ups and drops. */
+interface WalkSeg { at: number; total: number; prof: ReturnType<typeof walkProfile>; run: boolean; speed: number }
+interface LookSeg { at: number; dur: number; ease: (x: number) => number; target: Vec3 | string; weight: number }
+interface CharPlan { walks: WalkSeg[]; looks: LookSeg[]; gestures: { at: number; clip: string; dur: number; fade: number }[]; speech: { at: number; dur: number; keys: SceneVisemeKey[] }[] }
+interface HoldSeg { at: number; by?: string; hand?: "left" | "right"; drop?: boolean }
+interface Plan {
+  props: Map<string, Map<string, Seg[]>>; anims: Map<string, AnimSeg[]>; nodes: Map<string, { at: number; nodes: Record<string, boolean> }[]>;
+  chars: Map<string, CharPlan>; holds: Map<string, HoldSeg[]>;
+}
 const plans = new WeakMap<SceneDoc, Plan>();
+
+/** Scene Phase 2: a clip's length, loop, mask and stride (built-in or a library entry; library defaults 1 s, repeat, full, 1.3 m). */
+export function sceneClipInfo(doc: Pick<SceneDoc, "animations">, name: string): { length: number; loop: SceneLoop; mask: "full" | "upper"; stride: number; known: boolean } {
+  const b = BUILTIN_CLIPS[name];
+  if (b) return { length: b.length, loop: b.loop, mask: b.mask, stride: b.stride ?? 1.3, known: true };
+  const a = isObj(doc.animations) ? doc.animations[name] : undefined;
+  if (isObj(a)) return {
+    length: num(a.length) && a.length > 0 ? a.length : 1, loop: SCENE_LOOPS.includes(a.loop as SceneLoop) ? a.loop as SceneLoop : "repeat",
+    mask: a.mask === "upper" ? "upper" : "full", stride: num(a.stride) && a.stride > 0 ? a.stride : 1.3, known: true,
+  };
+  return { length: 1, loop: "repeat", mask: "full", stride: 1.3, known: false };
+}
+/** A character's height in units: the mannequin's body.height, a model's fit size, else 1.7. */
+export function characterHeight(o: Pick<SceneObject, "character" | "model" | "size">): number {
+  const h = isObj(o.character) && isObj(o.character.body) ? o.character.body.height : undefined;
+  if (num(h) && h > 0) return h;
+  if (typeof o.model === "string" && num(o.size) && o.size > 0) return o.size;
+  return 1.7;
+}
+const isCharacter = (o: SceneObject | undefined): o is SceneObject & { character: SceneCharacter } => !!o && isObj(o.character);
 function planOf(doc: SceneDoc): Plan {
   const hit = plans.get(doc);
   if (hit) return hit;
@@ -688,6 +889,117 @@ function planOf(doc: SceneDoc): Plan {
   };
   const anims = new Map<string, AnimSeg[]>();
   const nodes = new Map<string, { at: number; nodes: Record<string, boolean> }[]>();
+  const chars = new Map<string, CharPlan>(), holds = new Map<string, HoldSeg[]>();
+  const charOf = (id: string) => { let c = chars.get(id); if (!c) chars.set(id, (c = { walks: [], looks: [], gestures: [], speech: [] })); return c; };
+  const holdsOf = (id: string) => { let h = holds.get(id); if (!h) holds.set(id, (h = [])); return h; };
+  // A property's value at `at` from the segments planned so far (late targets taken roughly: seats at their start).
+  const chainAt = (o: SceneObject, prop: "position" | "rotation", at: number): Vec3 => evalChain(objBase(o)[prop], props.get(o.id)?.get(prop) ?? [], at, (s) => {
+    const to = s.to;
+    if (to && typeof to === "object" && !Array.isArray(to)) {
+      if ("pointOf" in to) { const so = objOf(doc, to.pointOf); const p = so ? objBase(so).position : [0, 0, 0]; return [p[0], to.y, p[2]]; }
+      return objBase(o)[prop];
+    }
+    return to;
+  }) as Vec3;
+  const yawCurve = (from: Val, k: number, to: Val): Val => [0, blendYaw(Array.isArray(from) ? from[1] : 0, Array.isArray(to) ? to[1] : 0, k), 0];
+  /** Scene Phase 2: one character event (walkTo, turnTo, lookAt, sit, stand, gesture, expression, speak, pickUp, drop, play, stop). */
+  const planCharacter = (o: SceneObject, e: SceneEvent, dur: number, ease: (x: number) => number) => {
+    const args = isObj(e.args) ? e.args : {};
+    const smooth = e.ease ? ease : SCENE_EASE.inOutSine;
+    switch (e.call) {
+      case "walkTo": case "runTo": {
+        const pts = pathPoints(args.path ?? args.position ?? args.value);
+        if (!pts) return;
+        const run = e.call === "runTo";
+        const speed = num(args.speed) && args.speed > 0 ? Math.min(12, args.speed) : run ? 3.6 : 1.3;
+        const from = chainAt(o, "position", e.at);
+        const path = floorPath(from, pts);
+        if (path.len < 1e-6) return;
+        const prof = walkProfile(path.len, speed), total = prof.total, end = path.at(path.len);
+        push(o.id, "position", { at: e.at, dur: total, ease: SCENE_EASE.linear, to: end.p, curve: (_f, x) => path.at(prof.at(x * total).d).p });
+        push(o.id, "rotation", {
+          at: e.at, dur: total, ease: SCENE_EASE.linear, to: [0, end.yaw, 0],
+          curve: (f, x) => {
+            // Turn towards the path within the first half second, then follow its heading.
+            const tau = x * total, p = path.at(prof.at(tau).d), fy = Array.isArray(f) ? f[1] : 0, kk = Math.min(1, tau / 0.5);
+            return [0, blendYaw(fy, Number.isFinite(p.yaw) ? p.yaw : fy, kk * kk * (3 - 2 * kk)), 0];
+          },
+        });
+        charOf(o.id).walks.push({ at: e.at, total, prof, run, speed });
+        return;
+      }
+      case "turnTo": {
+        const tg = args.target ?? args.value, d = dur || 0.6;
+        if (num(tg)) push(o.id, "rotation", { at: e.at, dur: d, ease: smooth, to: [0, tg, 0], curve: yawCurve });
+        else if (isVec3(tg) || (typeof tg === "string" && tg !== o.id && objOf(doc, tg)))
+          push(o.id, "rotation", { at: e.at, dur: d, ease: smooth, to: { lookAt: tg as Vec3 | string, obj: o.id, yawOnly: true }, curve: yawCurve });
+        return;
+      }
+      case "lookAt": {
+        const tg = args.target ?? args.value;
+        if (!(tg === SCENE_CAMERA || isVec3(tg) || (typeof tg === "string" && tg !== o.id && objOf(doc, tg)))) return;
+        charOf(o.id).looks.push({ at: e.at, dur, ease: smooth, target: tg as Vec3 | string, weight: num(args.weight) ? Math.min(1, Math.max(0, args.weight)) : 1 });
+        return;
+      }
+      case "sit": {
+        const d = dur || 0.8, seat = args.seat ?? args.target, y = objBase(o).position[1];
+        let yaw: number | undefined = num(args.facing) ? args.facing : undefined;
+        if (typeof args.facing === "string") { const f = objOf(doc, args.facing); if (f) yaw = objBase(f).rotation[1]; }
+        if (typeof seat === "string" && seat !== o.id && objOf(doc, seat)) {
+          push(o.id, "position", { at: e.at, dur: d, ease: smooth, to: { pointOf: seat, y } });
+          if (yaw === undefined) yaw = objBase(objOf(doc, seat)!).rotation[1];
+        } else if (isVec3(seat)) push(o.id, "position", { at: e.at, dur: d, ease: smooth, to: [seat[0], y, seat[2]] });
+        if (yaw !== undefined) push(o.id, "rotation", { at: e.at, dur: d, ease: smooth, to: [0, yaw, 0], curve: yawCurve });
+        push(o.id, "sit", { at: e.at, dur: d, ease: smooth, to: 1 });
+        return;
+      }
+      case "stand": push(o.id, "sit", { at: e.at, dur: dur || 0.8, ease: smooth, to: 0 }); return;
+      case "gesture": {
+        if (typeof args.clip !== "string" || !args.clip) return;
+        const info = sceneClipInfo(doc, args.clip);
+        charOf(o.id).gestures.push({ at: e.at, clip: args.clip, dur: dur || (info.loop === "once" ? info.length : 2), fade: num(args.fade) && args.fade >= 0 ? args.fade : 0.25 });
+        return;
+      }
+      case "expression": {
+        if (expressionsProblem(args.value)) return;
+        for (const [name, v] of Object.entries(args.value as Record<string, number>)) push(o.id, `expr:${name}`, { at: e.at, dur, ease, to: v });
+        return;
+      }
+      case "speak": {
+        const keys = Array.isArray(args.visemes) && !visemeKeysProblem(args.visemes) ? (args.visemes as SceneVisemeKey[]) : undefined;
+        const text = typeof args.text === "string" ? args.text : "";
+        const d = dur || (keys ? Math.max(0, ...keys.map((x) => x[0])) + 0.3 : Math.max(0.4, visemesFromText(text, 1).length * 0.2));
+        charOf(o.id).speech.push({ at: e.at, dur: d, keys: keys ?? visemesFromText(text, d) });
+        return;
+      }
+      case "pickUp": {
+        const held = typeof args.object === "string" ? objOf(doc, args.object) : undefined;
+        if (held && held.id !== o.id && !isCharacter(held)) holdsOf(held.id).push({ at: e.at, by: o.id, hand: args.hand === "left" ? "left" : "right" });
+        return;
+      }
+      case "drop": {
+        const held = typeof args.object === "string" ? objOf(doc, args.object) : undefined;
+        if (!held || held.id === o.id) return;
+        let to: Vec3;
+        if (isVec3(args.position)) to = args.position;
+        else {
+          const p = chainAt(o, "position", e.at), r = (chainAt(o, "rotation", e.at)[1] * Math.PI) / 180;
+          to = [p[0] + Math.sin(r) * 0.45, objBase(held).position[1], p[2] + Math.cos(r) * 0.45];
+        }
+        holdsOf(held.id).push({ at: e.at, drop: true });
+        push(held.id, "position", { at: e.at, dur: 0, ease, to });
+        return;
+      }
+      case "play": case "stop": {
+        const fade = num(args.fade) && args.fade >= 0 ? args.fade : dur;
+        const a = e.call === "stop" ? null : animOf({ clip: args.clip, speed: args.speed, loop: args.loop, from: args.from }).anim;
+        if (e.call === "play" && !a) return;
+        let l = anims.get(o.id); if (!l) anims.set(o.id, (l = []));
+        l.push({ at: e.at, fade, ease, anim: a ?? null });
+        return;
+      }
+    }
+  };
   for (const { e } of sortedEvents(doc)) {
     const dur = num(e.dur) && e.dur > 0 ? e.dur : 0;
     const ease = SCENE_EASE[(e.ease ?? "linear") as SceneEase] ?? SCENE_EASE.linear;
@@ -709,6 +1021,8 @@ function planOf(doc: SceneDoc): Plan {
         push(look.key, c.prop, { at: e.at, dur, ease, to: c.kind === "target" && typeof v === "string" ? { lookAt: v, obj: e.obj } : (v as Val) });
       continue;
     }
+    const co = objOf(doc, e.obj);
+    if (isCharacter(co) && isCharacterCall(e.call)) { planCharacter(co, e, dur, ease); continue; }
     const targets = eventTargets(doc, e);
     for (const [k, v] of Object.entries(targets)) {
       if (k === "animation") {
@@ -721,7 +1035,7 @@ function planOf(doc: SceneDoc): Plan {
       else push(e.obj, k, { at: e.at, dur, ease, to: k === "scale" ? vec3Of(v as number | Vec3) : (v as Val) });
     }
   }
-  const plan = { props, anims, nodes };
+  const plan = { props, anims, nodes, chars, holds };
   plans.set(doc, plan);
   return plan;
 }
@@ -748,6 +1062,87 @@ function animationAt(o: SceneObject, segs: AnimSeg[], t: number): SceneAnimState
   return out;
 }
 
+/** Scene Phase 2: whether `call` is handled as a character call on a character object. */
+const isCharacterCall = (call: string) => !!SCENE_CHARACTER_CALLS[call] || call === "play" || call === "stop";
+
+/**
+ * Scene Phase 2: a character at `t`. Layers (bottom to top): the base — `play` clips, else the idle clip — blended
+ * into walking / running by speed (the cycle's time is the distance walked over its stride, so feet don't slide),
+ * then the sit pose by its weight, then gestures on the upper body. Look: the latest lookAt event's target (an
+ * object, a point or the camera, followed live), blending from the previous one over the event's dur. Expressions:
+ * the object's own, their events, automatic blinks and the visemes of a running speak event.
+ */
+function characterStateAt(doc: SceneDoc, o: SceneObject & { character: SceneCharacter }, plan: Plan, t: number, positionAt: (id: string, at: number) => Vec3, cameraPos: Vec3): SceneCharacterState {
+  const ch = o.character, cp = plan.chars.get(o.id), scale = characterHeight(o) / 1.7;
+  const layers: SceneCharacterLayer[] = [];
+  const layer = (clip: string, time: number, weight: number, loop?: SceneLoop, mask?: "full" | "upper") => {
+    const info = sceneClipInfo(doc, clip);
+    if (weight > 1e-4) layers.push({ clip, time: Math.max(0, time), weight: Math.min(1, weight), loop: loop ?? info.loop, mask: mask ?? info.mask });
+  };
+  // Base: play / stop clips (with their fades), filled up with idling.
+  for (const a of animationAt(o, plan.anims.get(o.id) ?? [], t)) layer(a.clip, a.time, a.weight, a.loop, "full");
+  const used = layers.reduce((s, l) => s + l.weight, 0);
+  if (used < 1) layer(typeof ch.idle === "string" && ch.idle ? ch.idle : "idle", t, 1 - used, "repeat", "full");
+  const scaleAll = (k: number) => { for (const l of layers) l.weight *= k; };
+  // Walking / running: the latest walk that has started, until it ends or a later move of the position cuts it.
+  const walk = cp?.walks.filter((x) => x.at <= t).pop();
+  if (walk) {
+    const later = (plan.props.get(o.id)?.get("position") ?? []).find((s) => s.at > walk.at);
+    const end = Math.min(walk.at + walk.total, later ? later.at : Infinity);
+    if (t < end) {
+      const { d, speed } = walk.prof.at(t - walk.at);
+      const clip = walk.run ? (typeof ch.run === "string" && ch.run ? ch.run : "run") : typeof ch.walk === "string" && ch.walk ? ch.walk : "walk";
+      const info = sceneClipInfo(doc, clip);
+      const x = Math.min(1, speed / (walk.speed * 0.35)), ww = x * x * (3 - 2 * x);
+      scaleAll(1 - ww);
+      layer(clip, (d / (info.stride * scale)) * info.length, ww, "repeat", "full");
+    }
+  }
+  const sitSegs = plan.props.get(o.id)?.get("sit");
+  const sit = sitSegs ? (evalChain(0, sitSegs, t, (s) => s.to as Val) as number) : 0;
+  if (sit > 0) { scaleAll(1 - sit); layer("sit", 0, sit, "once", "full"); }
+  for (const g of cp?.gestures ?? []) {
+    if (t < g.at || t >= g.at + g.dur) continue;
+    const f = g.fade > 0 ? Math.min(1, (t - g.at) / g.fade, (g.at + g.dur - t) / g.fade) : 1;
+    layer(g.clip, t - g.at, f, undefined, "upper");
+  }
+  // Look: targets followed live; a character's head height for a character target.
+  const resolve = (tg: Vec3 | string): Vec3 => {
+    if (tg === SCENE_CAMERA) return cameraPos;
+    if (typeof tg !== "string") return tg;
+    const p = positionAt(tg, t), other = objOf(doc, tg);
+    return isCharacter(other) ? [p[0], p[1] + characterHeight(other) * 0.92, p[2]] : p;
+  };
+  let look: SceneCharacterState["look"];
+  const looks = cp?.looks ?? [];
+  let li = -1;
+  for (let i = 0; i < looks.length; i++) if (looks[i].at <= t) li = i;
+  if (li >= 0) {
+    const cur = looks[li], prev = looks[li - 1];
+    const kk = cur.dur > 0 ? cur.ease(Math.min(1, Math.max(0, (t - cur.at) / cur.dur))) : 1;
+    const to = resolve(cur.target);
+    const from = prev && prev.weight > 0 ? resolve(prev.target) : to;
+    const weight = lerp(prev ? prev.weight : 0, cur.weight, kk);
+    if (weight > 1e-4) look = { target: [lerp(from[0], to[0], kk), lerp(from[1], to[1], kk), lerp(from[2], to[2], kk)], weight };
+  }
+  // Expressions.
+  const ex: Partial<Record<SceneExpression, number>> = {};
+  const own = isObj(ch.expressions) ? ch.expressions : {};
+  for (const name of SCENE_EXPRESSIONS) {
+    const b0 = num(own[name]) ? Math.min(1, Math.max(0, own[name] as number)) : 0;
+    const segs = plan.props.get(o.id)?.get(`expr:${name}`);
+    const v = segs ? (evalChain(b0, segs, t, (s) => s.to as Val) as number) : b0;
+    if (v > 1e-4) ex[name] = v;
+  }
+  if (ch.blink !== false) { const bl = blinkAt(o.id, t); if (bl > (ex.blink ?? 0)) ex.blink = bl; }
+  for (const s of cp?.speech ?? []) {
+    if (t < s.at || t > s.at + s.dur + 0.3) continue;
+    for (const [v, x] of Object.entries(visemesAt(s.keys, t - s.at, s.dur)) as [SceneViseme, number][]) if (x > (ex[v] ?? 0)) ex[v] = x;
+  }
+  for (const k2 of Object.keys(ex) as SceneExpression[]) ex[k2] = Math.round(ex[k2]! * 1e4) / 1e4;
+  return { height: characterHeight(o), layers: layers.filter((l) => l.weight > 1e-4), ...(look ? { look } : {}), expressions: ex };
+}
+
 /**
  * The scene at clip-local second `t`: camera and every object's base properties. Pure and deterministic: the result
  * depends only on `doc` and `t`. Invalid events and fields are skipped (see `validateScene` for the messages).
@@ -756,39 +1151,20 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
   const plan = planOf(doc);
   const time = num(t) ? Math.max(0, t) : 0;
   const objs = (Array.isArray(doc.objects) ? doc.objects : []).filter((o) => isObj(o) && typeof o.id === "string" && o.id !== SCENE_CAMERA);
+  let depth = 0;
   const positionAt = (id: string, at: number): Vec3 => {
     const o = objOf(doc, id);
-    if (!o) return [0, 0, 0];
-    return evalChain(objBase(o).position, plan.props.get(id)?.get("position") ?? [], at, (s) => s.to as Val) as Vec3;
-  };
-  const objects = objs.map((o): SceneObjectState => {
-    const b = objBase(o), segs = plan.props.get(o.id);
-    const prop = <K extends ScenePropName>(k: K): SceneProps[K] => {
-      const list = segs?.get(k);
-      if (!list) return b[k];
-      return evalChain(b[k], list, time, (s) => {
+    if (!o || depth > 8) return o ? objBase(o).position : [0, 0, 0];
+    depth++;
+    try {
+      return evalChain(objBase(o).position, plan.props.get(id)?.get("position") ?? [], at, (s) => {
         const to = s.to;
-        if (to && typeof to === "object" && !Array.isArray(to)) {
-          // lookAt: face the target from where both are when the event ends.
-          const end = s.at + s.dur, self = positionAt(o.id, end);
-          const target = typeof to.lookAt === "string" ? positionAt(to.lookAt, end) : to.lookAt;
-          return lookRotation(self, target, b.rotation);
-        }
-        return to;
-      }) as SceneProps[K];
-    };
-    const out: SceneObjectState = { id: o.id, position: prop("position"), rotation: prop("rotation"), scale: prop("scale"), visible: prop("visible"), opacity: prop("opacity"), color: prop("color") };
-    if (typeof o.model === "string" && o.model) {
-      out.animation = animationAt(o, plan.anims.get(o.id) ?? [], time);
-      const ev = plan.nodes.get(o.id) ?? [];
-      if (ev.length || (isObj(o.nodes) && !nodesProblem(o.nodes))) {
-        let n: Record<string, boolean> = isObj(o.nodes) && !nodesProblem(o.nodes) ? { ...o.nodes } : {};
-        for (const x of ev) if (x.at <= time) n = { ...n, ...x.nodes };
-        out.nodes = n;
-      }
-    }
-    return out;
-  });
+        // Scene Phase 2: a seat is where its object is when the move ends.
+        if (to && typeof to === "object" && !Array.isArray(to) && "pointOf" in to) { const p = positionAt(to.pointOf, s.at + s.dur); return [p[0], to.y, p[2]]; }
+        return to as Val;
+      }) as Vec3;
+    } finally { depth--; }
+  };
   const w = isObj(doc.world) ? doc.world : {};
   const c = isObj(w.camera) ? w.camera : {};
   const cam = plan.props.get(SCENE_CAMERA);
@@ -800,9 +1176,44 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
     position: evalChain(pos0, cam?.get("position") ?? [], time, (s) => s.to as Val) as Vec3,
     target: evalChain(tgt0, cam?.get("target") ?? [], time, (s) => {
       const to = s.to;
-      return to && typeof to === "object" && !Array.isArray(to) ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
+      return to && typeof to === "object" && !Array.isArray(to) && "lookAt" in to ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
     }) as Vec3,
   };
+  const objects = objs.map((o): SceneObjectState => {
+    const b = objBase(o), segs = plan.props.get(o.id);
+    const prop = <K extends ScenePropName>(k: K): SceneProps[K] => {
+      const list = segs?.get(k);
+      if (!list) return b[k];
+      return evalChain(b[k], list, time, (s) => {
+        const to = s.to;
+        if (to && typeof to === "object" && !Array.isArray(to)) {
+          const end = s.at + s.dur;
+          if ("pointOf" in to) { const p = positionAt(to.pointOf, end); return [p[0], to.y, p[2]]; }
+          // lookAt: face the target from where both are when the event ends (turnTo: yaw only).
+          const self = positionAt(o.id, end);
+          const target = typeof to.lookAt === "string" ? positionAt(to.lookAt, end) : to.lookAt;
+          const r = lookRotation(self, target, b.rotation);
+          return to.yawOnly ? [0, r[1], 0] : r;
+        }
+        return to;
+      }) as SceneProps[K];
+    };
+    const out: SceneObjectState = { id: o.id, position: prop("position"), rotation: prop("rotation"), scale: prop("scale"), visible: prop("visible"), opacity: prop("opacity"), color: prop("color") };
+    // Scene Phase 2: characters (pose layers, look, expressions) and objects held in a hand.
+    if (isCharacter(o)) out.character = characterStateAt(doc, o, plan, time, positionAt, camera.position);
+    const hs = plan.holds.get(o.id);
+    if (hs) { let last: HoldSeg | undefined; for (const h of hs) if (h.at <= time) last = h; if (last && !last.drop && last.by) out.held = { by: last.by, hand: last.hand ?? "right" }; }
+    if (typeof o.model === "string" && o.model) {
+      out.animation = animationAt(o, plan.anims.get(o.id) ?? [], time);
+      const ev = plan.nodes.get(o.id) ?? [];
+      if (ev.length || (isObj(o.nodes) && !nodesProblem(o.nodes))) {
+        let n: Record<string, boolean> = isObj(o.nodes) && !nodesProblem(o.nodes) ? { ...o.nodes } : {};
+        for (const x of ev) if (x.at <= time) n = { ...n, ...x.nodes };
+        out.nodes = n;
+      }
+    }
+    return out;
+  });
   const background = isSceneColor(w.background) ? w.background : SCENE_DEFAULTS.background;
   // Scene Phase 1 (#350): lights, post, fog and sky: each property is a chain like an object's.
   const lookChain = (key: string, prop: string, base: unknown): unknown => {
@@ -810,7 +1221,7 @@ export function stateAt(doc: SceneDoc, t: number): SceneState {
     if (!segs || base === undefined) return base;
     return evalChain(base as Val, segs, time, (s) => {
       const to = s.to;
-      return to && typeof to === "object" && !Array.isArray(to) ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
+      return to && typeof to === "object" && !Array.isArray(to) && "lookAt" in to ? positionAt(String(to.lookAt), s.at + s.dur) : (to as Val);
     });
   };
   const resolveGroup = <T extends object>(key: string, base: T | undefined, kind: SceneLookTarget): T | undefined => {
