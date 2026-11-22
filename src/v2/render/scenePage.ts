@@ -486,8 +486,13 @@ async function initPost() {
   if (aa === "fxaa") { x.fxaa = new L.ShaderPass(L.FXAAShader); composer.addPass(x.fxaa); }
   else if (aa === "smaa") {
     x.smaa = new L.SMAAPass(w, h); composer.addPass(x.smaa);
-    // Its lookup textures are images: wait for them so the first frame is anti-aliased like the rest.
-    await Promise.all([x.smaa.areaTexture, x.smaa.searchTexture].map((t) => (t && t.image && t.image.decode ? t.image.decode().catch(() => {}) : null)));
+    // Its lookup textures are images (data: URLs): wait for them to load so the first frame is anti-aliased like the
+    // rest. The load event, not decode(): decode() may never settle in a background page (an export must not hang).
+    const loaded = (img) => new Promise((ok) => {
+      if (!img || img.complete) { ok(); return; }
+      img.addEventListener("load", ok, { once: true }); img.addEventListener("error", ok, { once: true });
+    });
+    await Promise.all([x.smaa.areaTexture, x.smaa.searchTexture].map((t) => loaded(t && t.image)));
     for (const t of [x.smaa.areaTexture, x.smaa.searchTexture]) if (t) t.needsUpdate = true;
   }
   post = x;
