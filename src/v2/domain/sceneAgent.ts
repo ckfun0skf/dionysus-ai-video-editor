@@ -9,13 +9,14 @@
  * Warnings the edit touches are returned so the agent can fix them.
  */
 import {
-  addSceneModel, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_EASES, SCENE_FORMAT, SCENE_LIGHTS, SCENE_SHAPES,
+  addSceneModel, lookTargetOf, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_EASES, SCENE_FORMAT, SCENE_LIGHTS, SCENE_SHAPES,
   SCENE_MIME, isVec3, sortedEvents, validateScene, type SceneDoc, type SceneEvent, type SceneIssue, type SceneLight, type SceneObject, type SceneShape,
 } from "./scene";
 import {
   addSceneLight, addSceneObject, callTweens, defaultCallArgs, lightIdProblem, removeSceneEvent, removeSceneLight, removeSceneObject, renameSceneObject,
-  roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneObject, updateSceneWorld, type SceneArgField,
+  roundSec, sceneCallArgs, sceneCalls, sceneCameraBase, sceneLightIndex, sceneLights, updateSceneLight, updateSceneLook, updateSceneObject, updateSceneWorld, type SceneArgField,
 } from "./sceneEdit";
+import { SCENE_LOOK_IDS } from "./sceneLook";
 import { moveSceneEventTo } from "./sceneRetime";
 import { addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, sceneScriptCode, setSceneScriptCode, setSceneScriptParams } from "./sceneScript";
 import { SCENE_SCRIPT_MAX, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
@@ -44,6 +45,12 @@ const issueText = (i: SceneIssue) => `${i.path ? `${i.path}: ` : ""}${i.message}
 /** "camera, ball, cube" — every id an event may name. */
 export const sceneObjectIds = (doc: SceneDoc): string[] => [SCENE_CAMERA, ...objectsOf(doc).filter((o) => isObj(o) && typeof o.id === "string").map((o) => o.id)];
 
+/** Scene Phase 1 (#350): what else events may name: lights with an id, and world.post / fog / sky when the scene has them. */
+export const sceneLookTargets = (doc: SceneDoc): string[] => [
+  ...sceneLights(doc).lights.flatMap((l) => (l.id && lookTargetOf(doc, l.id) ? [l.id] : [])),
+  ...SCENE_LOOK_IDS.filter((id) => isObj(doc.world) && isObj((doc.world as Record<string, unknown>)[id]) && lookTargetOf(doc, id)),
+];
+
 /** A short hint of what an argument takes. */
 export function argHint(f: SceneArgField): string {
   switch (f.kind) {
@@ -64,8 +71,17 @@ const argList = (fields: SceneArgField[]) => (fields.length ? fields.map((f) => 
 function needObject(doc: SceneDoc, id: unknown, camera = false): string | undefined {
   if (typeof id !== "string" || !id) return `Name an object. Objects: ${(camera ? sceneObjectIds(doc) : sceneObjectIds(doc).slice(1)).join(", ") || "none yet (add_scene_object)"}.`;
   if (id === SCENE_CAMERA) return camera ? undefined : `"camera" is not an object here; use set_scene_world for the camera's start, events for its moves.`;
-  if (sceneLights(doc).lights.some((l) => l.id === id)) return `"${id}" is a light. Lights are static (no events); change it with set_scene_light.`;
-  if (!objectsOf(doc).some((o) => isObj(o) && o.id === id)) return `No object "${id}". Objects: ${sceneObjectIds(doc).join(", ")}. Add one with add_scene_object.`;
+  if (!objectsOf(doc).some((o) => isObj(o) && o.id === id)) {
+    // Scene Phase 1 (#350): events may also name a light (with an id) or world.post / fog / sky.
+    const look = lookTargetOf(doc, id);
+    const declared = look && (look.kind === "light" || (isObj(doc.world) && isObj((doc.world as Record<string, unknown>)[look.kind])));
+    if (look && !declared) return `The scene has no world.${id}; add it with set_scene_world first${camera ? `, then add events on "${id}"` : ""}.`;
+    if (look && camera) return undefined;
+    if (look?.kind === "light") return `"${id}" is a light: change it with set_scene_light (its changes over time are events on "${id}").`;
+    if (look) return `"${id}" is world.${id}: set it with set_scene_world (its changes over time are events on "${id}").`;
+    const more = camera ? sceneLookTargets(doc) : [];
+    return `No object "${id}". Objects: ${sceneObjectIds(doc).join(", ")}${more.length ? `; lights and world: ${more.join(", ")}` : ""}. Add one with add_scene_object.`;
+  }
   return undefined;
 }
 
@@ -100,7 +116,7 @@ const done = (before: SceneDoc, after: SceneDoc, info: Record<string, unknown>, 
   return g.error ? fail(g.error) : { ok: true, doc: after, info, warnings: g.warnings };
 };
 
-const OBJECT_KEYS = ["name", "shape", "size", "color", "position", "rotation", "scale", "visible", "opacity", "model", "animation", "nodes", "functions"] as const;
+const OBJECT_KEYS = ["name", "shape", "size", "color", "position", "rotation", "scale", "visible", "opacity", "material", "model", "animation", "nodes", "functions"] as const;
 type ObjectKey = (typeof OBJECT_KEYS)[number];
 
 /** Object fields from an input object; `null` removes a field. */
@@ -295,6 +311,13 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
         if (a.lights === null) delete world.lights; else world.lights = a.lights as SceneLight[];
         d = { ...d, world };
       }
+      // Scene Phase 1 (#350): the look — each replaces the whole entry; null removes it.
+      for (const key of ["post", "fog", "sky", "environment", "export"] as const) {
+        const v = a[key];
+        if (v === undefined) continue;
+        if (v !== null && !isObj(v) && !(key !== "environment" && key !== "export" && v === true)) return fail(`"${key}" must be an object (see the scene format), true for the defaults, or null to remove it.`);
+        d = updateSceneLook(updateSceneLook(d, key, undefined), key, v === null ? undefined : v === true ? {} : v);
+      }
       return done(doc, d, { world: d.world ?? {}, name: d.name, durationSec: d.durationSec }, ["world", "durationSec", "name"]);
     }
     case "set_scene_light": {
@@ -326,6 +349,13 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       if (a.position !== undefined) {
         if (a.position !== null && !isVec3(a.position)) return fail('"position" must be [x, y, z] (directional and point lights), or null.');
         patch.position = a.position === null ? undefined : a.position;
+      }
+      // Scene Phase 1 (#350): ground colour, aim, shadows.
+      if (a.groundColor !== undefined) { if (a.groundColor !== null && typeof a.groundColor !== "string") return fail('"groundColor" must be "#rrggbb" (hemisphere lights), or null.'); patch.groundColor = a.groundColor ?? undefined; }
+      if (a.lookAt !== undefined) { if (a.lookAt !== null && !isVec3(a.lookAt)) return fail('"lookAt" must be [x, y, z] (where a directional light aims), or null.'); patch.lookAt = a.lookAt ?? undefined; }
+      if (a.shadow !== undefined) {
+        if (a.shadow !== null && typeof a.shadow !== "boolean" && !isObj(a.shadow)) return fail('"shadow" must be true, false, { mapSize, bias, normalBias, radius, area } or null.');
+        patch.shadow = a.shadow === null || a.shadow === false ? undefined : a.shadow as SceneLight["shadow"];
       }
       d = updateSceneLight(d, i, patch);
       return done(doc, d, { lightIndex: i, light: sceneLights(d).lights[i] }, [`world.lights[${i}]`]);
@@ -416,7 +446,10 @@ export function sceneObjectsForAgent(doc: SceneDoc) {
     }),
     // P81b: the camera's start values and the lights (index, optional id) as drawn.
     camera: { start: (({ background: _b, ...c }) => (void _b, c))(sceneCameraBase(doc)), calls: calls(SCENE_CAMERA) },
-    lights: sceneLights(doc).lights.map((l, index) => ({ index, ...l })),
+    lights: sceneLights(doc).lights.map((l, index) => ({ index, ...l, ...(l.id && lookTargetOf(doc, l.id) ? { calls: calls(l.id) } : {}) })),
+    // Scene Phase 1 (#350): world.post / fog / sky and their calls (events on "post", "fog", "sky").
+    look: Object.fromEntries(SCENE_LOOK_IDS.filter((id) => isObj(doc.world) && isObj((doc.world as Record<string, unknown>)[id]) && lookTargetOf(doc, id))
+      .map((id) => [id, { value: (doc.world as Record<string, unknown>)[id], calls: calls(id) }])),
     defaultLights: sceneLights(doc).defaults,
     // P82: the starting points set_scene_script takes as "template".
     scriptTemplates: SCENE_SCRIPT_TEMPLATES.map((t) => ({ id: t.id, label: t.label, description: t.description, params: t.params })),

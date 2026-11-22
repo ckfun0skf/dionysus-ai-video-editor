@@ -8,12 +8,12 @@ import { bytesToDataUrl, makeAnimatedGlb } from "../ui/cubeGlb";
 import { withRuntime } from "./htmlClip";
 import { CLIP_HTML_LIBRARIES, CLIP_LIBRARIES, detectLibraries, HTML_LIBRARIES, libById, selectedLibraries } from "./htmlLibs";
 import { sceneEditPage, sceneEditPageKey, SCENE_EDIT_JS } from "./sceneEditPage";
-import { SCENE_BUILD_JS, scenePage, scenePageKey, SCENE_RUNTIME_JS } from "./scenePage";
+import { SCENE_BUILD_JS, SCENE_POST_JS, scenePage, scenePageKey, SCENE_RUNTIME_JS } from "./scenePage";
 
 describe("P81a Edit view page", () => {
   it("is the scene page's build part plus the editor runtime (the clip page is unchanged)", () => {
     expect(SCENE_RUNTIME_JS.startsWith(SCENE_BUILD_JS)).toBe(true);
-    expect(SCENE_RUNTIME_JS.slice(SCENE_BUILD_JS.length).startsWith("dionysus.clip({")).toBe(true);
+    expect(SCENE_RUNTIME_JS.slice(SCENE_BUILD_JS.length).startsWith(SCENE_POST_JS + "dionysus.clip({")).toBe(true);
     expect(SCENE_BUILD_JS).not.toContain("dionysus.clip");
     const page = sceneEditPage(SAMPLE_SCENE);
     expect(page).toContain(SCENE_BUILD_JS + SCENE_EDIT_JS);
@@ -45,7 +45,7 @@ describe("P81a Edit view page", () => {
 
   it("the editor-only libraries are not offered to clips (picker, AI prompts, lint, detection)", () => {
     const editorOnly = HTML_LIBRARIES.filter((l) => l.editorOnly).map((l) => l.id);
-    expect(editorOnly).toEqual(["three-orbit", "three-transform"]);
+    expect(editorOnly).toEqual(["three-orbit", "three-transform", "three-look"]);
     expect(CLIP_HTML_LIBRARIES.map((l) => l.id)).toEqual(["three", "three-gltf"]);
     expect(CLIP_LIBRARIES.map((l) => l.id)).toEqual(["three", "three-gltf"]);
     const clip = 'import * as T from "three"; import { OrbitControls } from "three/addons/controls/OrbitControls.js";';
@@ -56,7 +56,7 @@ describe("P81a Edit view page", () => {
 
 describe("P81b Edit view page: camera and lights", () => {
   it("draws the scene camera (frustum, look-at point) and light handles with helpers, pickable by their ids", () => {
-    for (const t of ["CameraHelper(shot)", '"camera:target"', 'rig.userData.sceneId = "camera"', '"light:" + i', "PointLightHelper", "DirectionalLightHelper", "applyLights(d.lights)", "c.isLight"]) expect(SCENE_EDIT_JS).toContain(t);
+    for (const t of ["CameraHelper(shot)", '"camera:target"', 'rig.userData.sceneId = "camera"', '"light:" + i', "PointLightHelper", "DirectionalLightHelper", "applyEditLights(d.lights)", "lightNodes.forEach"]) expect(SCENE_EDIT_JS).toContain(t);
     expect(scenePage(SAMPLE_SCENE)).not.toContain("CameraHelper"); // the clip page never draws them
   });
 

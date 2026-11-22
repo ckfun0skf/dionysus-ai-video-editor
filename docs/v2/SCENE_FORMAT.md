@@ -49,7 +49,8 @@ This is close to the scene a new clip starts with (Code → **3D scene**).
 | `durationSec` | number > 0 | suggested clip length when the scene is added (the clip length is free, like a code clip) |
 | `world.background` | `"#rrggbb"` | default `#101018` |
 | `world.camera` | `{ fov, position, lookAt }` | degrees 1–179 (default 40), `[x, y, z]` (default `[0, 1.6, 6]`), `[x, y, z]` (default `[0, 1, 0]`) |
-| `world.lights[]` | `{ id?, type, color, intensity, position }` | `type`: `ambient`, `hemisphere`, `directional`, `point`; no lights = a hemisphere and a directional light. `id` (optional, P81b) names a light: letters, digits, `_`, `-`, unique among objects and lights, not `camera`. Lights are static: no events animate them (an event naming a light is an error) |
+| `world.lights[]` | `{ id?, type, color, intensity, position, lookAt?, groundColor?, shadow? }` | `type`: `ambient`, `hemisphere`, `directional`, `point`; no lights = a hemisphere and a directional light. `id` (optional, P81b) names a light: letters, digits, `_`, `-`, unique among objects and lights, not `camera`. Phase 1 (#350): a light with an `id` takes events (see [Look](#look-scene-phase-1-350)); `lookAt` aims a directional light (default the origin), `groundColor` is a hemisphere light's ground colour (default `#303040`), `shadow` (directional and point) is `true` or `{ mapSize, bias, normalBias, radius, area }` |
+| `world.fog`, `world.sky`, `world.environment`, `world.post`, `world.export` | objects | Phase 1 look, all optional: see [Look](#look-scene-phase-1-350) |
 | `objects[]` | object | see below |
 | `events[]` | `{ at, obj, call, args, dur, ease }` | see below |
 | `files` | `{ "<name>": "data:…" }` | embedded files (P75): GLB models as data: URLs, stored in the scene asset's version like an HTML clip package; since P82 also Script objects' code (`data:text/javascript;charset=utf-8;base64,…`) |
@@ -154,6 +155,80 @@ from }`; it cross-fades over the event's `dur`) and `nodes` (switches at `at`).
   starts during another fade fades from the earlier event's clip. `stop` fades to the rest pose. `nodes` switches at
   `at`; later events override the names they list.
 
+## Look (Scene Phase 1, #350)
+
+The stylized look (the Stylized-AAA epic #349: a Genshin / BotW / Arcane look, not photorealism). Every field is
+optional: a scene without them renders exactly as before.
+
+**Materials.** An object's `material` is a name or an object:
+
+| Field | Notes |
+|---|---|
+| `type` | `standard` (the old look, default for shapes), `toon` (banded light from a gradient map), `unlit` (ignores lights), `keep` (a model's or script's own materials, their default) |
+| `steps` | toon bands, 2–8 (default 3) |
+| `roughness`, `metalness` | 0–1 (standard) |
+| `emissive`, `emissiveIntensity` | glow colour and strength (standard and toon): what bloom picks up |
+| `outline` | `true` or `{ color (default #101014), width (units, default 0.02) }`: an inverted hull (a back-face shell pushed out along the normals) that follows skinning and morph targets |
+| `rim` | `true` or `{ color, strength (default 0.6), power (default 3) }`: a fresnel edge light (not unlit) |
+
+`"material": "toon"` is short for `{ "type": "toon" }`. On a GLB model a `type` converts every material (colour,
+texture, normal and emissive maps and alpha carry over); without one the file's materials stay and `outline`, `rim`
+and `emissive` still apply. A Script object opts in by having a `material`: the meshes its `build` returns are styled.
+
+**Lights over time.** A light with an `id` takes events with `"obj": "<light id>"`: `intensity` (`value` ≥ 0),
+`color` (`value`), `position` / `moveTo` (`value` / `position`, directional and point lights) and `lookAt` (`target`:
+an object id or `[x, y, z]`, directional lights). They tween and conflict like object properties. `stateAt` returns
+every drawn light at `t` as `lights` (the default lights when the scene has none). Shadows: any light with `shadow`
+turns on the shadow map (PCF; `radius` softens it, `area` is a directional light's shadow box half-size, default 10)
+and every object then casts and receives shadows.
+
+**Atmosphere.**
+
+| Field | Notes |
+|---|---|
+| `world.fog` | `{ type: "linear" (default) \| "exp2", color (default the background), near (10), far (60), density (0.03, exp2) }` |
+| `world.sky` | procedural sky (three.js `Sky`): `{ elevation (°, -90..90, default 20), azimuth (° around y, 0 = +z, 90 = +x, default 180), turbidity (8), rayleigh (2), mieCoefficient (0.005), mieDirectionalG (0.8), light }`. `light` names a directional light the sun places: at its `lookAt` + 30 units towards the sun, so moving the sun moves its light and shadows. A sky replaces the background colour and turns on ACES tone mapping (it is HDR) |
+| `world.environment` | `{ file, background? }`: an equirect `.hdr` (RGBELoader) or `.jpg` / `.png` / `.webp` in `files`, prefiltered (PMREM) as the scene's environment for reflections and image-based light; `background: true` also shows it behind everything |
+
+**Post-processing** (`world.post`): the scene through an EffectComposer — render, SSAO, bloom, depth of field, the
+output pass (tone mapping and sRGB), a grade pass and anti-aliasing.
+
+| Field | Notes |
+|---|---|
+| `toneMapping` | `none`, `linear`, `reinhard`, `cineon`, `aces`, `agx` (default `aces` with a sky, else `none`) |
+| `exposure` | 0–8 (default 1; with `none` an exposure other than 1 uses linear tone mapping) |
+| `contrast`, `saturation` | 0–3 (default 1) |
+| `lift`, `gamma`, `gain` | `[r, g, b]`: lift −1..1 (default 0), gamma 0.1..5 and gain 0..4 (default 1) |
+| `vignette`, `grain` | 0–1 (default 0); the grain pattern is seeded by the frame's time |
+| `bloom` | `true` or `{ strength (0.6), radius (0.4), threshold (0.85) }` (UnrealBloomPass, on the linear HDR picture) |
+| `dof` | `true` or `{ focus (units from the camera, 6), aperture (0–0.2, 0.01), maxblur (0–0.05, 0.01) }` (BokehPass) |
+| `ssao` | `true` or `{ radius (0.5), minDistance (0.001), maxDistance (0.1) }` |
+| `aa` | `fxaa` (default), `smaa`, `none` |
+
+**Look events.** The pseudo-objects `"post"`, `"fog"` and `"sky"` take events like `"camera"` (all with `value`):
+post `exposure`, `contrast`, `saturation`, `lift`, `gamma`, `gain`, `vignette`, `grain`, `bloomStrength`,
+`bloomRadius`, `bloomThreshold`, `dofFocus`, `dofAperture`, `dofMaxblur` (a focus pull is a `dofFocus` tween); fog
+`color`, `near`, `far`, `density`; sky `sunElevation`, `sunAzimuth`, `turbidity`, `rayleigh`. `stateAt` returns them
+resolved at `t` as `post`, `fog` and `sky`. An event on one the scene doesn't have warns (it changes nothing); a call
+for an effect that is off (`bloomStrength` without `bloom`) warns too. **Compatibility:** an object whose id is `post`,
+`fog` or `sky` keeps those events (old scenes), and the validator warns that the world's one can't be animated.
+
+**Export supersampling.** `world.export.supersample` (1–4) renders export frames at that many times the size (at most
+8192 px a side); the frame is fitted into the export canvas like any frame, so drawing it scales it down. The preview
+stays at 1×.
+
+**Rendering.** Materials, outlines, fog, shadows and tone mapping use core three.js. Post-processing, `Sky` and
+`RGBELoader` come from one vendored bundle of the three.js 0.160 addons (`public/vendor/three-look-0.160.0.min.js`,
+built by `scripts/vendor-three-look.mjs`, pinned by SRI, the library `three-look`), loaded only by pages that use them.
+Every value arrives per frame in the state; `composer.render(0)` never reads a clock, and SSAO's kernel comes from the
+clip runtime's seeded random numbers in a fixed build order, so preview, export and any seek order give the same
+frame. The page is rebuilt only when the look's structure changes (materials, which post passes, fog type, sky,
+environment); animated values never reload it.
+
+**Benchmark shot.** `src/v2/domain/__fixtures__/benchmarkShot.ts` (also `public/samples/scenes/benchmark-shot.scene.json`)
+is the epic's dusk village street, re-rendered at the end of every phase. Phase 1 renders:
+[before](benchmark/phase1-before.jpg) (the same shot without the Phase 1 fields) and [after](benchmark/phase1-after.jpg).
+
 ## Validation
 
 `validateScene` reports errors and warnings with JSON paths (`events[3].args.value: must be [x, y, z] numbers.`):
@@ -190,7 +265,7 @@ check worker's time limits are the page's only timers, and they run before the f
 A scene clip has its own timeline editor: **Edit scene** in the clip's Scene tab or **Edit scene…** in its menu on
 desktop (it takes the timeline panel's place), the **Scene** tool on the phone (a full-screen sheet with the preview at
 the top). The tracks (P81b): **Scene** (scene-wide settings only, no events), **Camera** (the camera's moves), one track
-per object, then one per light (lights are static, so their tracks never hold events); each event is a block labelled
+per object, then one per light (a light with an id holds its events; Phase 1 adds Post, Fog and Sky tracks when the scene has them); each event is a block labelled
 with its call (blocks that overlap in time stack in rows). Select a block to edit its call, `at`, `dur`, `ease` and
 arguments; select a track name to edit the object's base fields (id, name, shape, size, colour, position, rotation,
 scale, visible, opacity; for models the animation from 0 s and the parts shown), the scene (name, `durationSec`,
@@ -295,8 +370,8 @@ the schemas) and AI guide RULE 79:
 | `update_scene_event` | Changes an event by index: time, `dur` / `ease` (`null` removes), call (args reset), args (merged), object. |
 | `retime_scene_event` | Moves an event (`at` or `shiftSec`) and / or changes `dur`. |
 | `remove_scene_event` | Removes an event by index. |
-| `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults). |
-| `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`; omit `light` to add one, `remove: true` to delete it. |
+| `set_scene_world` | Name, planned length, background, camera start and lights (`null` = the defaults); Phase 1: `post`, `fog`, `sky`, `environment`, `export` (each replaces the whole entry, `true` = defaults, `null` removes it). |
+| `set_scene_light` (P81b) | One light by `id` or index: `id` (`null` removes it), `type`, `color`, `intensity`, `position`, and (Phase 1) `lookAt`, `groundColor`, `shadow`; omit `light` to add one, `remove: true` to delete it. |
 | `set_scene_script` (P82) | Script objects: omit `objectId` to add one from `template` (`particles`, `shape`, `text`, `empty`) or `code` (with optional `id`, `params`, `position`); with `objectId` set its `code`, `template` (code and params) or `params` (replaces the map; `null` removes them), or `remove: true` to make it a plain shape. Code with static problems is refused with them listed. `list_scene_objects` gives each Script object's code and the templates. |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 

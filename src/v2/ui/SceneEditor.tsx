@@ -11,6 +11,7 @@ import {
   type SceneIssue, type SceneLightType, type SceneObject, type SceneShape, type SceneTrack, type Vec3, type RetimeEdge, type RetimeOptions,
   addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, SCRIPT_PARAM_RE, sceneScriptCode, scriptProblems, setSceneScriptCode, setSceneScriptParams,
   type SceneScriptParams,
+  fogBase, lookTargetOf, postBase, SCENE_AAS, SCENE_TONE_MAPPINGS, skyBase, updateSceneLook, type SceneMaterial, type SceneMaterialType,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -26,7 +27,10 @@ import { ConfirmDialog } from "./Timeline";
  * What the side panel edits: the scene (name, length, background, the list of lights), the camera (P81b), one light
  * (P81b, by index in the drawn list), one object, or one event (by index).
  */
-export type SceneSel = { kind: "scene" } | { kind: "camera" } | { kind: "light"; index: number } | { kind: "object"; id: string } | { kind: "event"; index: number };
+export type SceneSel = { kind: "scene" } | { kind: "camera" } | { kind: "light"; index: number } | { kind: "object"; id: string } | { kind: "event"; index: number }
+  /** Scene Phase 1 (#350): world.post / fog / sky. */
+  | { kind: "look"; id: LookId };
+type LookId = "post" | "fog" | "sky";
 
 export interface SceneEditorProps {
   engine: Engine;
@@ -124,15 +128,15 @@ export function SceneEditor(props: SceneEditorProps) {
   const viewState = useRef<{ doc: SceneDoc; at: number; s: SceneState }>();
   const fileInput = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "camera" ? "c" : "s";
+  const selKey = sel.kind === "event" ? `e${sel.index}` : sel.kind === "object" ? `o${sel.id}` : sel.kind === "light" ? `l${sel.index}` : sel.kind === "look" ? `k${sel.id}` : sel.kind === "camera" ? "c" : "s";
   useEffect(() => { if (panelRef.current) panelRef.current.scrollTop = 0; }, [selKey]);
   // P80 (phone): a new selection keeps a matching sheet open (e.g. Add event → the new event's Timing), else closes it.
   useEffect(() => {
     setPart((x) => {
       if (!x) return x;
       const ok: Part[] = sel.kind === "event" ? ["timing", "args"] : sel.kind === "object" ? ["props", "model", "addEvent"] : sel.kind === "camera" ? ["camera", "addEvent"]
-        : sel.kind === "light" ? ["light"] : ["scene", "lights", "add"];
-      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : sel.kind === "light" ? "light" : sel.kind === "camera" ? "camera" : undefined;
+        : sel.kind === "light" ? ["light", "addEvent"] : sel.kind === "look" ? ["look", "addEvent"] : ["scene", "lights", "add"];
+      return ok.includes(x) ? x : sel.kind === "event" ? "timing" : sel.kind === "object" ? "props" : sel.kind === "light" ? "light" : sel.kind === "look" ? "look" : sel.kind === "camera" ? "camera" : undefined;
     });
   }, [selKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -459,14 +463,16 @@ export function SceneEditor(props: SceneEditorProps) {
   const step = pps >= 80 ? 0.5 : pps >= 40 ? 1 : 2;
   for (let s = 0; s <= span + 1e-9; s += step) ticks.push(Math.round(s * 1000) / 1000);
   const selObj = sel.kind === "object" ? doc.objects.find((o) => o.id === sel.id) : undefined;
-  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
-  /** P81b: only the camera and objects have events (the Scene track is settings, lights are static). */
-  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script";
+  const pickTrack = (t: SceneTrack) => setSel(t.kind === "camera" ? { kind: "camera" } : t.kind === "light" ? { kind: "light", index: t.light ?? 0 } : t.kind === "look" ? { kind: "look", id: t.id as LookId }
+    : t.kind === "scene" || t.kind === "missing" ? { kind: "scene" } : { kind: "object", id: t.id });
+  /** P81b: the camera and objects have events (the Scene track is settings); Scene Phase 1 (#350): so do lights with an id, post, fog and sky. */
+  const animatable = (t: SceneTrack) => t.kind === "camera" || t.kind === "shape" || t.kind === "model" || t.kind === "script" || t.kind === "look" || (t.kind === "light" && !!t.obj);
   const addEventOn = (t: SceneTrack) => {
-    const call = "moveTo";
-    void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, t.id, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; });
+    const target = t.obj ?? t.id;
+    const call = t.obj ? sceneCalls(doc, target)[0]?.call ?? "moveTo" : "moveTo";
+    void edit(`add ${call}`, (d) => { const r = addSceneEvent(d, target, call, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; });
   };
-  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : t.kind === "script" ? "</>" : "scene");
+  const trackIcon = (t: SceneTrack) => (t.kind === "camera" ? "camera" : t.kind === "light" ? "light" : t.kind === "look" ? "effect" : t.kind === "scene" ? "settings" : t.kind === "missing" ? "⚠" : t.kind === "script" ? "</>" : "scene");
 
   const tracksEl = (
     <div ref={tracksRef} className={`v2-sed-tracks ${draft ? "is-dragging" : ""}`} role="group" aria-label="Scene tracks">
@@ -485,8 +491,9 @@ export function SceneEditor(props: SceneEditorProps) {
         </div>
         {tracks.map((t) => {
           const on = (sel.kind === "object" && sel.id === t.id) || (sel.kind === "scene" && t.kind === "scene") || (sel.kind === "camera" && t.kind === "camera")
-            || (sel.kind === "light" && t.kind === "light" && sel.index === t.light);
-          const drop = draft?.target === t.id && t.id ? (draft.problem ? "is-nodrop" : "is-drop") : "";
+            || (sel.kind === "light" && t.kind === "light" && sel.index === t.light) || (sel.kind === "look" && t.kind === "look" && sel.id === t.id);
+          const tid = t.obj ?? t.id;
+          const drop = draft?.target === tid && tid ? (draft.problem ? "is-nodrop" : "is-drop") : "";
           return <div key={t.id || "missing"} className={`v2-sed-track kind-${t.kind} ${on ? "is-sel" : ""} ${drop}`} style={{ height: t.rows * LANE + 4 }}>
             <div className="v2-sed-thead" style={{ width: LABEL_W(mobile) }}>
               <button type="button" className="v2-sed-tname" aria-pressed={on} title={`${t.label} · ${t.detail}`} onClick={() => pickTrack(t)}>
@@ -494,8 +501,8 @@ export function SceneEditor(props: SceneEditorProps) {
               </button>
               {animatable(t) && <button type="button" className="v2-icon v2-sed-tadd" aria-label={`Add event to ${t.label}`} title={`Add an event to ${t.label} at the playhead`} onClick={() => addEventOn(t)}><Ic g="＋" size={16} /></button>}
             </div>
-            <div className="v2-sed-lane" data-track={animatable(t) ? t.id : undefined} style={{ width }}>
-              {(t.kind === "scene" || t.kind === "light") && <span className="v2-sed-lanehint">{t.kind === "scene" ? "Scene settings (no events)" : `${t.detail} · static (no events)`}</span>}
+            <div className="v2-sed-lane" data-track={animatable(t) ? tid : undefined} style={{ width }}>
+              {(t.kind === "scene" || (t.kind === "light" && !t.obj)) && <span className="v2-sed-lanehint">{t.kind === "scene" ? "Scene settings (no events)" : `${t.detail} · give it an id to animate it`}</span>}
               <span className="v2-sed-out" style={{ left: 0, width: Math.max(0, inSec * pps) }} />
               <span className="v2-sed-out" style={{ left: outSec * pps, width: Math.max(0, width - outSec * pps) }} />
               {t.blocks.map((b) => {
@@ -529,11 +536,12 @@ export function SceneEditor(props: SceneEditorProps) {
   const selEventNow = sel.kind === "event" ? doc.events?.[sel.index] : undefined;
   const selLight: SceneLight | undefined = sel.kind === "light" ? sceneLights(doc).lights[sel.index] : undefined;
   const form = (pt?: Part) => sel.kind === "event" && selEventNow
-    ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(selEventNow.obj === SCENE_CAMERA ? { kind: "camera" } : { kind: "object", id: selEventNow.obj })} atNow={atNow} />
+    ? <EventForm key={`e${sel.index}`} doc={doc} index={sel.index} ev={selEventNow} issues={issues} edit={edit} part={pt} onSeek={() => seekLocal(selEventNow.at)} onDeleted={() => setSel(ownerSel(doc, selEventNow.obj))} atNow={atNow} />
     : sel.kind === "object" && selObj ? <ObjectForm key={`o${selObj.id}`} doc={doc} obj={selObj} issues={issues} edit={edit} part={pt} atNow={atNow} runIssues={scriptIssues.filter((x) => x.id === selObj.id)} />
       : sel.kind === "camera" ? <CameraForm doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} />
-        : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} onDeleted={() => setSel({ kind: "scene" })} />
-          : <SceneForm doc={doc} edit={edit} part={pt} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} />;
+        : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} atNow={atNow} onDeleted={() => setSel({ kind: "scene" })} />
+          : sel.kind === "look" ? <LookForm key={`k${sel.id}`} doc={doc} id={sel.id} issues={issues} edit={edit} part={pt} atNow={atNow} onRemoved={() => setSel({ kind: "scene" })} />
+            : <SceneForm doc={doc} edit={edit} part={pt} issues={issues} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} onPickLook={(id) => setSel({ kind: "look", id })} />;
   const panel = (
     <div ref={panelRef} className="v2-sed-panel" aria-label="Edit selection">
       {form()}
@@ -662,7 +670,7 @@ export function SceneEditor(props: SceneEditorProps) {
     ...(sceneCallArgs(doc, selEventNow.obj, selEventNow.call).length ? [ctxTool("⤧", "Values", () => open("args"), { on: part === "args", title: "The call's arguments (where it moves to, its value…)" })] : []),
     ctxTool("⇤", "Go to", () => seekLocal(selEventNow.at), { title: "Move the playhead to this event" }),
     ctxTool("⧉", "Duplicate", () => void edit("duplicate event", (d) => { const r = duplicateSceneEvent(d, sel.index); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })),
-    ctxTool("🗑", "Delete", () => { const back: SceneSel = selEventNow.obj === SCENE_CAMERA ? { kind: "camera" } : { kind: "object", id: selEventNow.obj }; const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel(back); }, { danger: true, title: "Delete this event" }),
+    ctxTool("🗑", "Delete", () => { const back: SceneSel = ownerSel(doc, selEventNow.obj); const i = sel.index; void edit("delete event", (d) => removeSceneEvent(d, i)); setSel(back); }, { danger: true, title: "Delete this event" }),
   ] : sel.kind === "object" && selObj ? [
     ctxTool("⤧", "Properties", () => open("props"), { on: part === "props", title: "Id, shape, size, colour, position, rotation, scale, visibility" }),
     ...(typeof selObj.model === "string" ? [ctxTool("anim-loop", "Animation", () => open("model"), { on: part === "model", title: "The model's animation and parts from 0 s" })] : []),
@@ -677,7 +685,11 @@ export function SceneEditor(props: SceneEditorProps) {
   ] : sel.kind === "light" && selLight ? [
     ctxTool("light", "Light", () => open("light"), { on: part === "light", title: "Id, type, colour, intensity, position" }),
     ...(lightHasPosition(selLight) ? [ctxTool("move3d", "Move", () => setView("edit"), { on: view === "edit", title: "Move it in the Edit view" })] : []),
+    ...(selLight.id && sceneCalls(doc, selLight.id).length ? [ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a light change at the playhead (${atNow}s)` })] : []),
     ctxTool("🗑", "Delete", () => { const i = sel.index; void edit("delete light", (d) => removeSceneLight(d, i)); setSel({ kind: "scene" }); }, { danger: true, title: "Delete this light" }),
+  ] : sel.kind === "look" ? [
+    ctxTool("effect", LOOK_NAME[sel.id], () => open("look"), { on: part === "look", title: `world.${sel.id} at 0 s` }),
+    ctxTool("◆", "Add event", () => open("addEvent"), { on: part === "addEvent", title: `Add a change at the playhead (${atNow}s)` }),
   ] : [
     ctxTool("＋", "Add object", () => open("add"), { on: part === "add", title: "Add a shape, a GLB model or a Script object" }),
     ctxTool("settings", "Scene", () => open("scene"), { on: part === "scene", title: "Name, planned length, background" }),
@@ -763,8 +775,8 @@ const MAX_UNDO = 200;
 /** P80: autosave delay after the last edit. */
 export const DRAFT_DELAY_MS = 600;
 /** P80 (phone): the form sections the context toolbar opens in a sheet. */
-export type Part = "add" | "scene" | "camera" | "lights" | "light" | "props" | "model" | "script" | "addEvent" | "timing" | "args";
-const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", props: "Properties", model: "Animation", script: "Script", addEvent: "Add event", timing: "Timing", args: "Values" };
+export type Part = "add" | "scene" | "camera" | "lights" | "light" | "look" | "props" | "model" | "script" | "addEvent" | "timing" | "args";
+const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", look: "Look", props: "Properties", model: "Animation", script: "Script", addEvent: "Add event", timing: "Timing", args: "Values" };
 
 function draftNote(d: SceneDraft, work: Work | undefined, versions: { id: string }[]): string {
   if (!work || d.baseBlobKey === work.baseKey) return "You closed the editor without saving. Restore the draft to keep working on it, or discard it.";
@@ -810,7 +822,36 @@ function Problems({ list }: { list: SceneIssue[] }) {
 
 // ---------------------------------------------------------------- forms
 
-function SceneForm({ doc, edit, part, onPickLight, onPickCamera }: { doc: SceneDoc; edit: Edit; part?: Part; onPickLight: (i: number) => void; onPickCamera: () => void }) {
+/** Scene Phase 1 (#350): the names of world.post / fog / sky in the editor. */
+const LOOK_NAME: Record<LookId, string> = { post: "Post", fog: "Fog", sky: "Sky" };
+const LOOK_IDS: LookId[] = ["post", "fog", "sky"];
+/** Where the editor goes when an event of `obj` is deleted: its camera, light, look or object. */
+function ownerSel(doc: SceneDoc, obj: string): SceneSel {
+  if (obj === SCENE_CAMERA) return { kind: "camera" };
+  const look = lookTargetOf(doc, obj);
+  if (look?.kind === "light") { const i = sceneLights(doc).lights.findIndex((l) => l.id === obj); return i >= 0 ? { kind: "light", index: i } : { kind: "scene" }; }
+  if (look) return { kind: "look", id: look.kind as LookId };
+  return { kind: "object", id: obj };
+}
+const worldOf = (doc: SceneDoc): Record<string, unknown> => (doc.world && typeof doc.world === "object" ? doc.world as Record<string, unknown> : {});
+const objOrUndef = (v: unknown): Record<string, unknown> | undefined => (v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : v === true ? {} : undefined);
+
+/** Scene Phase 1: the look entries a new one starts with (visible at once, all editable). */
+function newLook(doc: SceneDoc, id: LookId): Record<string, unknown> {
+  if (id === "post") return { toneMapping: "aces", bloom: true, vignette: 0.2 };
+  if (id === "fog") return { color: sceneCameraBase(doc).background, near: 8, far: 40 };
+  const sun = sceneLights(doc).lights.find((l) => l.type === "directional" && l.id);
+  return { elevation: 25, azimuth: 200, ...(sun ? { light: sun.id } : {}) };
+}
+
+/** Read a picked file as a data: URL. */
+const fileDataUrl = (f: File) => new Promise<string>((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(r.error); r.readAsDataURL(f); });
+
+function SceneForm({ doc, edit, part, issues, onPickLight, onPickCamera, onPickLook }: { doc: SceneDoc; edit: Edit; part?: Part; issues: SceneIssue[]; onPickLight: (i: number) => void; onPickCamera: () => void; onPickLook: (id: LookId) => void }) {
+  const w = worldOf(doc);
+  const env = objOrUndef(w.environment);
+  const envInput = useRef<HTMLInputElement>(null);
+  const ss = (objOrUndef(w.export)?.supersample as number | undefined) ?? 1;
   const base = sceneCameraBase(doc);
   const { lights, defaults } = sceneLights(doc);
   const all = !part;
@@ -820,6 +861,31 @@ function SceneForm({ doc, edit, part, onPickLight, onPickCamera }: { doc: SceneD
       <TextField label="Name" value={doc.name ?? ""} onCommit={(v) => edit("rename scene", (d) => ({ ...d, name: v || undefined }) as SceneDoc)} />
       <NumField label="Planned length (s)" value={doc.durationSec} min={0.1} step={0.5} optional onCommit={(v) => edit("planned length", (d) => (v === undefined ? (({ durationSec: _x, ...r }) => (void _x, r as SceneDoc))(d) : { ...d, durationSec: v }))} />
       <ColorField label="Background" value={base.background} onCommit={(v) => edit("background", (d) => updateSceneWorld(d, { background: v }))} />
+      {/* Scene Phase 1 (#350): the look — post-processing, fog, sky, environment map, export supersampling. */}
+      <h5><Ic g="effect" size={14} /> Look</h5>
+      <div className="v2-sed-picklist" role="list" aria-label="Look">
+        {LOOK_IDS.map((id) => (objOrUndef(w[id]) ? <button key={id} type="button" role="listitem" className="v2-btn v2-sed-pick" onClick={() => onPickLook(id)} title={`Edit world.${id}`}><Ic g="effect" size={16} /> <span>{LOOK_NAME[id]}</span></button>
+          : <button key={id} type="button" role="listitem" className="v2-btn" onClick={() => void edit(`add ${id}`, (d) => ({ doc: updateSceneLook(d, id, newLook(d, id)), sel: { kind: "look", id } }))}><Ic g="＋" size={16} /> {LOOK_NAME[id]}</button>))}
+      </div>
+      <Field label="Environment map">
+        <span className="v2-sed-row">
+          <small>{env ? String(env.file) : "none"}</small>
+          <button type="button" className="v2-btn" onClick={() => envInput.current?.click()}>{env ? "Replace…" : "Add .hdr / image…"}</button>
+          {env && <button type="button" className="v2-btn" onClick={() => void edit("remove environment", (d) => updateSceneLook(d, "environment", undefined))}>Remove</button>}
+        </span>
+        <input ref={envInput} type="file" hidden accept=".hdr,.jpg,.jpeg,.png,.webp" onChange={(e) => {
+          const f = e.target.files?.[0]; e.target.value = "";
+          if (!f) return;
+          void fileDataUrl(f).then((url) => edit("environment map", (d) => {
+            const name = f.name.replace(/[^A-Za-z0-9 _.()-]/g, "_").replace(/^[^A-Za-z0-9]+/, "") || "environment.hdr";
+            return updateSceneLook({ ...d, files: { ...(d.files ?? {}), [name]: url } }, "environment", { file: name });
+          }));
+        }} />
+      </Field>
+      {env && <CheckField label="Show the environment as the background" value={env.background === true} onCommit={(v) => edit("environment background", (d) => updateSceneLook(d, "environment", { background: v || undefined }))} />}
+      <SelectField label="Export supersampling" value={String(ss)} options={["1", "2", "3", "4"]} labels={{ 1: "Off", 2: "2× (smoother edges)", 3: "3×", 4: "4×" }}
+        onCommit={(v) => edit("export supersampling", (d) => updateSceneLook(d, "export", v === "1" ? undefined : { supersample: Number(v) }))} />
+      <Problems list={[...issuesAt(issues, "world.environment"), ...issuesAt(issues, "world.export")]} />
     </>}
     {(all || part === "lights") && <>
       {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
@@ -864,11 +930,16 @@ function CameraForm({ doc, issues, edit, part, atNow }: { doc: SceneDoc; issues:
 }
 
 /** P81b: one light (by index in the drawn list): id, type, colour, intensity, position. Lights are static. */
-function LightForm({ doc, index: i, light: l, issues, edit, part, onDeleted }: { doc: SceneDoc; index: number; light: SceneLight; issues: SceneIssue[]; edit: Edit; part?: Part; onDeleted: () => void }) {
+function LightForm({ doc, index: i, light: l, issues, edit, part, atNow, onDeleted }: { doc: SceneDoc; index: number; light: SceneLight; issues: SceneIssue[]; edit: Edit; part?: Part; atNow: number; onDeleted: () => void }) {
   const all = !part;
   const { defaults } = sceneLights(doc);
   const [idErr, setIdErr] = useState<string>();
+  const live = !defaults && !!l.id && lookTargetOf(doc, l.id)?.kind === "light";
+  const calls = live ? sceneCalls(doc, l.id!) : [];
+  const shadow = objOrUndef(l.shadow);
+  const sunDriven = !!l.id && objOrUndef(worldOf(doc).sky)?.light === l.id;
   return <div className="v2-sed-form" data-testid="light-form">
+    {(all || part === "light") && <>
     {all && <h4><Ic g="light" size={16} /> {sceneLightLabel(l, i)} <small>{l.type} light</small></h4>}
     {defaults && <p className="v2-abnote">Default lighting: a change here writes the default lights into the scene first.</p>}
     <TextField label="Id" value={l.id ?? ""} error={idErr} onCommit={(v) => {
@@ -879,10 +950,143 @@ function LightForm({ doc, index: i, light: l, issues, edit, part, onDeleted }: {
     <ColorField label="Colour" value={l.color ?? "#ffffff"} onCommit={(v) => edit("light colour", (d) => updateSceneLight(d, i, { color: v }))} />
     <NumField label="Intensity" value={l.intensity ?? 1} min={0} step={0.1} onCommit={(v) => edit("light intensity", (d) => updateSceneLight(d, i, { intensity: v }))} />
     {lightHasPosition(l) && <Vec3Field label="Position" value={l.position ?? [0, 3, 2]} onCommit={(v) => edit("light position", (d) => updateSceneLight(d, i, { position: v }))} />}
-    <p className="v2-abnote">{lightHasPosition(l) ? "Drag it in the Edit view to move it. " : "An ambient or hemisphere light lights from everywhere, so it has no position. "}Lights are static: no events animate them.</p>
+    {l.type === "directional" && <Vec3Field label="Aims at" value={l.lookAt ?? [0, 0, 0]} onCommit={(v) => edit("light aim", (d) => updateSceneLight(d, i, { lookAt: v[0] || v[1] || v[2] ? v : undefined }))} />}
+    {l.type === "hemisphere" && <ColorField label="Ground colour" value={l.groundColor ?? "#303040"} onCommit={(v) => edit("light ground colour", (d) => updateSceneLight(d, i, { groundColor: v }))} />}
+    {lightHasPosition(l) && <>
+      <CheckField label="Casts shadows" value={!!l.shadow} onCommit={(v) => edit(v ? "light shadows" : "no light shadows", (d) => updateSceneLight(d, i, { shadow: v ? true : undefined }))} />
+      {l.shadow && <>
+        <SelectField label="Shadow detail" value={String(shadow?.mapSize ?? 2048)} options={["512", "1024", "2048", "4096"]} onCommit={(v) => edit("shadow detail", (d) => updateSceneLight(d, i, { shadow: { ...shadow, mapSize: Number(v) } }))} />
+        <NumField label="Shadow softness" value={(shadow?.radius as number | undefined) ?? 2} min={0} max={25} step={0.5} onCommit={(v) => edit("shadow softness", (d) => updateSceneLight(d, i, { shadow: { ...shadow, radius: v } }))} />
+        {l.type === "directional" && <NumField label="Shadow area (units)" value={(shadow?.area as number | undefined) ?? 10} min={0.5} max={500} step={1} onCommit={(v) => edit("shadow area", (d) => updateSceneLight(d, i, { shadow: { ...shadow, area: v } }))} />}
+      </>}
+    </>}
+    <p className="v2-abnote">{lightHasPosition(l) ? "Drag it in the Edit view to move it. " : "An ambient or hemisphere light lights from everywhere, so it has no position. "}
+      {sunDriven ? "The sky's sun places this light (world.sky.light). " : ""}
+      {live ? "Its values here are from 0 s; change it over time with events on its track (＋)." : defaults ? "" : "Give it an id to change it over time with events."}</p>
     <Problems list={defaults ? [] : issuesAt(issues, `world.lights[${i}]`)} />
     {all && <button type="button" className="v2-btn v2-sed-danger" onClick={() => { void edit("delete light", (d) => removeSceneLight(d, i)); onDeleted(); }}><Ic g="🗑" size={16} /> Delete light</button>}
+    </>}
+    {live && (all || part === "addEvent") && <AddLookEvent doc={doc} obj={l.id!} calls={calls.map((c) => c.call)} atNow={atNow} edit={edit} />}
   </div>;
+}
+
+/** Scene Phase 1 (#350): an add-event row for a light, "post", "fog" or "sky". */
+function AddLookEvent({ doc, obj, calls, atNow, edit }: { doc: SceneDoc; obj: string; calls: string[]; atNow: number; edit: Edit }) {
+  const [call, setCall] = useState(calls[0] ?? "");
+  const pick = calls.includes(call) ? call : calls[0] ?? "";
+  return <>
+    <h5>Add a change at {atNow}s</h5>
+    <div className="v2-sed-row">
+      <select aria-label="Call" value={pick} onChange={(e) => setCall(e.target.value)}>{sceneCalls(doc, obj).map((c) => <option key={c.call} value={c.call} title={c.description}>{c.call}</option>)}</select>
+      <button type="button" className="v2-btn" disabled={!pick} onClick={() => void edit(`add ${pick}`, (d) => { const r = addSceneEvent(d, obj, pick, atNow, 1); return { doc: r.doc, sel: { kind: "event", index: r.index } }; })}><Ic g="＋" size={16} /> Add event</button>
+    </div>
+  </>;
+}
+
+/** Scene Phase 1: world.post / fog / sky at 0 s, adding a change over time, removing it. */
+function LookForm({ doc, id, issues, edit, part, atNow, onRemoved }: { doc: SceneDoc; id: LookId; issues: SceneIssue[]; edit: Edit; part?: Part; atNow: number; onRemoved: () => void }) {
+  const all = !part;
+  const w = worldOf(doc);
+  const raw = objOrUndef(w[id]);
+  const live = !!raw && lookTargetOf(doc, id)?.kind === id;
+  const put = (label: string, patch: Record<string, unknown>) => edit(label, (d) => updateSceneLook(d, id, patch));
+  const sub = (key: string, label: string, patch: Record<string, unknown>) => put(label, { [key]: { ...(objOrUndef(raw?.[key]) ?? {}), ...patch } });
+  const toggle = (key: string, label: string, on: boolean) => put(label, { [key]: on ? true : undefined });
+  let body: ReactNode = null;
+  if (raw && id === "post") {
+    const p = postBase(w)!;
+    body = <>
+      <SelectField label="Tone mapping" value={p.toneMapping} options={[...SCENE_TONE_MAPPINGS]} onCommit={(v) => put("tone mapping", { toneMapping: v })} />
+      <NumField label="Exposure" value={p.exposure} min={0} max={8} step={0.05} onCommit={(v) => put("exposure", { exposure: v })} />
+      <NumField label="Contrast" value={p.contrast} min={0} max={3} step={0.05} onCommit={(v) => put("contrast", { contrast: v })} />
+      <NumField label="Saturation" value={p.saturation} min={0} max={3} step={0.05} onCommit={(v) => put("saturation", { saturation: v })} />
+      <Vec3Field label="Lift (shadows r, g, b)" value={p.lift} onCommit={(v) => put("lift", { lift: v })} />
+      <Vec3Field label="Gamma (midtones r, g, b)" value={p.gamma} onCommit={(v) => put("gamma", { gamma: v })} />
+      <Vec3Field label="Gain (highlights r, g, b)" value={p.gain} onCommit={(v) => put("gain", { gain: v })} />
+      <NumField label="Vignette" value={p.vignette} min={0} max={1} step={0.05} onCommit={(v) => put("vignette", { vignette: v })} />
+      <NumField label="Film grain" value={p.grain} min={0} max={1} step={0.05} onCommit={(v) => put("grain", { grain: v })} />
+      <CheckField label="Bloom" value={!!p.bloom} onCommit={(v) => toggle("bloom", "bloom", v)} />
+      {p.bloom && <>
+        <NumField label="Bloom strength" value={p.bloom.strength} min={0} max={5} step={0.05} onCommit={(v) => sub("bloom", "bloom strength", { strength: v })} />
+        <NumField label="Bloom radius" value={p.bloom.radius} min={0} max={1} step={0.05} onCommit={(v) => sub("bloom", "bloom radius", { radius: v })} />
+        <NumField label="Bloom threshold" value={p.bloom.threshold} min={0} max={2} step={0.05} onCommit={(v) => sub("bloom", "bloom threshold", { threshold: v })} />
+      </>}
+      <CheckField label="Depth of field" value={!!p.dof} onCommit={(v) => toggle("dof", "depth of field", v)} />
+      {p.dof && <>
+        <NumField label="Focus distance" value={p.dof.focus} min={0.01} max={500} step={0.1} onCommit={(v) => sub("dof", "focus distance", { focus: v })} />
+        <NumField label="Aperture" value={p.dof.aperture} min={0} max={0.2} step={0.001} onCommit={(v) => sub("dof", "aperture", { aperture: v })} />
+        <NumField label="Max blur" value={p.dof.maxblur} min={0} max={0.05} step={0.001} onCommit={(v) => sub("dof", "max blur", { maxblur: v })} />
+      </>}
+      <CheckField label="Ambient occlusion (SSAO)" value={!!p.ssao} onCommit={(v) => toggle("ssao", "ambient occlusion", v)} />
+      {p.ssao && <NumField label="AO radius" value={p.ssao.radius} min={0.01} max={64} step={0.05} onCommit={(v) => sub("ssao", "ao radius", { radius: v })} />}
+      <SelectField label="Anti-aliasing" value={p.aa} options={[...SCENE_AAS]} labels={{ none: "None", fxaa: "FXAA", smaa: "SMAA" }} onCommit={(v) => put("anti-aliasing", { aa: v })} />
+    </>;
+  } else if (raw && id === "fog") {
+    const f = fogBase(w, sceneCameraBase(doc).background)!;
+    body = <>
+      <SelectField label="Type" value={f.type} options={["linear", "exp2"]} labels={{ linear: "Linear (near → far)", exp2: "Exponential (density)" }} onCommit={(v) => put("fog type", { type: v === "linear" ? undefined : v })} />
+      <ColorField label="Colour" value={f.color} onCommit={(v) => put("fog colour", { color: v })} />
+      {f.type === "linear" ? <>
+        <NumField label="Starts at" value={f.near} min={0} step={0.5} onCommit={(v) => put("fog near", { near: v })} />
+        <NumField label="Full at" value={f.far} min={0.01} step={0.5} onCommit={(v) => put("fog far", { far: v })} />
+      </> : <NumField label="Density" value={f.density} min={0} max={1} step={0.005} onCommit={(v) => put("fog density", { density: v })} />}
+    </>;
+  } else if (raw && id === "sky") {
+    const k = skyBase(w)!;
+    const suns = sceneLights(doc).lights.filter((l) => l.type === "directional" && l.id).map((l) => l.id!);
+    body = <>
+      <NumField label="Sun elevation (°)" value={k.elevation} min={-90} max={90} step={1} onCommit={(v) => put("sun elevation", { elevation: v })} />
+      <NumField label="Sun azimuth (°)" value={k.azimuth} min={-360} max={360} step={1} onCommit={(v) => put("sun azimuth", { azimuth: v })} />
+      <NumField label="Turbidity (haze)" value={k.turbidity} min={0} max={20} step={0.1} onCommit={(v) => put("turbidity", { turbidity: v })} />
+      <NumField label="Rayleigh" value={k.rayleigh} min={0} max={4} step={0.05} onCommit={(v) => put("rayleigh", { rayleigh: v })} />
+      <SelectField label="Sun drives light" value={k.light ?? ""} options={["", ...suns]} labels={{ "": "None" }} onCommit={(v) => put("sun light", { light: v || undefined })} />
+      {!suns.length && <p className="v2-abnote">Give a directional light an id to let the sun place it.</p>}
+    </>;
+  }
+  return <div className="v2-sed-form" data-testid="look-form">
+    {all && <h4><Ic g="effect" size={16} /> {LOOK_NAME[id]}</h4>}
+    {(all || part === "look") && <>
+      {all && <h5>At 0 s</h5>}
+      {body}
+      <Problems list={issuesAt(issues, `world.${id}`)} />
+      {raw && !live && <p className="v2-abnote">An object is called “{id}”, so events on “{id}” change that object; rename it to animate world.{id}.</p>}
+      {all && <button type="button" className="v2-btn v2-sed-danger" onClick={() => { void edit(`remove ${id}`, (d) => updateSceneLook(d, id, undefined)); onRemoved(); }}><Ic g="🗑" size={16} /> Remove {LOOK_NAME[id].toLowerCase()}</button>}
+    </>}
+    {live && (all || part === "addEvent") && <AddLookEvent doc={doc} obj={id} calls={sceneCalls(doc, id).map((c) => c.call)} atNow={atNow} edit={edit} />}
+  </div>;
+}
+
+/** Scene Phase 1: an object's material style (toon, unlit, glow, outline, rim). */
+function MaterialFields({ obj, set }: { obj: SceneObject; set: (label: string, patch: Partial<SceneObject>) => unknown }) {
+  const own = typeof obj.model === "string" || !!obj.script;
+  const m: SceneMaterial = typeof obj.material === "string" ? { type: obj.material } : obj.material ?? {};
+  const deflt: SceneMaterialType = own ? "keep" : "standard";
+  const type = m.type ?? deflt;
+  const put = (label: string, patch: Partial<SceneMaterial>) => {
+    const next = Object.fromEntries(Object.entries({ ...m, ...patch }).filter(([, v]) => v !== undefined)) as SceneMaterial;
+    const keys = Object.keys(next);
+    set(label, { material: !keys.length ? undefined : keys.length === 1 && next.type ? next.type : next });
+  };
+  const outline = m.outline ? (m.outline === true ? {} : m.outline) : undefined;
+  const rim = m.rim ? (m.rim === true ? {} : m.rim) : undefined;
+  return <>
+    <h5>Look</h5>
+    <SelectField label="Material" value={type} options={own ? ["keep", "standard", "toon", "unlit"] : ["standard", "toon", "unlit"]}
+      labels={{ keep: "Its own (from the file / script)", standard: "Standard", toon: "Toon", unlit: "Unlit" }} onCommit={(v) => put("material", { type: v === deflt ? undefined : v as SceneMaterialType })} />
+    {type === "toon" && <NumField label="Toon bands" value={m.steps ?? 3} min={2} max={8} step={1} onCommit={(v) => put("toon bands", { steps: v === 3 ? undefined : v })} />}
+    {type !== "unlit" && <ColorField label="Glow (emissive)" value={m.emissive ?? "#000000"} onCommit={(v) => put("glow", { emissive: v === "#000000" ? undefined : v })} />}
+    {type !== "unlit" && m.emissive && <NumField label="Glow strength" value={m.emissiveIntensity ?? 1} min={0} max={100} step={0.1} onCommit={(v) => put("glow strength", { emissiveIntensity: v === 1 ? undefined : v })} />}
+    <CheckField label="Outline" value={!!outline} onCommit={(v) => put(v ? "outline" : "no outline", { outline: v ? true : undefined })} />
+    {outline && <>
+      <ColorField label="Outline colour" value={outline.color ?? "#101014"} onCommit={(v) => put("outline colour", { outline: { ...outline, color: v } })} />
+      <NumField label="Outline width" value={outline.width ?? 0.02} min={0} max={1} step={0.005} onCommit={(v) => put("outline width", { outline: { ...outline, width: v } })} />
+    </>}
+    {type !== "unlit" && <CheckField label="Rim light" value={!!rim} onCommit={(v) => put(v ? "rim light" : "no rim light", { rim: v ? true : undefined })} />}
+    {type !== "unlit" && rim && <>
+      <ColorField label="Rim colour" value={rim.color ?? "#ffffff"} onCommit={(v) => put("rim colour", { rim: { ...rim, color: v } })} />
+      <NumField label="Rim strength" value={rim.strength ?? 0.6} min={0} max={10} step={0.05} onCommit={(v) => put("rim strength", { rim: { ...rim, strength: v } })} />
+    </>}
+  </>;
 }
 
 function ObjectForm({ doc, obj, issues, edit, atNow, part, runIssues = [] }: { doc: SceneDoc; obj: SceneObject; issues: SceneIssue[]; edit: Edit; atNow: number; part?: Part; runIssues?: SceneScriptIssue[] }) {
@@ -914,6 +1118,7 @@ function ObjectForm({ doc, obj, issues, edit, atNow, part, runIssues = [] }: { d
       <ListField label="Scale" value={scale} hint="one number or x, y, z" onCommit={(v) => set("scale", { scale: v === undefined ? undefined : Array.isArray(v) ? (v.length === 3 ? v as Vec3 : v[0]) : v })} />
       <CheckField label="Visible" value={obj.visible !== false} onCommit={(v) => set(v ? "show" : "hide", { visible: v ? undefined : false })} />
       <NumField label="Opacity" value={obj.opacity ?? 1} min={0} max={1} step={0.05} onCommit={(v) => set("opacity", { opacity: v === 1 ? undefined : v })} />
+      <MaterialFields obj={obj} set={set} />
     </>}
     {model && (all || part === "model") && <>
       {all && <h5>Animation from 0 s</h5>}

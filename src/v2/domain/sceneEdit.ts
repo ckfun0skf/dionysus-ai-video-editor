@@ -9,9 +9,10 @@
  */
 import { cleanParamDecls, type HtmlClipParam } from "./htmlClipPackage";
 import {
-  modelAnimations, modelNodes, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_DEFAULTS, SCENE_LOOPS,
+  lookTargetOf, modelAnimations, modelNodes, SCENE_BASE_FUNCTIONS, SCENE_CAMERA, SCENE_CAMERA_FUNCTIONS, SCENE_DEFAULT_LIGHTS, SCENE_DEFAULTS, SCENE_LOOPS,
   stateAt, type SceneDoc, type SceneEase, type SceneEvent, type SceneLight, type SceneObject, type SceneShape, type SceneWorld, type Vec3,
 } from "./scene";
+import { getLookProp, SCENE_LOOK_CALLS, SCENE_LOOK_IDS, type SceneLookCall } from "./sceneLook";
 
 const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === "object" && !Array.isArray(v);
 const ID_RE = /^[A-Za-z][A-Za-z0-9_-]{0,63}$/;
@@ -126,8 +127,6 @@ export function removeSceneObject(doc: SceneDoc, id: string): { doc: SceneDoc; r
 
 // ---------------------------------------------------------------- world, camera and lights
 
-/** The lights a scene without `world.lights` (or with an empty list) is lit by (as the scene page draws them). */
-export const SCENE_DEFAULT_LIGHTS: readonly SceneLight[] = [{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [3, 5, 2], intensity: 1.5 }];
 
 /** Change the world's background or the camera's start values (`undefined` removes a field). */
 export function updateSceneWorld(doc: SceneDoc, patch: { background?: string; camera?: Partial<NonNullable<SceneWorld["camera"]>> }): SceneDoc {
@@ -138,6 +137,21 @@ export function updateSceneWorld(doc: SceneDoc, patch: { background?: string; ca
     const cam = clean({ ...(isObj(w.camera) ? w.camera : {}), ...patch.camera });
     next = Object.keys(cam).length ? { ...next, camera: cam } : (({ camera: _c, ...rest }) => (void _c, rest))(next);
   }
+  return JSON.stringify(next) === JSON.stringify(w) ? doc : { ...doc, world: next };
+}
+
+/**
+ * Scene Phase 1 (#350): set (or with `undefined` remove) one of world.post / fog / sky / environment / export. A
+ * patch object is merged into the old value (its `undefined` fields are removed); `true` for an absent entry adds
+ * the empty object (all defaults).
+ */
+export type SceneLookKey = "post" | "fog" | "sky" | "environment" | "export";
+export function updateSceneLook(doc: SceneDoc, key: SceneLookKey, patch: Record<string, unknown> | undefined): SceneDoc {
+  const w: SceneWorld = isObj(doc.world) ? doc.world : {};
+  const old = (w as Record<string, unknown>)[key];
+  let next: SceneWorld;
+  if (patch === undefined) { if (old === undefined) return doc; const { [key]: _x, ...rest } = w; void _x; next = rest; }
+  else next = { ...w, [key]: clean({ ...(isObj(old) ? old : {}), ...patch }) };
   return JSON.stringify(next) === JSON.stringify(w) ? doc : { ...doc, world: next };
 }
 
@@ -200,7 +214,17 @@ export function removeSceneLight(doc: SceneDoc, i: number): SceneDoc {
 // ---------------------------------------------------------------- events
 
 /** What one call offers in the editor. */
-export interface SceneCallInfo { call: string; kind: "base" | "custom" | "camera"; description: string }
+export interface SceneCallInfo { call: string; kind: "base" | "custom" | "camera" | "look"; description: string }
+
+/** Scene Phase 1 (#350): the calls of a light (with an id), "post", "fog" or "sky" (only the effects the scene has). */
+function lookCalls(doc: SceneDoc, obj: string): [string, SceneLookCall][] | undefined {
+  const look = lookTargetOf(doc, obj);
+  if (!look) return undefined;
+  const w = isObj(doc.world) ? doc.world : {};
+  if (look.kind !== "light" && !isObj((w as Record<string, unknown>)[look.kind])) return [];
+  const post: Record<string, unknown> = isObj(w.post) ? w.post as Record<string, unknown> : {};
+  return Object.entries(SCENE_LOOK_CALLS[look.kind]).filter(([, c]) => !c.needs || post[c.needs] === true || isObj(post[c.needs]));
+}
 
 /** The calls an object (or the camera) offers: base functions (animation ones for models only), then its own functions. */
 export function sceneCalls(doc: SceneDoc, obj: string): SceneCallInfo[] {
@@ -208,6 +232,8 @@ export function sceneCalls(doc: SceneDoc, obj: string): SceneCallInfo[] {
     const d: Record<string, string> = { position: "Move the camera to [x, y, z].", moveTo: "Same as position.", lookAt: "Aim the camera at an object id or a point.", fov: "Field of view in degrees." };
     return Object.keys(SCENE_CAMERA_FUNCTIONS).map((call) => ({ call, kind: "camera", description: d[call] ?? "" }));
   }
+  const look = lookCalls(doc, obj);
+  if (look) return look.map(([call, c]) => ({ call, kind: "look" as const, description: c.description }));
   const o = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
   if (!o) return [];
   const model = typeof o.model === "string";
@@ -234,6 +260,12 @@ export function sceneCallArgs(doc: SceneDoc, obj: string, call: string): SceneAr
     if (f.prop === "fov") return [{ name: "value", kind: "number", label: "Field of view (°)", min: 2, max: 178, step: 1 }];
     if (f.prop === "target") return [{ name: "target", kind: "target", label: "Look at" }];
     return [{ name: f.arg, kind: "vec3", label: "Position" }];
+  }
+  const look = lookTargetOf(doc, obj);
+  if (look) {
+    const c = SCENE_LOOK_CALLS[look.kind][call];
+    if (!c) return [];
+    return c.kind === "number" ? [{ name: c.arg, kind: "number", label: c.label, min: c.min, max: c.max, step: c.step }] : [{ name: c.arg, kind: c.kind, label: c.label }];
   }
   const o = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
   const base = SCENE_BASE_FUNCTIONS[call];
@@ -273,6 +305,15 @@ export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: nu
     if (f.prop === "target") return { target: vecR(s.camera.target) };
     return { [f.arg]: vecR(s.camera.position) };
   }
+  const look = lookTargetOf(doc, obj);
+  if (look) {
+    const c = SCENE_LOOK_CALLS[look.kind][call];
+    if (!c) return {};
+    const st = (look.kind === "light" ? s.lights.find((l) => l.id === obj) : s[look.kind]) as Record<string, unknown> | undefined;
+    let v = st ? getLookProp(st, c.prop) : undefined;
+    if (v === undefined) v = c.kind === "color" ? "#ffffff" : c.kind === "vec3" || c.kind === "target" ? [0, 0, 0] : c.min ?? 0;
+    return { [c.arg]: typeof v === "number" ? r3(v) : Array.isArray(v) ? vecR(v as Vec3) : v };
+  }
   const o = s.objects.find((x) => x.id === obj);
   const src = objectsOf(doc).find((x) => isObj(x) && x.id === obj);
   if (!o || !src) return {};
@@ -300,8 +341,10 @@ export function defaultCallArgs(doc: SceneDoc, obj: string, call: string, at: nu
 }
 
 /** Calls that change something over time (a `dur` and an ease make sense); the others switch at `at` (or fade). */
-export function callTweens(_doc: SceneDoc, obj: string, call: string): boolean {
+export function callTweens(doc: SceneDoc, obj: string, call: string): boolean {
   if (obj === SCENE_CAMERA) return !!SCENE_CAMERA_FUNCTIONS[call];
+  const look = lookTargetOf(doc, obj);
+  if (look) return !!SCENE_LOOK_CALLS[look.kind][call];
   const base = SCENE_BASE_FUNCTIONS[call];
   if (base) return base.prop !== "visible" && base.prop !== "nodes";
   return true;
@@ -364,9 +407,11 @@ export function duplicateSceneEvent(doc: SceneDoc, i: number): { doc: SceneDoc; 
 export interface SceneBlock { index: number; at: number; dur: number; end: number; call: string; row: number }
 export interface SceneTrack {
   /** The object id (`camera` for the camera; "#scene", "#light-<i>" and "" (unknown objects) never take events). */
-  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "light" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
+  id: string; label: string; kind: "scene" | "camera" | "shape" | "model" | "script" | "light" | "look" | "missing"; detail: string; rows: number; blocks: SceneBlock[];
   /** P81b: a light track's index in the drawn lights. */
   light?: number;
+  /** Scene Phase 1 (#350): what events on this track name (a light's id, "post", "fog" or "sky"); unset = `id` (none for a light without an id). */
+  obj?: string;
 }
 /** P81b: the Scene track's id (scene-wide settings; no events). */
 export const SCENE_TRACK = "#scene";
@@ -390,7 +435,20 @@ export function sceneTracks(doc: SceneDoc, minSec = 0.4): SceneTrack[] {
   }
   const byId = new Map(tracks.map((t) => [t.id, t]));
   const { lights, defaults } = sceneLights(doc);
-  lights.forEach((l, i) => tracks.push({ id: `#light-${i}`, label: sceneLightLabel(l, i), kind: "light", detail: `${l.type} light${defaults ? " (default)" : ""}`, rows: 1, blocks: [], light: i }));
+  lights.forEach((l, i) => {
+    const t: SceneTrack = { id: `#light-${i}`, label: sceneLightLabel(l, i), kind: "light", detail: `${l.type} light${defaults ? " (default)" : ""}`, rows: 1, blocks: [], light: i };
+    // Scene Phase 1 (#350): a light with an id takes events on its track.
+    if (!defaults && l.id && lookTargetOf(doc, l.id)?.kind === "light") { t.obj = l.id; byId.set(l.id, t); }
+    tracks.push(t);
+  });
+  // Scene Phase 1: the world's post, fog and sky (when the scene has them) take events too.
+  const w = isObj(doc.world) ? doc.world as Record<string, unknown> : {};
+  const LOOK_LABEL: Record<string, [string, string]> = { post: ["Post", "grading, bloom, depth of field"], fog: ["Fog", "colour, distance"], sky: ["Sky", "sun, haze"] };
+  for (const id of SCENE_LOOK_IDS) {
+    if (!isObj(w[id]) || lookTargetOf(doc, id)?.kind !== id) continue;
+    const t: SceneTrack = { id, label: LOOK_LABEL[id][0], kind: "look", detail: LOOK_LABEL[id][1], rows: 1, blocks: [], obj: id };
+    byId.set(id, t); tracks.push(t);
+  }
   let missing: SceneTrack | undefined;
   eventsOf(doc).forEach((e, index) => {
     if (!isObj(e) || typeof e.at !== "number" || !Number.isFinite(e.at)) return;

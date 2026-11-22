@@ -1,0 +1,724 @@
+{
+ "format": "dionysus.scene/1",
+ "name": "Benchmark shot: village street at dusk",
+ "durationSec": 15,
+ "world": {
+  "background": "#6f6a86",
+  "camera": {
+   "fov": 40,
+   "position": [
+    -1,
+    3.2,
+    12
+   ],
+   "lookAt": [
+    0,
+    1.2,
+    0
+   ]
+  },
+  "lights": [
+   {
+    "id": "skyfill",
+    "type": "hemisphere",
+    "color": "#a8b8ff",
+    "groundColor": "#3a2a30",
+    "intensity": 0.9
+   },
+   {
+    "id": "sun",
+    "type": "directional",
+    "color": "#ffc890",
+    "intensity": 2.4,
+    "position": [
+     -8,
+     6,
+     6
+    ],
+    "lookAt": [
+     0,
+     0,
+     0
+    ],
+    "shadow": {
+     "mapSize": 2048,
+     "area": 12,
+     "radius": 3
+    }
+   },
+   {
+    "id": "lantern",
+    "type": "point",
+    "color": "#ffb060",
+    "intensity": 0,
+    "position": [
+     2.8,
+     2,
+     -1.2
+    ]
+   }
+  ],
+  "sky": {
+   "elevation": 10,
+   "azimuth": 250,
+   "turbidity": 6,
+   "rayleigh": 2.5,
+   "light": "sun"
+  },
+  "fog": {
+   "type": "linear",
+   "color": "#7a6c8c",
+   "near": 22,
+   "far": 75
+  },
+  "post": {
+   "toneMapping": "aces",
+   "exposure": 0.55,
+   "contrast": 1.1,
+   "saturation": 1.1,
+   "lift": [
+    0.02,
+    0,
+    0.04
+   ],
+   "gain": [
+    1.04,
+    1,
+    0.96
+   ],
+   "vignette": 0.28,
+   "grain": 0.05,
+   "bloom": {
+    "strength": 0.35,
+    "radius": 0.35,
+    "threshold": 1.1
+   },
+   "dof": {
+    "focus": 11,
+    "aperture": 0.002,
+    "maxblur": 0.008
+   },
+   "ssao": {
+    "radius": 0.35
+   },
+   "aa": "smaa"
+  },
+  "export": {
+   "supersample": 2
+  }
+ },
+ "objects": [
+  {
+   "id": "ground",
+   "shape": "plane",
+   "size": [
+    60,
+    60
+   ],
+   "color": "#5f7a4a",
+   "rotation": [
+    -90,
+    0,
+    0
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3
+   }
+  },
+  {
+   "id": "street",
+   "shape": "box",
+   "size": [
+    60,
+    0.04,
+    3
+   ],
+   "color": "#8b7d6b",
+   "position": [
+    0,
+    0.02,
+    0.6
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3
+   }
+  },
+  {
+   "id": "house",
+   "shape": "box",
+   "size": [
+    3,
+    2.4,
+    2.5
+   ],
+   "color": "#e8d8b8",
+   "position": [
+    1,
+    1.2,
+    -3
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "roof",
+   "shape": "cone",
+   "size": [
+    2.3,
+    1.4
+   ],
+   "color": "#b4553f",
+   "position": [
+    1,
+    3.1,
+    -3
+   ],
+   "rotation": [
+    0,
+    45,
+    0
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "door",
+   "shape": "box",
+   "size": [
+    0.7,
+    1.3,
+    0.06
+   ],
+   "color": "#6b4a32",
+   "position": [
+    1.5,
+    0.65,
+    -1.72
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "glass",
+   "shape": "box",
+   "size": [
+    0.7,
+    0.6,
+    0.06
+   ],
+   "color": "#ffd890",
+   "position": [
+    0.2,
+    1.5,
+    -1.72
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    },
+    "emissive": "#ffb050",
+    "emissiveIntensity": 1.4
+   }
+  },
+  {
+   "id": "house2",
+   "shape": "box",
+   "size": [
+    2.6,
+    2.2,
+    2.2
+   ],
+   "color": "#c9d6e0",
+   "position": [
+    -4.5,
+    1.1,
+    -3.5
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "roof2",
+   "shape": "cone",
+   "size": [
+    2,
+    1.2
+   ],
+   "color": "#50607a",
+   "position": [
+    -4.5,
+    2.8,
+    -3.5
+   ],
+   "rotation": [
+    0,
+    45,
+    0
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "glass2",
+   "shape": "box",
+   "size": [
+    0.6,
+    0.6,
+    0.06
+   ],
+   "color": "#ffd890",
+   "position": [
+    -4.1,
+    1.3,
+    -2.37
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    },
+    "emissive": "#ffa040",
+    "emissiveIntensity": 1.2
+   }
+  },
+  {
+   "id": "lampPost",
+   "shape": "cylinder",
+   "size": [
+    0.05,
+    2.1
+   ],
+   "color": "#2c2a30",
+   "position": [
+    2.8,
+    1.05,
+    -1.5
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "lamp",
+   "shape": "sphere",
+   "size": 0.16,
+   "color": "#ffe0a0",
+   "position": [
+    2.8,
+    2.15,
+    -1.5
+   ],
+   "material": {
+    "type": "toon",
+    "emissive": "#ffb060",
+    "emissiveIntensity": 0.3,
+    "outline": {
+     "width": 0.02
+    }
+   }
+  },
+  {
+   "id": "trunk",
+   "shape": "cylinder",
+   "size": [
+    0.15,
+    1.2
+   ],
+   "color": "#6b4a32",
+   "position": [
+    5,
+    0.6,
+    -2.5
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "crown",
+   "shape": "cone",
+   "size": [
+    1,
+    2.4
+   ],
+   "color": "#3f6b3a",
+   "position": [
+    5,
+    2.4,
+    -2.5
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "trunk2",
+   "shape": "cylinder",
+   "size": [
+    0.15,
+    1.2
+   ],
+   "color": "#6b4a32",
+   "position": [
+    -7.5,
+    0.6,
+    -1.8
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "crown2",
+   "shape": "cone",
+   "size": [
+    1.2,
+    2.8
+   ],
+   "color": "#46733c",
+   "position": [
+    -7.5,
+    2.6,
+    -1.8
+   ],
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.03
+    }
+   }
+  },
+  {
+   "id": "hero",
+   "name": "Character (stand-in)",
+   "shape": "cylinder",
+   "size": [
+    0.25,
+    1.6
+   ],
+   "position": [
+    -5,
+    0,
+    0.6
+   ],
+   "rotation": [
+    0,
+    90,
+    0
+   ],
+   "script": {
+    "file": "hero.js",
+    "params": {
+     "skin": "#f2c9a0",
+     "cloth": "#3d6fb6",
+     "walkFrom": 0.5,
+     "walkTo": 6.5,
+     "stride": 7,
+     "waveFrom": 8,
+     "waveTo": 10.6
+    }
+   },
+   "material": {
+    "type": "toon",
+    "steps": 3,
+    "outline": {
+     "width": 0.012
+    },
+    "rim": {
+     "color": "#ffd0a0",
+     "strength": 0.25,
+     "power": 4
+    }
+   }
+  },
+  {
+   "id": "fireflies",
+   "position": [
+    0.5,
+    0,
+    -0.5
+   ],
+   "script": {
+    "file": "fireflies.js",
+    "params": {
+     "count": 60,
+     "color": "#ffe88a",
+     "glow": 3,
+     "size": 0.07,
+     "width": 12,
+     "height": 2.4,
+     "depth": 6,
+     "fadeFrom": 9,
+     "fadeFor": 2.5
+    }
+   }
+  }
+ ],
+ "events": [
+  {
+   "at": 0.5,
+   "obj": "hero",
+   "call": "moveTo",
+   "args": {
+    "position": [
+     1.6,
+     0,
+     0.6
+    ]
+   },
+   "dur": 6,
+   "ease": "linear"
+  },
+  {
+   "at": 7,
+   "obj": "hero",
+   "call": "rotation",
+   "args": {
+    "value": [
+     0,
+     24,
+     0
+    ]
+   },
+   "dur": 0.8,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 2,
+   "obj": "sky",
+   "call": "sunElevation",
+   "args": {
+    "value": -1.5
+   },
+   "dur": 12,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 2,
+   "obj": "sky",
+   "call": "rayleigh",
+   "args": {
+    "value": 3.2
+   },
+   "dur": 12,
+   "ease": "linear"
+  },
+  {
+   "at": 4,
+   "obj": "sun",
+   "call": "color",
+   "args": {
+    "value": "#ff7a4a"
+   },
+   "dur": 9,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 4,
+   "obj": "sun",
+   "call": "intensity",
+   "args": {
+    "value": 0.5
+   },
+   "dur": 10,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 5,
+   "obj": "skyfill",
+   "call": "intensity",
+   "args": {
+    "value": 0.35
+   },
+   "dur": 9,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 5,
+   "obj": "skyfill",
+   "call": "color",
+   "args": {
+    "value": "#6a70c8"
+   },
+   "dur": 9,
+   "ease": "linear"
+  },
+  {
+   "at": 4,
+   "obj": "fog",
+   "call": "color",
+   "args": {
+    "value": "#3a3550"
+   },
+   "dur": 10,
+   "ease": "linear"
+  },
+  {
+   "at": 4,
+   "obj": "fog",
+   "call": "far",
+   "args": {
+    "value": 50
+   },
+   "dur": 10,
+   "ease": "linear"
+  },
+  {
+   "at": 5,
+   "obj": "lantern",
+   "call": "intensity",
+   "args": {
+    "value": 0.9
+   },
+   "dur": 3,
+   "ease": "outCubic"
+  },
+  {
+   "at": 5,
+   "obj": "post",
+   "call": "exposure",
+   "args": {
+    "value": 0.75
+   },
+   "dur": 9,
+   "ease": "linear"
+  },
+  {
+   "at": 0.5,
+   "obj": "camera",
+   "call": "moveTo",
+   "args": {
+    "position": [
+     3,
+     3,
+     11
+    ]
+   },
+   "dur": 4.5,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 5,
+   "obj": "camera",
+   "call": "moveTo",
+   "args": {
+    "position": [
+     6,
+     2.6,
+     8.5
+    ]
+   },
+   "dur": 4.9,
+   "ease": "inOutSine"
+  },
+  {
+   "at": 10,
+   "obj": "camera",
+   "call": "moveTo",
+   "args": {
+    "position": [
+     3.4,
+     1.65,
+     3.6
+    ]
+   }
+  },
+  {
+   "at": 10,
+   "obj": "camera",
+   "call": "lookAt",
+   "args": {
+    "target": [
+     1.6,
+     1.45,
+     0.4
+    ]
+   }
+  },
+  {
+   "at": 10,
+   "obj": "camera",
+   "call": "fov",
+   "args": {
+    "value": 34
+   }
+  },
+  {
+   "at": 10,
+   "obj": "post",
+   "call": "dofFocus",
+   "args": {
+    "value": 6.2
+   }
+  },
+  {
+   "at": 10,
+   "obj": "post",
+   "call": "dofAperture",
+   "args": {
+    "value": 0.012
+   }
+  },
+  {
+   "at": 10.6,
+   "obj": "post",
+   "call": "dofFocus",
+   "args": {
+    "value": 3.3
+   },
+   "dur": 1.4,
+   "ease": "inOutCubic"
+  }
+ ],
+ "files": {
+  "hero.js": "data:text/javascript;charset=utf-8;base64,Ly8gU3RhbmQtaW4gY2hhcmFjdGVyOiBhIHdhbGsgY3ljbGUgd2hpbGUgd2Fsa2luZyBhbmQgYSB3YXZlLCBib3RoIGZyb20gc2NlbmUgdGltZSB0IGFsb25lLgpleHBvcnQgZnVuY3Rpb24gYnVpbGQoVEhSRUUsIHBhcmFtcykgewogIGNvbnN0IGcgPSBuZXcgVEhSRUUuR3JvdXAoKTsKICBjb25zdCBtYXQgPSAoYykgPT4gbmV3IFRIUkVFLk1lc2hTdGFuZGFyZE1hdGVyaWFsKHsgY29sb3I6IGMsIHJvdWdobmVzczogMC44IH0pOwogIGNvbnN0IHNraW4gPSBtYXQocGFyYW1zLnNraW4pLCBjbG90aCA9IG1hdChwYXJhbXMuY2xvdGgpLCBkYXJrID0gbWF0KCIjMjIyMDJhIik7CiAgY29uc3QgYm9keSA9IG5ldyBUSFJFRS5NZXNoKG5ldyBUSFJFRS5DYXBzdWxlR2VvbWV0cnkoMC4yNCwgMC41LCA2LCAxNiksIGNsb3RoKTsgYm9keS5wb3NpdGlvbi55ID0gMS4wOyBnLmFkZChib2R5KTsKICBjb25zdCBoZWFkID0gbmV3IFRIUkVFLk1lc2gobmV3IFRIUkVFLlNwaGVyZUdlb21ldHJ5KDAuMiwgMjQsIDE2KSwgc2tpbik7IGhlYWQucG9zaXRpb24ueSA9IDEuNTU7IGcuYWRkKGhlYWQpOwogIGZvciAoY29uc3QgeCBvZiBbLTAuMDcsIDAuMDddKSB7IGNvbnN0IGUgPSBuZXcgVEhSRUUuTWVzaChuZXcgVEhSRUUuU3BoZXJlR2VvbWV0cnkoMC4wMywgMTAsIDgpLCBkYXJrKTsgZS5wb3NpdGlvbi5zZXQoeCwgMS41OCwgMC4xOCk7IGcuYWRkKGUpOyB9CiAgY29uc3QgbGltYiA9IChsZW4sIHIsIG0pID0+IHsgY29uc3QgcCA9IG5ldyBUSFJFRS5Hcm91cCgpOyBjb25zdCBsID0gbmV3IFRIUkVFLk1lc2gobmV3IFRIUkVFLkNhcHN1bGVHZW9tZXRyeShyLCBsZW4sIDQsIDEwKSwgbSk7IGwucG9zaXRpb24ueSA9IC1sZW4gLyAyIC0gcjsgcC5hZGQobCk7IHJldHVybiBwOyB9OwogIGNvbnN0IGFybUwgPSBsaW1iKDAuNDUsIDAuMDcsIGNsb3RoKSwgYXJtUiA9IGxpbWIoMC40NSwgMC4wNywgY2xvdGgpOwogIGFybUwucG9zaXRpb24uc2V0KC0wLjMyLCAxLjMyLCAwKTsgYXJtUi5wb3NpdGlvbi5zZXQoMC4zMiwgMS4zMiwgMCk7IGcuYWRkKGFybUwsIGFybVIpOwogIGNvbnN0IGxlZ0wgPSBsaW1iKDAuNDIsIDAuMDg1LCBkYXJrKSwgbGVnUiA9IGxpbWIoMC40MiwgMC4wODUsIGRhcmspOwogIGxlZ0wucG9zaXRpb24uc2V0KC0wLjEyLCAwLjYyLCAwKTsgbGVnUi5wb3NpdGlvbi5zZXQoMC4xMiwgMC42MiwgMCk7IGcuYWRkKGxlZ0wsIGxlZ1IpOwogIGcudXNlckRhdGEucGFydHMgPSB7IGJvZHksIGhlYWQsIGFybUwsIGFybVIsIGxlZ0wsIGxlZ1IgfTsKICByZXR1cm4gZzsKfQoKZXhwb3J0IGZ1bmN0aW9uIHVwZGF0ZShnLCB0LCBwYXJhbXMpIHsKICBjb25zdCBwID0gZy51c2VyRGF0YS5wYXJ0czsKICBjb25zdCB3YWxraW5nID0gdCA+PSBwYXJhbXMud2Fsa0Zyb20gJiYgdCA8PSBwYXJhbXMud2Fsa1RvOwogIGNvbnN0IHMgPSB3YWxraW5nID8gTWF0aC5zaW4oKHQgLSBwYXJhbXMud2Fsa0Zyb20pICogcGFyYW1zLnN0cmlkZSkgOiAwOwogIHAubGVnTC5yb3RhdGlvbi54ID0gcyAqIDAuNjsgcC5sZWdSLnJvdGF0aW9uLnggPSAtcyAqIDAuNjsKICBwLmFybUwucm90YXRpb24ueCA9IC1zICogMC41OyBwLmFybVIucm90YXRpb24ueCA9IHMgKiAwLjU7CiAgcC5ib2R5LnBvc2l0aW9uLnkgPSAxLjAgKyAod2Fsa2luZyA/IE1hdGguYWJzKHMpICogMC4wNCA6IDApOwogIHAuYXJtUi5yb3RhdGlvbi56ID0gMDsKICAvLyBXYXZlOiByYWlzZSB0aGUgcmlnaHQgYXJtIG92ZXIgMC40IHMsIHdhdmUgaXQsIGxvd2VyIGl0IG92ZXIgMC40IHMuCiAgY29uc3QgdzAgPSBwYXJhbXMud2F2ZUZyb20sIHcxID0gcGFyYW1zLndhdmVUbzsKICBpZiAodCA+IHcwICYmIHQgPCB3MSkgewogICAgY29uc3QgdXAgPSBNYXRoLm1pbigxLCAodCAtIHcwKSAvIDAuNCwgKHcxIC0gdCkgLyAwLjQpOwogICAgcC5hcm1SLnJvdGF0aW9uLnggPSAwOwogICAgcC5hcm1SLnJvdGF0aW9uLnogPSB1cCAqICgyLjUgKyBNYXRoLnNpbigodCAtIHcwKSAqIDkpICogMC4zNSk7CiAgfQogIHAuaGVhZC5yb3RhdGlvbi55ID0gMDsKfQo=",
+  "fireflies.js": "data:text/javascript;charset=utf-8;base64,Ly8gRmlyZWZsaWVzOiBwb2ludHMgdGhhdCBkcmlmdCBhbmQgYmxpbmsgZnJvbSBzY2VuZSB0aW1lIHQgYWxvbmUsIGZhZGluZyBpbiBmcm9tIGZhZGVGcm9tLgpleHBvcnQgZnVuY3Rpb24gYnVpbGQoVEhSRUUsIHBhcmFtcywgY3R4KSB7CiAgY29uc3QgbiA9IE1hdGgubWF4KDEsIE1hdGgubWluKDUwMCwgTWF0aC5yb3VuZChwYXJhbXMuY291bnQpKSk7CiAgY29uc3Qgcm5kID0gY3R4LnJhbmRvbSg3KTsKICBjb25zdCBzZWVkcyA9IG5ldyBGbG9hdDMyQXJyYXkobiAqIDUpOwogIGZvciAobGV0IGkgPSAwOyBpIDwgc2VlZHMubGVuZ3RoOyBpKyspIHNlZWRzW2ldID0gcm5kKCk7CiAgY29uc3QgZ2VvbWV0cnkgPSBuZXcgVEhSRUUuQnVmZmVyR2VvbWV0cnkoKTsKICBnZW9tZXRyeS5zZXRBdHRyaWJ1dGUoInBvc2l0aW9uIiwgbmV3IFRIUkVFLkJ1ZmZlckF0dHJpYnV0ZShuZXcgRmxvYXQzMkFycmF5KG4gKiAzKSwgMykpOwogIGNvbnN0IGNvbG9yID0gbmV3IFRIUkVFLkNvbG9yKHBhcmFtcy5jb2xvcikubXVsdGlwbHlTY2FsYXIocGFyYW1zLmdsb3cpOwogIGNvbnN0IG1hdGVyaWFsID0gbmV3IFRIUkVFLlBvaW50c01hdGVyaWFsKHsgY29sb3IsIHNpemU6IHBhcmFtcy5zaXplLCB0cmFuc3BhcmVudDogdHJ1ZSwgb3BhY2l0eTogMCwgZGVwdGhXcml0ZTogZmFsc2UsIGJsZW5kaW5nOiBUSFJFRS5BZGRpdGl2ZUJsZW5kaW5nIH0pOwogIGNvbnN0IHBvaW50cyA9IG5ldyBUSFJFRS5Qb2ludHMoZ2VvbWV0cnksIG1hdGVyaWFsKTsKICBwb2ludHMuZnJ1c3R1bUN1bGxlZCA9IGZhbHNlOwogIHBvaW50cy51c2VyRGF0YS5zZWVkcyA9IHNlZWRzOwogIHJldHVybiBwb2ludHM7Cn0KCmV4cG9ydCBmdW5jdGlvbiB1cGRhdGUocG9pbnRzLCB0LCBwYXJhbXMpIHsKICBjb25zdCBzID0gcG9pbnRzLnVzZXJEYXRhLnNlZWRzLCBwb3MgPSBwb2ludHMuZ2VvbWV0cnkuYXR0cmlidXRlcy5wb3NpdGlvbjsKICBmb3IgKGxldCBpID0gMDsgaSA8IHBvcy5jb3VudDsgaSsrKSB7CiAgICBjb25zdCBrID0gaSAqIDUsIGEgPSB0ICogKDAuMyArIHNbayArIDNdICogMC40KSArIHNbayArIDRdICogNi4yODM7CiAgICBwb3Muc2V0WFlaKGksIChzW2tdIC0gMC41KSAqIHBhcmFtcy53aWR0aCArIE1hdGguc2luKGEpICogMC40LCAwLjQgKyBzW2sgKyAxXSAqIHBhcmFtcy5oZWlnaHQgKyBNYXRoLnNpbihhICogMS43KSAqIDAuMjUsIChzW2sgKyAyXSAtIDAuNSkgKiBwYXJhbXMuZGVwdGggKyBNYXRoLmNvcyhhKSAqIDAuNCk7CiAgfQogIHBvcy5uZWVkc1VwZGF0ZSA9IHRydWU7CiAgcG9pbnRzLm1hdGVyaWFsLm9wYWNpdHkgPSBNYXRoLm1heCgwLCBNYXRoLm1pbigxLCAodCAtIHBhcmFtcy5mYWRlRnJvbSkgLyBwYXJhbXMuZmFkZUZvcikpOwp9Cg=="
+ }
+}

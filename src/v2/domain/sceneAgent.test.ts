@@ -159,14 +159,15 @@ describe("scene agent: lights and the camera (P81b)", () => {
     // A scene on the default lights gets them written out first.
     const bare = freeze({ format: "dionysus.scene/1", objects: [] } as SceneDoc);
     expect(ok(applySceneTool("set_scene_light", bare, { light: 1, position: [0, 6, 0] })).doc.world!.lights).toEqual([{ type: "hemisphere", intensity: 1 }, { type: "directional", position: [0, 6, 0], intensity: 1.5 }]);
-    // An event on a light is refused with a pointer to set_scene_light.
-    expect(err(applySceneTool("add_scene_event", freeze(named.doc), { event: { at: 0, obj: "key", call: "moveTo", args: { position: [0, 0, 0] } } }))).toMatch(/"key" is a light. Lights are static/);
+    // Scene Phase 1 (#350): a light with an id takes events; set_scene_object on it points to set_scene_light.
+    expect(ok(applySceneTool("add_scene_event", freeze(named.doc), { event: { at: 0, obj: "key", call: "intensity", args: { value: 2 }, dur: 1 } })).info.index).toBe(named.doc.events!.length);
+    expect(err(applySceneTool("set_scene_object", freeze(named.doc), { objectId: "key", props: { opacity: 0.5 } }))).toMatch(/"key" is a light: change it with set_scene_light/);
   });
 
   it("list_scene_objects lists the camera's start and the lights with their index and id", () => {
     const v = sceneObjectsForAgent(ok(applySceneTool("set_scene_light", sample(), { light: 1, id: "key" })).doc);
     expect(v.camera.start).toEqual({ fov: 40, position: [0, 1.6, 6], lookAt: [0, 0.8, 0] });
-    expect(v.lights).toEqual([{ index: 0, type: "hemisphere", intensity: 1.1 }, { index: 1, id: "key", type: "directional", position: [3, 5, 2], intensity: 1.6 }]);
+    expect(v.lights).toEqual([{ index: 0, type: "hemisphere", intensity: 1.1 }, { index: 1, id: "key", type: "directional", position: [3, 5, 2], intensity: 1.6, calls: expect.any(Array) }]);
     expect(v.defaultLights).toBe(false);
     expect(sceneObjectsForAgent({ format: "dionysus.scene/1", objects: [] } as SceneDoc).defaultLights).toBe(true);
   });

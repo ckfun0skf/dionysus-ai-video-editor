@@ -218,7 +218,7 @@ describe("P81b scene editor: the camera and lights as their own tracks", () => {
     expect(track("Camera").querySelectorAll(".v2-sed-block")).toHaveLength(1);
     expect(t.button(/^Camera\.moveTo at 2\.5s for 2s$/)).toBeTruthy();
     expect(track("Light 2").querySelector(".v2-sed-tadd")).toBeNull();
-    expect(track("Light 2").textContent).toMatch(/directional light · static \(no events\)/);
+    expect(track("Light 2").textContent).toMatch(/directional light · give it an id to animate it/);
     const form = t.q('[data-testid="scene-form"]');
     expect(form.textContent).toMatch(/Background/);
     expect(form.textContent).not.toMatch(/Field of view/);
@@ -241,7 +241,7 @@ describe("P81b scene editor: the camera and lights as their own tracks", () => {
     await t.click([...t.el.querySelectorAll<HTMLElement>(".v2-sed-pick")].find((b) => /Light 2/.test(b.textContent ?? ""))!);
     const form = () => t.q('[data-testid="light-form"]');
     expect(form().textContent).toMatch(/Light 2 directional light/);
-    expect(form().textContent).toMatch(/Lights are static/);
+    expect(form().textContent).toMatch(/Give it an id to change it over time/);
     await t.typeIn(t.field("Id"), "ball");
     expect(form().textContent).toMatch(/"ball" is the id of an object/);
     expect(t.work().world!.lights![1].id).toBeUndefined();

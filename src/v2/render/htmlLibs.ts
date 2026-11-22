@@ -51,6 +51,14 @@ export const HTML_LIBRARIES: readonly HtmlLibrary[] = [
     integrity: "sha384-eTFVsxJY1p7fgdmLfbs9JB68HV0aNf4Rs2Xwn7OWVC6kYdALETgIFi/4VymLpfMe",
     license: "vendor/three-LICENSE.txt", requires: ["three"], editorOnly: true,
   },
+  {
+    // Scene Phase 1 (#350): the scene page's look — EffectComposer and its passes (bloom, depth of field, SSAO, SMAA,
+    // FXAA, output), the procedural Sky and RGBELoader, bundled by scripts/vendor-three-look.mjs. Built-in pages only.
+    id: "three-look", name: "three.js post-processing, Sky and RGBELoader", version: "0.160.0", specifier: "three/addons/dionysus-look.js",
+    path: "vendor/three-look-0.160.0.min.js",
+    integrity: "sha384-nm2otDl837p6dOMGYQMS865Ka526KufeVXeuA6zKiPrZ/dcjMcNsKpTDdBHv3RPN",
+    license: "vendor/three-LICENSE.txt", requires: ["three"], editorOnly: true,
+  },
 ];
 /** The libraries clips may use (the editor-only ones left out). */
 export const CLIP_HTML_LIBRARIES: readonly HtmlLibrary[] = HTML_LIBRARIES.filter((l) => !l.editorOnly);
