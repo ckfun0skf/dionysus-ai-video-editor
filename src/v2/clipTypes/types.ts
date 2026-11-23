@@ -77,8 +77,15 @@ export interface ClipAgentApi {
    * asset version's blob (a scene): read it, and write a new version's blob before `edit` points the clip at it.
    */
   blobs?: { get(key: string): Promise<Blob | undefined>; put(key: string, blob: Blob): Promise<void> };
+  /**
+   * Scene Phase 4 (#353): render stills of `project` at `ticks` like export, when the host can (WebMCP in the app), as
+   * one contact sheet (`sheetWidth` px wide, each frame captioned with `labels[i]`, `marked[i]` highlighted) and each
+   * frame's brightness. `extraBlobs` are read before the media store (a temporary scene under review).
+   */
+  stills?(project: Project, ticks: number[], opts: { sheetWidth: number; labels: string[]; marked?: boolean[]; extraBlobs?: Record<string, Blob> }): Promise<{ image?: { data: string; mimeType: string }; luma: ({ mean: number; dark: number; bright: number } | undefined)[] }>;
 }
-export interface ClipAgentResult { ok: boolean; changed: boolean; text: string }
+/** Scene Phase 4: `image` is returned to the agent with the text (a rendered contact sheet). */
+export interface ClipAgentResult { ok: boolean; changed: boolean; text: string; image?: { data: string; mimeType: string } }
 
 /** P72: a clip type's agent surface. Built-ins contributed no tools or rules in Phase 1; the scene type (P78) is the first that does. */
 export interface ClipAgent {

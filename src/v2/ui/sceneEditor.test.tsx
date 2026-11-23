@@ -386,4 +386,27 @@ describe("P82 scene editor: Script objects", () => {
     expect(t.q('[data-testid="scene-shot-strip"]').textContent).toMatch(/cam2/);
     t.done();
   });
+  it("Scene Phase 4: Direct applies a look preset and a mood, blocks action from text at the playhead and checks the scene", async () => {
+    const t = await open({ time: S });
+    await t.click(t.button(/^Add object$/));
+    await t.click(t.q('[data-testid="scene-add-character"]'));
+    await t.click([...t.el.querySelectorAll<HTMLElement>(".v2-sed-tname")].find((b) => b.textContent === "Scene")!);
+    await t.click(t.q('[data-testid="scene-apply-look"]'));
+    expect(t.work().world!.lights!.map((l) => l.id)).toEqual(["fill", "sun"]);
+    expect(t.work().world!.sky).toMatchObject({ light: "sun" });
+    await t.choose(t.field("Time of day"), "night");
+    await t.click(t.q('[data-testid="scene-apply-mood"]'));
+    expect(t.work().world!.lights!.find((l) => l.id === "sun")!.color).toBe("#8aa0ff");
+    const area = t.q<HTMLTextAreaElement>('textarea[aria-label="Blocking"]');
+    await act(async () => { const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!; set.call(area, "character walks to the ball, turns to camera and waves"); area.dispatchEvent(new Event("input", { bubbles: true })); });
+    await t.click(t.q('[data-testid="scene-block"]'));
+    const evs = t.work().events!.filter((x) => x.obj === "character");
+    expect(evs.map((x) => x.call)).toEqual(["walkTo", "turnTo", "gesture"]);
+    expect(evs[0].at).toBe(1);
+    await t.click(t.q('[data-testid="scene-check"]'));
+    expect(t.q('[data-testid="scene-checks"]')).toBeTruthy();
+    await t.undo();
+    expect(t.work().events!.some((x) => x.obj === "character")).toBe(false);
+    t.done();
+  });
 });

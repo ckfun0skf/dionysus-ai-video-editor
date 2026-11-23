@@ -9,7 +9,7 @@ import { CodeEditor } from "../CodeEditor";
 import { htmlPlacementOf, htmlPreviewParams, mixFromPlayer } from "../codeClipMix";
 import { AudioClipImport, AudioEditor } from "../AudioEditor";
 import { storeAudioClip } from "../audioClipAsset";
-import { readSceneInput, storeSceneMedia } from "../sceneAsset";
+import { draftShotScene, readSceneInput, storeSceneMedia } from "../sceneAsset";
 import { audioClipPrompt, newId, type AudioClip } from "../../domain";
 import { htmlParamSpecs } from "../HtmlParamsPanel";
 import { HtmlExportButtons, HtmlImport } from "../HtmlImport";
@@ -174,6 +174,15 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
     const a = await importFile(new File([html], `${name || "clip"}.html`, { type: "text/html" }), blobs);
     if (!a) throw new Error("Couldn't store the clip.");
     swap(cmd.addStoryVersion(target, a.versions[0].media, versionOpts({ ...(model.trim() ? { model: model.trim() } : {}), ...(mode ? { mode } : {}) })));
+  });
+  /** Scene Phase 4 (#353): a first-draft scene from the shot's prompt and references; regenerating keeps the user's edits. */
+  const [draftNote, setDraftNote] = useState<string>();
+  const sceneSlotId = kind === "scene" ? (slot?.id ?? clipSlot?.id) : undefined;
+  const draftScene = () => run(versions.length ? "Regenerating the draft…" : "Drafting the scene…", async () => {
+    if (!sceneSlotId) return;
+    const r = await draftShotScene(engine.getState().project, blobs, sceneSlotId, shot?.id);
+    swap(cmd.addStoryVersion(target, r.media, versionOpts({ model: "Dionysus draft" })));
+    setDraftNote(`${r.merged ? `Regenerated: kept ${r.kept.length} of your objects, added ${r.added.length}` : `Drafted ${r.doc.objects.length} objects and ${r.doc.events?.length ?? 0} events`} from the prompt.${r.skipped.length ? ` Not staged: ${r.skipped.map((x) => `“${x.text}”`).join(", ")}.` : ""} Refine it in the scene editor.`);
   });
   const upload = (f: File) => run("Adding…", async () => {
     if (kind === "scene") {
@@ -385,6 +394,9 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
           <button className={`v2-btn v2-sb-btn ${lf ? "" : "primary"}`} disabled={!!busy} onClick={() => setPicking(true)} aria-haspopup="dialog">
             <Ic g="⇪" size={16} /> {versions.length ? (saveMode === "replace" ? "Replace current version" : "Add new version") : clipSlot ? (kind === "html" ? "Add HTML" : kind === "video" ? "Add clip" : "Add image") : shot ? "Add clip" : kind === "html" ? "Add HTML" : "Add file"}
           </button>
+          {sceneSlotId && <button className={`v2-btn v2-sb-btn ${versions.length ? "" : "primary"}`} disabled={!!busy} data-testid="draft-scene" onClick={() => void draftScene()} title="Stage a first-draft 3D scene from the prompt, camera note and reference assets. Regenerating keeps your edits where ids match.">
+            <Ic g="scene" size={16} /> {versions.length ? "Regenerate draft (keeps your edits)" : "Draft scene from the prompt"}
+          </button>}
           <input ref={fileRef} type="file" hidden accept={ACCEPT[kind]} aria-label={`Upload ${kind} for ${title}`}
             onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void upload(f); }} />
         </div>
@@ -403,6 +415,7 @@ export function StoryDetail({ project, target, thumbs, engine, blobs, player, mo
         )}
         {lf && !lfVersion && <p className="v2-hint">Shot {shotNo(lf)} needs a clip first. <button className="v2-linkbtn" onClick={() => onOpen({ shot: lf })}>Open shot {shotNo(lf)}</button></p>}
         {swapNote && <p className="v2-sb-swapnote" role="status"><Ic g="to-timeline" size={14} /> {swapNote}</p>}
+        {draftNote && <p className="v2-sb-swapnote" role="status" data-testid="draft-note"><Ic g="scene" size={14} /> {draftNote}</p>}
         {busy && <p className="v2-hint" role="status">{busy}</p>}
         {err && <p className="v2-sb-err" role="alert"><Ic g="alert" size={14} /> {err}</p>}
       </Section>}

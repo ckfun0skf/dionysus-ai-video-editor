@@ -1,4 +1,4 @@
-import { newId, newSceneFromInput, SCENE_MIME, sceneMediaRef, type Asset, type AssetVersion, type MediaRef, type SceneDoc } from "../domain";
+import { board, draftSceneFromShot, mergeSceneDraft, newId, newSceneFromInput, parseScene, SCENE_MIME, sceneMediaRef, type Asset, type AssetVersion, type MediaRef, type Project, type SceneDoc } from "../domain";
 
 type BlobPut = { put(key: string, blob: Blob): Promise<void> };
 
@@ -46,4 +46,25 @@ export async function storeSceneMedia(blobs: BlobPut, doc: SceneDoc, owner = new
   await blobs.put(blobKey, new Blob([JSON.stringify(doc, null, 2)], { type: SCENE_MIME }));
   rememberSceneDoc(blobKey, doc);
   return sceneMedia(blobKey);
+}
+
+/**
+ * Scene Phase 4 (#353): a first-draft scene for scene slot `slotId` from its shot's prompt and references
+ * (domain/sceneStage.ts draftSceneFromShot), merged with the slot's current version (the user's edits win where ids
+ * match) unless `fresh`; stored as a blob. The caller adds the version (cmd.addStoryVersion).
+ */
+export async function draftShotScene(p: Project, blobs: BlobPut & { get(key: string): Promise<Blob | undefined> }, slotId: string, shotId?: string, fresh = false) {
+  const input = board.sceneDraftInput(p, slotId, shotId);
+  const draft = draftSceneFromShot(input);
+  const slot = p.storyboard?.slots[slotId];
+  const asset = slot?.assetId ? p.assets[slot.assetId] : undefined;
+  const v = asset?.versions.find((x) => x.id === asset.selectedVersionId);
+  let prev: SceneDoc | undefined;
+  if (v && !fresh) {
+    prev = cachedSceneDoc(v.media.blobKey);
+    if (!prev) { const b = await blobs.get(v.media.blobKey); if (b) prev = parseScene(await (typeof b.text === "function" ? b.text() : new Response(b).text())).doc; }
+  }
+  const merged = prev ? mergeSceneDraft(prev, draft.doc) : { doc: draft.doc, kept: [] as string[], added: draft.doc.objects.map((o) => o.id) };
+  const media = await storeSceneMedia(blobs, merged.doc, asset?.id);
+  return { media, merged: !!prev, kept: merged.kept, added: merged.added, skipped: draft.skipped, doc: merged.doc };
 }

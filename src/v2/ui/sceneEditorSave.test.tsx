@@ -216,7 +216,7 @@ describe("P80 scene editor: phone layout", () => {
     const tools = () => [...bar().querySelectorAll(".v2-toolbar-scroll .v2-tool span")].map((x) => x.textContent);
     expect(t.el.querySelector(".v2-sed-panel")).toBeNull(); // no side panel on a phone
     expect(t.button(/^Cancel$/)).toBeUndefined(); // the X is Cancel on a phone
-    expect(tools()).toEqual(["Add object", "Scene", "Camera", "Lights"]);
+    expect(tools()).toEqual(["Add object", "Scene", "Camera", "Lights", "Direct"]);
     // The body is above the toolbar, which comes after the tracks.
     expect(t.el.querySelector(".v2-sed-body")!.compareDocumentPosition(bar()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     // P81b: Camera selects the camera (its own actions); Start opens its start values.
@@ -235,7 +235,7 @@ describe("P80 scene editor: phone layout", () => {
     expect(t.dialog("Add object")).toBeNull();
     expect(tools()).toEqual(["Properties", "Add event", "Delete"]);
     await t.click(t.button(/^Back to the scene$/));
-    expect(tools()).toEqual(["Add object", "Scene", "Camera", "Lights"]);
+    expect(tools()).toEqual(["Add object", "Scene", "Camera", "Lights", "Direct"]);
     await t.click(t.button(/^ball\.moveTo at 0\.5s/));
     expect(tools()).toEqual(["Timing", "Values", "Go to", "Duplicate", "Delete"]);
     await t.click(t.button(/^Timing$/));

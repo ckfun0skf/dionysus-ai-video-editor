@@ -1832,6 +1832,8 @@ select.v2-tp-field { -webkit-appearance: none; appearance: none; padding-right: 
 .v2-sed-vec .v2-sed-field { grid-template-columns: 14px minmax(0, 1fr); gap: 4px; }
 .v2-sed-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .v2-sed-row > .v2-sed-field { flex: 1 1 180px; }
+/* Scene Phase 4 (#353): the Direct section's blocking text. */
+.v2-sed-blocking { width: 100%; box-sizing: border-box; min-height: 72px; padding: 8px; border: 1px solid var(--line); border-radius: 6px; background: #0000002a; color: var(--text); font: 14px/1.4 system-ui; resize: vertical; }
 .v2-sed-row select { flex: 1 1 120px; width: auto; }
 .v2-app .v2-scene-editor .v2-btn.v2-sed-danger { color: #ff8a7a; }
 .v2-sed-mirror { flex: none; display: flex; justify-content: center; background: #000; height: 26dvh; }
