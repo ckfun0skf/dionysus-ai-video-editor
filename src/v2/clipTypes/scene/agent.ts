@@ -13,9 +13,10 @@
  * (`file: { url }`), fetched with the attach_asset_version rules (https, localhost or this site; no credentials).
  */
 import {
-  agentMedia, applySceneEdits, applySceneTool, clipVersion, findPlacement, isSceneEditTool, newId, newSceneFromInput, ops, parseScene, SCENE_MIME, sceneForAgent,
-  sceneMediaRef, sceneObjectsForAgent, secondsToTicks, ticksToSeconds, timelineReview, validateScene, versionOfPlacement, type AssetVersion, type Placement,
-  type Project, type SceneDoc,
+  activeCameraAt, agentMedia, applySceneEdits, applySceneTool, board, checkScene, clipVersion, draftSceneFromShot, findPlacement, isSceneEditTool, lumaVerdict, mergeSceneDraft,
+  newId, newSceneFromInput, ops, parseScene, presetSummary, reviewTimes, SCENE_MIME, SCENE_PALETTES, SCENE_POST_PRESETS, SCENE_PRESETS, sceneCameraDefs, sceneForAgent,
+  sceneMediaRef, sceneObjectsForAgent, secondsToTicks, SET_PIECES, setSceneShots, STAGE_SPOTS, ticksToSeconds, TIMES_OF_DAY, timelineReview, validateScene, versionOfPlacement,
+  type AssetVersion, type Placement, type Project, type SceneCheck, type SceneDoc, type StageBrief,
 } from "../../domain";
 import type { ClipAgentApi, ClipAgentResult } from "../types";
 
@@ -97,6 +98,76 @@ async function store(blobs: NonNullable<ClipAgentApi["blobs"]>, assetId: string,
   return { id, createdAt: new Date().toISOString(), media: sceneMediaRef(blobKey), provenance: { source: "import", inputs: [] } };
 }
 
+/** Scene Phase 4: a one-clip project that plays `doc` (stored under a temporary key) from scene time 0. */
+function reviewProject(p: Project, pl: Placement, asset: Project["assets"][string], key: string, maxSec: number): Project {
+  const root = p.compositions[p.rootCompositionId];
+  const main = root.tracks.find((t) => t.placements.some((x) => x.id === pl.id)) ?? ops.mainTrack(root) ?? root.tracks[0];
+  const version: AssetVersion = { id: "scene-review", createdAt: "", media: sceneMediaRef(key), provenance: { source: "import", inputs: [] } };
+  const clip: Placement = { id: "scene-review", startTicks: 0, durationTicks: Math.max(1, secondsToTicks(maxSec)), sourceInTicks: 0, source: { kind: "assetVersion", assetId: asset.id, versionId: version.id }, clipType: "scene" };
+  const tracks = root.tracks.map((t) => ({ ...t, hidden: false, muted: false, placements: t.id === main.id ? [clip] : [] }));
+  return { ...p, assets: { ...p.assets, [asset.id]: { ...asset, versions: [...asset.versions, version] } }, compositions: { ...p.compositions, [root.id]: { ...root, tracks, subtitles: [] } } };
+}
+
+/** Scene Phase 4: render stills at `times` as a labelled contact sheet (the host draws it) and add brightness checks. */
+async function reviewScene(api: ClipAgentApi, p: Project, pl: Placement, asset: Project["assets"][string], doc: SceneDoc, times: number[], checks: SceneCheck[], camera: string | undefined, clipId: string, maxWidth: number): Promise<ClipAgentResult> {
+  if (!api.stills) return fail("Rendering stills isn't available here (open the project in the app); check_scene runs the checks without rendering.");
+  const view: SceneDoc = camera ? setSceneShots(doc, [{ at: 0, camera }]) : doc;
+  const key = `scene-review/${asset.id}/${newId("rev")}`;
+  const proj = reviewProject(p, pl, asset, key, Math.max(...times) + 1);
+  const cams = times.map((t) => camera ?? activeCameraAt(doc, t));
+  const marked = times.map((t) => checks.some((c) => c.level === "warning" && Math.abs(c.at - t) < 1e-6));
+  const r = await api.stills(proj, times.map((t) => secondsToTicks(t)), {
+    sheetWidth: Math.max(320, Math.min(2048, Math.round(maxWidth))), labels: times.map((t, i) => `${i + 1}. ${t.toFixed(2)}s · ${cams[i]}`), marked,
+    extraBlobs: { [key]: new Blob([JSON.stringify(view)], { type: SCENE_MIME }) },
+  });
+  const all = [...checks];
+  r.luma.forEach((l, i) => { const v = l && lumaVerdict(l, times[i], cams[i]); if (v) all.push(v); });
+  const warnings = all.filter((c) => c.level === "warning").length;
+  return { ok: true, changed: false, ...(r.image ? { image: r.image } : {}), text: json({
+    clipId, frames: times.map((t, i) => ({ index: i + 1, at: t, camera: cams[i], ...(r.luma[i] ? { luma: r.luma[i] } : {}) })), problems: all,
+    summary: warnings ? `${warnings} problem${warnings === 1 ? "" : "s"} to fix; then review again.` : "No problems found by the checks; look at the sheet for composition and mood.",
+  }) };
+}
+
+/** Scene Phase 4: draft_scene_from_shot — a first-draft scene for a storyboard shot, merged with the current version. */
+async function draftFromShot(a: Record<string, unknown>, api: ClipAgentApi, blobs: NonNullable<ClipAgentApi["blobs"]>): Promise<ClipAgentResult> {
+  const p = api.project(), b = p.storyboard;
+  if (!b) return fail('No storyboard yet. Create one (create_storyboard) with a shot that has render "scene".');
+  const shotId = typeof a.shotId === "string" ? a.shotId : undefined, slotArg = typeof a.slotId === "string" ? a.slotId : undefined;
+  if (!shotId && !slotArg) return fail('Give "shotId" (a shot with render "scene") or "slotId" (a scene asset).');
+  let shot = shotId ? b.shots[shotId] : undefined;
+  if (shotId && !shot) return fail(`No shot "${shotId}". Shots: ${b.order.join(", ")}.`);
+  if (shot && shot.render !== "scene") return fail(`Shot "${shotId}" is not a 3D scene shot (render "${shot.render ?? "ai"}"). Set render "scene" with "clip" set to a scene asset first (update_shot).`);
+  const slotId = slotArg ?? shot?.clipSlot;
+  const slot = slotId ? b.slots[slotId] : undefined;
+  if (!slot || slot.type !== "scene") return fail(slotArg ? `"${slotArg}" is not a scene asset.` : `Shot "${shotId}" has no scene asset ("clip"); give it one first.`);
+  shot ??= b.order.map((id) => b.shots[id]).find((x) => x?.clipSlot === slot.id);
+  if (a.brief !== undefined && (!a.brief || typeof a.brief !== "object" || Array.isArray(a.brief))) return fail('"brief" must be a stage_scene brief object.');
+  if (a.blocking !== undefined && typeof a.blocking !== "string") return fail('"blocking" must be text.');
+  const input = board.sceneDraftInput(p, slot.id, shot?.id);
+  const draft = draftSceneFromShot(input, { ...(a.brief ? { brief: a.brief as StageBrief } : {}), ...(typeof a.blocking === "string" ? { blocking: a.blocking } : {}) });
+  // The current version (if any) wins wherever ids match.
+  let prev: SceneDoc | undefined;
+  const sel = slot.assetId ? p.assets[slot.assetId] : undefined, v = sel?.versions.find((x) => x.id === sel.selectedVersionId);
+  if (v && a.fresh !== true) {
+    const blob = await blobs.get(v.media.blobKey);
+    if (blob) prev = parseScene(await blobText(blob)).doc;
+  }
+  const merged = prev ? mergeSceneDraft(prev, draft.doc) : { doc: draft.doc, kept: [] as string[], added: draft.doc.objects.map((o) => o.id) };
+  const errors = validateScene(merged.doc).filter((i) => i.level === "error");
+  if (errors.length) return fail(`The draft would not be valid: ${errors.slice(0, 4).map((i) => `${i.path}: ${i.message}`).join(" ")}`);
+  const versionId = newId("ver"), key = `${slot.assetId ?? newId("ast")}/${versionId}`;
+  await blobs.put(key, new Blob([JSON.stringify(merged.doc, null, 2)], { type: SCENE_MIME }));
+  const changed = api.edit(prev ? "AI: regenerate scene draft" : "AI: draft scene", (q) => board.addStoryVersion(q, { slot: slot.id }, sceneMediaRef(key), { versionId }));
+  if (!changed) return fail("The draft could not be stored.");
+  return { ok: true, changed, text: json({
+    slotId: slot.id, ...(shot ? { shotId: shot.id } : {}), versionId, merged: !!prev, kept: merged.kept, added: merged.added,
+    objects: merged.doc.objects.length, events: merged.doc.events?.length ?? 0, brief: draft.brief, blocking: draft.blocking,
+    ...(draft.skipped.length ? { skipped: draft.skipped } : {}), ...(draft.notes.length ? { notes: draft.notes } : {}),
+    next: "Send the storyboard to the timeline (or update it) to get the scene clip, then review_scene it and fix what it reports.",
+  }) };
+}
+
 export async function runSceneTool(name: string, a: Record<string, unknown>, api: ClipAgentApi): Promise<ClipAgentResult> {
   const blobs = api.blobs;
   if (!blobs) return fail("Scene tools need the project's media store (open the project in the app).");
@@ -133,6 +204,15 @@ export async function runSceneTool(name: string, a: Record<string, unknown>, api
     return { ok: true, changed, text: json({ clip: timelineReview.clipJson(p, placed), assetId, objects: doc.objects.length, events: doc.events?.length ?? 0, ...(made.warnings.length ? { warnings: made.warnings } : {}) }) };
   }
 
+  // Scene Phase 4 (#353): presets need no clip; drafting works on the storyboard.
+  if (name === "list_scene_presets") {
+    const full = a.full !== false;
+    return { ok: true, changed: false, text: json({
+      presets: SCENE_PRESETS.map((x) => (full ? x : presetSummary(x))), setPieces: Object.keys(SET_PIECES), spots: STAGE_SPOTS, timesOfDay: TIMES_OF_DAY, palettes: SCENE_PALETTES, post: SCENE_POST_PRESETS,
+    }) };
+  }
+  if (name === "draft_scene_from_shot") return draftFromShot(a, api, blobs);
+
   const clipId = typeof a.clipId === "string" ? a.clipId : "";
   const p = api.project();
   const pl = clipId ? findClip(p, clipId) : undefined;
@@ -152,6 +232,16 @@ export async function runSceneTool(name: string, a: Record<string, unknown>, api
     return { ok: true, changed: false, text: json({ clipId, assetId: asset.id, version: versionInfo, clipSec: { start: ticksToSeconds(pl.startTicks), length: ticksToSeconds(pl.durationTicks), sceneFrom: ticksToSeconds(pl.sourceInTicks) }, scene: sceneForAgent(doc), problems: validateScene(doc) }) };
   }
   if (name === "list_scene_objects") return { ok: true, changed: false, text: json({ clipId, version: versionInfo, ...sceneObjectsForAgent(doc) }) };
+  if (name === "check_scene" || name === "review_scene") {
+    const camera = typeof a.camera === "string" && a.camera ? a.camera : undefined;
+    if (camera && !sceneCameraDefs(doc).some((c) => c.id === camera)) return fail(`No camera "${camera}". Cameras: ${sceneCameraDefs(doc).map((c) => c.id).join(", ")}.`);
+    if (a.times !== undefined && !(Array.isArray(a.times) && a.times.every((t) => typeof t === "number" && Number.isFinite(t) && t >= 0))) return fail('"times" must be a list of scene seconds ≥ 0.');
+    const count = typeof a.count === "number" ? Math.max(1, Math.min(24, Math.round(a.count))) : 6;
+    const times = (Array.isArray(a.times) && a.times.length ? (a.times as number[]) : reviewTimes(doc, count)).slice(0, name === "review_scene" ? 24 : 72);
+    const checks = checkScene(doc, { times, aspect: p.settings.width / p.settings.height, camera });
+    if (name === "check_scene") return { ok: true, changed: false, text: json({ clipId, times, problems: checks, ...(checks.length ? {} : { note: "No problems found at these times." }) }) };
+    return reviewScene(api, p, pl, asset, doc, times, checks, camera, clipId, typeof a.maxWidth === "number" ? a.maxWidth : 1280);
+  }
   if (!isSceneEditTool(name) && name !== "apply_scene_edits") return fail(`Unknown tool ${name}.`);
   if (a.newVersion !== undefined && typeof a.newVersion !== "boolean") return fail('"newVersion" must be true or false.');
 

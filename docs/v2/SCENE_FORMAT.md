@@ -315,6 +315,119 @@ playhead), the shots (time and camera) and Cut at the playhead; a shot strip und
 when. **Not yet:** splitting a scene clip into shot sub-clips on the main timeline, a viewfinder per camera, and
 rule-of-thirds / safe-area overlays; the Edit view draws the camera being seen.
 
+## AI cooperation loop (Scene Phase 4, #353)
+
+Phase 4 adds no new fields: `dionysus.scene/1` is unchanged and every scene renders exactly as before. What it adds is
+a set of **semantic operations** that write the Phase 1–3 fields and events for you (`src/v2/domain/sceneStage.ts`,
+pure and deterministic), a way for an agent to **look at its own work**, and **storyboard → scene** drafting. The agent
+writes and checks the scene; the user refines it in the editor.
+
+**Staging** (`stage_scene`). A brief places set pieces, characters and cameras and sets the mood in one step:
+
+```json
+{
+  "name": "Village street", "durationSec": 12, "stage": { "width": 14, "depth": 8 },
+  "mood": { "preset": "dusk-village", "post": "cinematic" },
+  "set": [
+    { "id": "house", "kind": "house", "at": "back" },
+    { "id": "door", "kind": "door", "at": { "near": "house", "side": "front" } },
+    { "id": "lantern", "kind": "lamp", "at": "right" },
+    { "id": "bench", "kind": "bench", "at": "left" }
+  ],
+  "characters": [{ "id": "ana", "name": "Ana", "at": "front-left", "facing": "camera" }],
+  "cameras": [{ "subject": "house", "shot": "wide" }, { "id": "close", "subject": "ana", "shot": "closeup", "focalLength": 50, "at": 6 }]
+}
+```
+
+- `kind`: a stylized blockout piece — `house`, `tower`, `tree`, `bush`, `rock`, `lamp` (adds a point light
+  `<id>-glow`), `table-lamp`, `bench`, `chair`, `stool`, `sofa`, `table`, `bed`, `shelf`, `crate`, `barrel`, `well`,
+  `wall`, `fence`, `door`, `window`, `street`, `rug` (aliases such as cottage, lantern, road, boulder) — a plain shape
+  (`box`, `sphere`, `cylinder`, `cone`, `torus`), or `"model"` with `"model"` naming a GLB in `files`. Multi-part pieces
+  are several objects: `<id>-roof`, `<id>-crown`, `<id>-light`, `<id>-back`, `<id>-shade`. `size` scales a piece.
+- `at`: a spot (`center`, `left`, `right`, `back`, `front`, `back-left`, `back-right`, `front-left`, `front-right`,
+  `far-left`, `far-right`, `far-back`; +z faces the default camera), `{ x, z }` / `[x, y, z]` (taken exactly), or
+  `{ near: id, side?, distance? }` (doors and windows sit flush on the face and face away from it). Spots and
+  neighbours are nudged sideways until nothing overlaps.
+- `facing`: degrees (0 = towards +z), `"camera"`, `left`, `right`, `back` or an object id to face.
+- `style`: `toon` (default: toon shading with outlines, rim light on characters) or `standard`.
+- Cameras are framed on their `subject` with the Phase 3 framing (`shot`, `angle`, `height`); the first is the
+  default camera; several cameras become `shots` (at their `at`, or spread over the length).
+- Staging an existing scene keeps every object and camera whose id already exists (reported as `kept`) unless
+  `replace: true` — re-staging never undoes the user's moves.
+
+**Mood** (`set_mood`): a look preset, `timeOfDay` (`dawn`, `morning`, `noon`, `afternoon`, `golden`, `dusk`, `night`:
+world.sky's sun angle driving the directional light `sun`, the hemisphere `fill`, background and exposure; the lights
+get those ids if they have none), `palette` (`neutral`, `warm`, `cool`, `teal-orange`, `pastel`, `desaturated`,
+`vivid`: the post grade) and `post` (`none`, `soft`, `cinematic`, `dreamy`, `crisp`). With `at` (and `dur`) the time
+of day changes from there as events on `sky`, `sun`, `fill` and `post` — dusk falling over a shot.
+
+**Blocking** (`block_action`) compiles plain sentences (or structured beats) into events:
+
+```text
+Ana walks to the door, turns to Ben and says "Ready?". Ben sits on the bench.
+As Ana talks, camera orbits Ana. Cut to a close-up of Ben.
+```
+
+Names are object ids or names (case-insensitive; "the door" finds `door` or a single `front-door`), `camera` is the
+camera seen at that moment, other cameras by id or name, and "who" refers to the one just named. Characters walk / run
+to (stopping beside the target, on their side of it, never inside it), turn to, look at, sit (on the nearest seat if
+none is named), stand, wave / nod / point (at), say "…" (lip sync), talk, pick up, drop and smile / frown / look
+surprised. Cameras push in, pull out, zoom, orbit, follow, crane, truck, rack focus, go handheld, frame, or cut to a
+shot (a new camera framed on the subject plus a shot). Beats run one after another from `at`; a walk takes as long as
+its distance needs; "as / while" starts with the previous beat (an "as" clause that repeats it adds nothing). Clauses it
+can't read are returned in `skipped` with the reason; nothing else changes for them. The planned length grows to fit.
+
+**Presets** are plain JSON (`SCENE_PRESETS` in `sceneStage.ts`; `list_scene_presets` returns them):
+
+- Looks (`{ kind: "look", world: { background?, lights?, sky?, fog?, post? }, objects?, files? }`, `null` removes an
+  entry): `dusk-village`, `golden-hour`, `noon-sunny`, `interior-lamp`, `rainy-night` (adds a deterministic rain
+  Script object), `moonlit`, `overcast`, `studio`. A look replaces the lights; a lamp's `<id>-glow` light stays.
+- Camera rigs (`{ kind: "rig", dur, events: [{ obj: "$camera", call, args, dur?: "$dur", ease?, after? }] }`, with
+  `"$subject"`; an orbit's `turn` is degrees from the camera's current angle): `push-in`, `pull-out`, `orbit-reveal`,
+  `handheld-follow`, `crane-up`, `wide-to-closeup`, `rack-to-subject`.
+
+`apply_scene_preset` takes an id or a preset object of the same shape, so agents and users can keep their own.
+
+**Review** (`review_scene`, `check_scene`). `review_scene` renders the scene — only it, through the export renderer —
+at the given times (default: just after, in the middle of and just before every shot, or spread over the length) as one
+labelled contact sheet image returned to the agent, optionally through one `camera`. Both run the automatic checks
+(`checkScene`):
+
+| Check | When |
+|---|---|
+| `overlap` | Two visible objects' boxes intersect by more than a fifth of the smaller one (the floor, flat pieces, Script objects, a seat being sat on and held objects are left out). |
+| `out-of-frame` | A character the camera is aimed at (its `frame` / `follow` / `orbit` / focus subject or lens focus), or any character when none is in frame, is outside the frame or behind the camera. |
+| `occluded` | A character the camera is aimed at (as above) is in frame, but the lines from the lens to its middle and its head both pass through a solid object's box. |
+| `head-cut` (info) | A character's middle is in frame but its head is above the top edge. |
+| `camera-inside` / `camera-below-floor` | The camera seen at that time is inside an object's box, or under y = 0 with a floor. |
+| `dark` / `bright` | `review_scene` only: a frame's mean luma is under 38/255 or over 60% near black (dark), or over 218/255 or 35% blown out (bright). |
+
+Each problem has `at`, `camera`, `objects`, a `message` and a `fix` hint. The loop the agent follows (AI rule 79):
+build, review, correct, review again, then hand over to the user.
+
+**Storyboard → scene** (`draft_scene_from_shot`, and *Draft scene from the prompt* on a scene shot or scene asset in
+the storyboard). The shot's prompt, camera note, length and reference assets become a brief: the mood from its words
+(dusk, rain, interior, night …), set pieces from the nouns it names (with simple counts: "two houses"), its character
+references as characters (else a hero when it mentions a person), a camera framed on the first character, and the
+blocking its prompt describes. The draft is stored as a new version of the scene asset. **Regenerating keeps the
+user's edits**: the current version wins wherever ids match (objects, cameras, lights, look, shots and the events on
+its objects); only objects, cameras and lights with new ids (and their events) are added.
+
+**Editor.** The scene editor's *Direct* section (desktop: under Cameras and shots; phone: *Direct* in the scene
+toolbar) offers the same operations: apply a look preset, apply a mood (time of day, optionally over time from the
+playhead; palette; post), add a camera rig at the playhead, *Block it* from text at the playhead, and *Check scene*
+with a Go to per problem. Each is one undo step of the editor.
+
+**Benchmark.** `src/v2/domain/__fixtures__/benchmarkBrief.ts` makes the benchmark shot the Phase 4 way: the epic's
+one-paragraph brief → `stage_scene` + `set_mood` (night falling) + `block_action`, then review → correct → review:
+the first review finds the hero outside the orbit and close-up cameras (framed where the hero stood at 0 s), so they
+are framed on the hero at their cuts; the second finds the orbit camera seeing the hero through the house corner, so it
+takes the next angle; the third is clean (`sceneStage.test.ts`). The rendered review (`review_scene` in Chrome) also
+found the night frames too dark (mean luma 17–31 / 255), fixed with `set_mood` dusk. Looking at the sheet, the hero
+ended its walk against the house wall, so the walk now ends in the street; the elder sits on the bench.
+[Before](benchmark/phase4-before.jpg) (the first draft: cameras behind the hero, night too dark) and
+[after](benchmark/phase4-after.jpg) the corrections.
+
 ## Validation
 
 `validateScene` reports errors and warnings with JSON paths (`events[3].args.value: must be [x, y, z] numbers.`):
@@ -462,6 +575,8 @@ the schemas) and AI guide RULE 79:
 | `set_scene_camera` (Phase 3) | Cameras: omit `camera` to add one (`id?`, `at`: from the view then, `name`, `position`, `lookAt`, `fov`, `lens`); `camera: <id>` (`"camera"` = the default) changes its start values; `remove: true` deletes it with its events and shots. |
 | `set_scene_shots` (Phase 3) | `shots: [{ at, camera, name? }]` replaces the cuts (sorted); `null` removes them. Camera moves and rigs are events on the camera's id. |
 | `set_scene_animation` (Phase 2) | The animation library: `name`, `file` (`{ url }` or `{ name, dataUrl }`, a .glb) adds or replaces a clip; `clip`, `stride`, `length`, `loop`, `mask`, `rig`; `remove: true` deletes it (refused while an event still uses it). Characters come from `add_scene_object` with `props: { character: {} }` (mannequin) or a `.vrm` / humanoid `.glb` `file`; their calls are ordinary events. |
+| `stage_scene`, `block_action`, `set_mood`, `apply_scene_preset` (Phase 4) | Semantic edits (see [AI cooperation loop](#ai-cooperation-loop-scene-phase-4-353)); they also run inside `apply_scene_edits`. |
+| `list_scene_presets`, `check_scene`, `review_scene`, `draft_scene_from_shot` (Phase 4) | Presets as JSON; the automatic checks; rendered stills as a contact sheet with the checks; a first-draft scene for a storyboard shot (keeps the user's edits on regenerate). |
 | `apply_scene_edits` (P79) | A list of the edits above (`{ tool, …its fields }`, at most 200) applied in order as **one** undo step and one save. All or nothing: if one is refused nothing changes and the error names it (`edits[2] (add_scene_event): …`). |
 
 Every edit is checked with the validator: one that would add an error is refused and changes nothing, and the message

@@ -8,7 +8,7 @@ import { audioClipAsset } from "../audioClipAsset";
 import { blobText } from "../AssetPreview";
 import { bindingRefsOf } from "../CleanupDialog";
 import { captureFrameAt, storePickedFrame } from "../storyboard/frameCapture";
-import { captions, cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
+import { lumaStats, captions, cleanup, clipVersion, DEFAULT_SOURCE, INPUT_TYPES, readManifest, resolveSource, versionOf, codePresetId, codeRoleIssue, transitions, audioOutputOf, board, chain, edit as editDomain, mergeLayer, ops, promote, findPlacement, slip, subs, newId, audioClipPrompt, parseAudioClip, runtimeAiLinks, panToAzimuth, positionErrors, secondsToTicks, TICKS_PER_SECOND, timelineReview, text as T, words as W, type Placement, type Project } from "../../domain";
 
 import { getPreset, listPresets } from "../../registry";
 import { tracking, sourceAt, ticksToSeconds, masking, motion, storyPaths, type Box, type MotionTrack, type NamedTrack, type TrackMask } from "../../domain";
@@ -39,6 +39,7 @@ import { agentToolOwner, clipPropFits, clipToolFits, clipTypeOf, PLUGIN_HOST_TOO
 import { runPluginTool } from "./pluginTools";
 import { runAttachTool, runImportStoryboard, type MediaIO } from "./mediaTools";
 import type { BlobStore } from "../../ports";
+import type { ClipAgentApi } from "../../clipTypes";
 import { ExportVideoFrames, Player, audioPlan, exportDuration, mixAudio } from "../../render";
 
 export type McpContent = { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
@@ -57,6 +58,31 @@ export interface FrameSource {
 }
 
 const still = { kind: "wall" as const, now: () => 0 };
+/** Scene Phase 4: columns of a contact sheet of `n` frames. */
+const sheetCols = (n: number) => Math.max(1, Math.ceil(Math.sqrt(n * 1.3)));
+/** Scene Phase 4: frames → one captioned contact sheet (JPEG) and each frame's brightness. */
+function stillsSheet(frames: HTMLCanvasElement[], labels: string[], marked: boolean[]): { image?: { data: string; mimeType: string }; luma: ({ mean: number; dark: number; bright: number } | undefined)[] } {
+  const luma = frames.map((f) => { try { const g = f.getContext("2d"); return g ? lumaStats(g.getImageData(0, 0, f.width, f.height).data, 7) : undefined; } catch { return undefined; } });
+  if (!frames.length) return { luma };
+  const cols = sheetCols(frames.length), cellW = frames[0].width, cellH = frames[0].height, label = 18, rows = Math.ceil(frames.length / cols);
+  const sheet = document.createElement("canvas"); sheet.width = cols * cellW; sheet.height = rows * (cellH + label);
+  const g = sheet.getContext("2d");
+  if (!g) return { luma };
+  g.fillStyle = "#111"; g.fillRect(0, 0, sheet.width, sheet.height); g.font = "13px system-ui, sans-serif"; g.textBaseline = "middle";
+  frames.forEach((f, i) => {
+    const x = (i % cols) * cellW, y = Math.floor(i / cols) * (cellH + label);
+    g.drawImage(f, x, y);
+    g.fillStyle = marked[i] ? "#ffb347" : "#eee"; g.fillText(`${labels[i] ?? ""}${marked[i] ? " ⚠" : ""}`, x + 4, y + cellH + label / 2);
+  });
+  const data = jpeg(sheet);
+  return { ...(data ? { image: { data, mimeType: "image/jpeg" } } : {}), luma };
+}
+/** Scene Phase 4: a media store that serves `extra` blobs first (a scene under review), the rest from `blobs`. */
+function withExtraBlobs(blobs: BlobStore, extra: Record<string, Blob>): BlobStore {
+  const w = Object.create(blobs) as BlobStore;
+  w.get = (k: string) => (k in extra ? Promise.resolve(extra[k]) : blobs.get(k));
+  return w;
+}
 export function playerFrameSource(blobs: BlobStore): FrameSource {
   return {
     async frames(project, ticksList, width) {
@@ -796,6 +822,13 @@ export async function runTimelineTool(engine: Engine, source: FrameSource | unde
   if (PLUGIN_HOST_TOOL_NAMES.has(name)) return (await runPluginTool(engine, name, a))!;
   // P72: a tool contributed by a clip type core runs through its `agent.run` (one undo step per edit).
   const owner = agentToolOwner(name);
-  if (owner?.agent?.run) return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name), ...(blobs ? { blobs } : {}) });
+  if (owner?.agent?.run) {
+    // Scene Phase 4 (#353): tools may render stills (review_scene), reading a temporary scene before the media store.
+    const stills: ClipAgentApi["stills"] = source || blobs ? async (p, ticks, o) => {
+      const src = o.extraBlobs && blobs ? playerFrameSource(withExtraBlobs(blobs, o.extraBlobs)) : source ?? playerFrameSource(blobs!);
+      return stillsSheet(await src.frames(p, ticks, Math.floor(o.sheetWidth / sheetCols(ticks.length))), o.labels, o.marked ?? []);
+    } : undefined;
+    return owner.agent.run(name, a, { project, edit: (label, apply) => engine.dispatch({ label, apply }, name), ...(blobs ? { blobs } : {}), ...(stills ? { stills } : {}) });
+  }
   return fail(`Unknown tool ${name}.`);
 }

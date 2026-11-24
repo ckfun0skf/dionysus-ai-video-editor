@@ -22,6 +22,7 @@ import { SCENE_CAMERA_RIGS } from "./sceneCamera";
 import { moveSceneEventTo } from "./sceneRetime";
 import { addSceneScript, removeSceneScript, SCENE_SCRIPT_TEMPLATES, sceneScriptCode, setSceneScriptCode, setSceneScriptParams } from "./sceneScript";
 import { SCENE_SCRIPT_MAX, scriptParamsProblem, scriptProblems, type SceneScriptParams } from "./sceneScriptCode";
+import { applyScenePreset, blockAction, setMood, stageScene, type Beat, type MoodSpec, type StageBrief } from "./sceneStage";
 import type { AssetVersion } from "./model";
 
 /** A scene version's media: the JSON blob at 1920×1080, no length (a scene's length is free, like a code clip's). */
@@ -31,6 +32,8 @@ export const sceneMediaRef = (blobKey: string): AssetVersion["media"] => ({ blob
 export const SCENE_EDIT_TOOLS = [
   "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event",
   "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation", "set_scene_camera", "set_scene_shots",
+  // Scene Phase 4 (#353): semantic tools that compile intent into the fields and events above.
+  "stage_scene", "block_action", "set_mood", "apply_scene_preset",
 ] as const;
 export type SceneEditTool = (typeof SCENE_EDIT_TOOLS)[number];
 export const isSceneEditTool = (n: string): n is SceneEditTool => (SCENE_EDIT_TOOLS as readonly string[]).includes(n);
@@ -395,6 +398,39 @@ export function applySceneTool(name: SceneEditTool, doc: SceneDoc, a: Record<str
       if (!Array.isArray(a.shots)) return fail(`"shots" must be a list of { at, camera, name? } (camera ids: ${sceneCameraDefs(doc).map((c) => c.id).join(", ")}), or null to remove them.`);
       const d = setSceneShots(doc, a.shots as never);
       return done(doc, d, { shots: d.shots ?? [] }, ["shots"]);
+    }
+    case "stage_scene": {
+      // Scene Phase 4: a brief → set pieces, characters, mood and cameras (domain/sceneStage.ts).
+      if (a.brief === undefined || !isObj(a.brief)) return fail('"brief" must be { name?, durationSec?, stage?, style?, mood?, set?: [{ id?, kind, at?, facing?, size?, color? }], characters?: [{ id?, name?, at?, facing?, body? }], cameras?: [{ id?, subject?, shot?, angle?, height?, focalLength?, at? }] }.');
+      if (a.replace !== undefined && typeof a.replace !== "boolean") return fail('"replace" must be true or false.');
+      const r = stageScene(doc, a.brief as StageBrief, { replace: a.replace === true });
+      if ("error" in r) return fail(r.error);
+      return done(doc, r.doc, { ...r.report }, ["objects", "world", "shots"]);
+    }
+    case "block_action": {
+      if (a.text !== undefined && typeof a.text !== "string") return fail('"text" must be the blocking as text, e.g. "Ana walks to the door, turns to Ben, camera pushes in".');
+      if (a.beats !== undefined && !Array.isArray(a.beats)) return fail('"beats" must be a list of { who, do, target?, text?, clip?, shot?, angle?, height?, distance?, degrees?, at?, dur?, with? }.');
+      if (a.at !== undefined && (!numOk(a.at) || a.at < 0)) return fail('"at" must be seconds ≥ 0 (when the first beat starts).');
+      const r = blockAction(doc, { text: a.text as string | undefined, beats: a.beats as Beat[] | undefined, at: a.at as number | undefined });
+      if ("error" in r) return fail(r.error);
+      const first = eventsOf(doc).length;
+      return done(doc, r.doc, { beats: r.beats.map((b) => ({ ...(b.text ? { text: b.text } : {}), who: b.beat.who, do: b.beat.do, at: b.at, dur: b.dur })), eventIndices: r.events.map((_, k) => first + k), endSec: r.endSec, ...(r.skipped.length ? { skipped: r.skipped } : {}), ...(r.notes.length ? { notes: r.notes } : {}) }, r.events.map((_, k) => `events[${first + k}]`));
+    }
+    case "set_mood": {
+      const m: MoodSpec = {};
+      for (const k of ["preset", "timeOfDay", "palette", "post"] as const) if (a[k] !== undefined) { if (typeof a[k] !== "string") return fail(`"${k}" must be text.`); (m as Record<string, unknown>)[k] = a[k]; }
+      if (a.at !== undefined) { if (!numOk(a.at) || a.at < 0) return fail('"at" must be seconds ≥ 0.'); m.at = a.at; }
+      if (a.dur !== undefined) { if (!numOk(a.dur) || a.dur <= 0) return fail('"dur" must be seconds > 0.'); m.dur = a.dur; }
+      const r = setMood(doc, m);
+      if ("error" in r) return fail(r.error);
+      return done(doc, r.doc, { notes: r.notes, world: r.doc.world }, ["world"]);
+    }
+    case "apply_scene_preset": {
+      if (a.preset === undefined) return fail('Give "preset": a built-in id (list_scene_presets) or a preset object.');
+      for (const k of ["at", "dur"] as const) if (a[k] !== undefined && (!numOk(a[k]) || (a[k] as number) < 0)) return fail(`"${k}" must be seconds ≥ 0.`);
+      const r = applyScenePreset(doc, a.preset, { at: a.at as number | undefined, dur: a.dur as number | undefined, camera: typeof a.camera === "string" ? a.camera : undefined, subject: typeof a.subject === "string" ? a.subject : undefined });
+      if ("error" in r) return fail(r.error);
+      return done(doc, r.doc, { notes: r.notes }, ["world", "objects"]);
     }
     case "set_scene_animation": {
       // Scene Phase 2 (#351): a library clip — add (file { url } or { name, dataUrl }) or change one, or remove it.

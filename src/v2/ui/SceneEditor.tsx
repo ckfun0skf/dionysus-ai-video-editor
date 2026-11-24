@@ -15,6 +15,8 @@ import {
   addSceneAnimation, addSceneCharacter, audioVisemeFrames, autoRig, BUILTIN_CLIP_NAMES, glbInfoOfDataUrl, removeSceneAnimation, sceneClipNames,
   visemesFromEnergy, type SceneCharacter,
   addSceneCamera, cameraKeyOf, removeSceneCamera, sceneCameraDefs, sceneShots, setSceneShots, updateSceneCamera, type SceneLens,
+  applyScenePreset, blockAction, checkScene, SCENE_LOOK_PRESETS, SCENE_PALETTES, SCENE_POST_PRESETS, SCENE_RIG_PRESETS, setMood, TIMES_OF_DAY, type SceneCheck,
+  type ScenePalette, type ScenePostPreset, type TimeOfDay,
 } from "../domain";
 import { cmd, type Engine } from "../engine";
 import type { BlobStore } from "../ports";
@@ -565,7 +567,7 @@ export function SceneEditor(props: SceneEditorProps) {
         : sel.kind === "cam" ? <CameraForm key={`m${sel.id}`} id={sel.id} doc={doc} issues={issues} edit={edit} part={pt} atNow={atNow} onDeleted={() => setSel({ kind: "scene" })} />
         : sel.kind === "light" && selLight ? <LightForm key={`l${sel.index}`} doc={doc} index={sel.index} light={selLight} issues={issues} edit={edit} part={pt} atNow={atNow} onDeleted={() => setSel({ kind: "scene" })} />
           : sel.kind === "look" ? <LookForm key={`k${sel.id}`} doc={doc} id={sel.id} issues={issues} edit={edit} part={pt} atNow={atNow} onRemoved={() => setSel({ kind: "scene" })} />
-            : <SceneForm doc={doc} edit={edit} part={pt} issues={issues} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} onPickLook={(id) => setSel({ kind: "look", id })} atNow={atNow} onPickCam={(id) => setSel({ kind: "cam", id })} />;
+            : <SceneForm doc={doc} edit={edit} part={pt} issues={issues} onPickLight={(i) => setSel({ kind: "light", index: i })} onPickCamera={() => setSel({ kind: "camera" })} onPickLook={(id) => setSel({ kind: "look", id })} atNow={atNow} onPickCam={(id) => setSel({ kind: "cam", id })} onSeek={seekLocal} />;
   const panel = (
     <div ref={panelRef} className="v2-sed-panel" aria-label="Edit selection">
       {form()}
@@ -727,6 +729,7 @@ export function SceneEditor(props: SceneEditorProps) {
     ctxTool("settings", "Scene", () => open("scene"), { on: part === "scene", title: "Name, planned length, background" }),
     ctxTool("camera", "Camera", () => setSel({ kind: "camera" }), { title: "Select the camera" }),
     ctxTool("light", "Lights", () => open("lights"), { on: part === "lights", title: "Lights" }),
+    ctxTool("scene", "Direct", () => open("direct"), { on: part === "direct", title: "Look and rig presets, mood, blocking from text, check the scene" }),
   ];
   const ctxBar = (
     <nav className="v2-toolbar v2-sed-ctx" aria-label={sel.kind === "event" ? "Event actions" : sel.kind === "object" ? "Object actions" : sel.kind === "camera" ? "Camera actions" : sel.kind === "light" ? "Light actions" : "Scene actions"}>
@@ -807,8 +810,8 @@ const MAX_UNDO = 200;
 /** P80: autosave delay after the last edit. */
 export const DRAFT_DELAY_MS = 600;
 /** P80 (phone): the form sections the context toolbar opens in a sheet. */
-export type Part = "add" | "scene" | "camera" | "lights" | "light" | "look" | "props" | "model" | "script" | "addEvent" | "timing" | "args";
-const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", look: "Look", props: "Properties", model: "Animation", script: "Script", addEvent: "Add event", timing: "Timing", args: "Values" };
+export type Part = "add" | "scene" | "camera" | "lights" | "light" | "look" | "props" | "model" | "script" | "addEvent" | "timing" | "args" | "direct";
+const PART_LABEL: Record<Part, string> = { add: "Add object", scene: "Scene", camera: "Camera at 0 s", lights: "Lights", light: "Light", look: "Look", props: "Properties", model: "Animation", script: "Script", addEvent: "Add event", timing: "Timing", args: "Values", direct: "Direct" };
 
 function draftNote(d: SceneDraft, work: Work | undefined, versions: { id: string }[]): string {
   if (!work || d.baseBlobKey === work.baseKey) return "You closed the editor without saving. Restore the draft to keep working on it, or discard it.";
@@ -880,7 +883,7 @@ function newLook(doc: SceneDoc, id: LookId): Record<string, unknown> {
 /** Read a picked file as a data: URL. */
 const fileDataUrl = (f: File) => new Promise<string>((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => no(r.error); r.readAsDataURL(f); });
 
-function SceneForm({ doc, edit, part, issues, atNow, onPickLight, onPickCamera, onPickLook, onPickCam }: { doc: SceneDoc; edit: Edit; part?: Part; issues: SceneIssue[]; atNow: number; onPickLight: (i: number) => void; onPickCamera: () => void; onPickLook: (id: LookId) => void; onPickCam: (id: string) => void }) {
+function SceneForm({ doc, edit, part, issues, atNow, onPickLight, onPickCamera, onPickLook, onPickCam, onSeek }: { doc: SceneDoc; edit: Edit; part?: Part; issues: SceneIssue[]; atNow: number; onPickLight: (i: number) => void; onPickCamera: () => void; onPickLook: (id: LookId) => void; onPickCam: (id: string) => void; onSeek: (s: number) => void }) {
   const w = worldOf(doc);
   const env = objOrUndef(w.environment);
   const envInput = useRef<HTMLInputElement>(null);
@@ -922,6 +925,7 @@ function SceneForm({ doc, edit, part, issues, atNow, onPickLight, onPickCamera, 
       <AnimationLibrary doc={doc} edit={edit} issues={issues} />
       <CamerasAndShots doc={doc} edit={edit} issues={issues} atNow={atNow} onPickCamera={onPickCamera} onPickCam={onPickCam} />
     </>}
+    {(all || part === "direct") && <DirectSection doc={doc} edit={edit} atNow={atNow} onSeek={onSeek} all={all} />}
     {(all || part === "lights") && <>
       {all ? <h5><Ic g="light" size={14} /> Lights {defaults && <small>(default lighting)</small>}</h5> : defaults && <p className="v2-abnote">Default lighting: change or add a light to set your own.</p>}
       <div className="v2-sed-picklist" role="list" aria-label="Lights">
@@ -936,6 +940,74 @@ function SceneForm({ doc, edit, part, issues, atNow, onPickLight, onPickCamera, 
       <p className="v2-abnote">Tap a track name to edit the camera, a light or an object, or a block to edit an event. Camera moves are events on the Camera track (＋).</p>
     </>}
   </div>;
+}
+
+
+/**
+ * Scene Phase 4 (#353): direct the scene — the same semantic operations the agent uses (domain/sceneStage.ts): a look
+ * preset, the mood (time of day, palette, post), a camera rig preset, blocking from plain text at the playhead, and the
+ * automatic checks with a Go to per problem. Each apply is one editor undo step.
+ */
+function DirectSection({ doc, edit, atNow, onSeek, all }: { doc: SceneDoc; edit: Edit; atNow: number; onSeek: (s: number) => void; all: boolean }) {
+  const [look, setLook] = useState(SCENE_LOOK_PRESETS[0].id);
+  const [tod, setTod] = useState<string>("");
+  const [palette, setPalette] = useState<string>("");
+  const [post, setPost] = useState<string>("");
+  const [overTime, setOverTime] = useState(false);
+  const [rig, setRig] = useState(SCENE_RIG_PRESETS[0].id);
+  const chars = doc.objects.filter((o) => o.character).map((o) => o.id);
+  const [subject, setSubject] = useState("");
+  const [text, setText] = useState("");
+  const [msg, setMsg] = useState<string>();
+  const [checks, setChecks] = useState<SceneCheck[]>();
+  const subj = subject || chars[0] || doc.objects.find((o) => o.shape !== "plane")?.id || "";
+  const apply = (label: string, fn: (d: SceneDoc) => { doc: SceneDoc; notes: string[] } | { error: string }) => {
+    let out: string | undefined;
+    // Success shows as the editor's note; a refusal (nothing changes) shows here.
+    void edit(label, (d) => { const r = fn(d); if ("error" in r) { out = r.error; return d; } return { doc: r.doc, note: r.notes.join(" ") }; }).then(() => setMsg(out));
+  };
+  return <>
+    {all && <h5><Ic g="scene" size={14} /> Direct</h5>}
+    <Field label="Look preset">
+      <span className="v2-sed-row">
+        <select aria-label="Look preset" value={look} onChange={(e) => setLook(e.target.value)}>{SCENE_LOOK_PRESETS.map((p) => <option key={p.id} value={p.id} title={p.description}>{p.label}</option>)}</select>
+        <button type="button" className="v2-btn" data-testid="scene-apply-look" onClick={() => apply(`look: ${look}`, (d) => applyScenePreset(d, look))}>Apply</button>
+      </span>
+    </Field>
+    <div className="v2-sed-row v2-sed-wrap">
+      <SelectField label="Time of day" value={tod} options={["", ...TIMES_OF_DAY]} labels={{ "": "—" }} onCommit={setTod} />
+      <SelectField label="Palette" value={palette} options={["", ...SCENE_PALETTES]} labels={{ "": "—" }} onCommit={setPalette} />
+      <SelectField label="Post" value={post} options={["", ...SCENE_POST_PRESETS]} labels={{ "": "—" }} onCommit={setPost} />
+    </div>
+    {tod && <CheckField label={`Change to it over time from the playhead (${atNow}s)`} value={overTime} onCommit={setOverTime} />}
+    <button type="button" className="v2-btn" data-testid="scene-apply-mood" disabled={!tod && !palette && !post} onClick={() => apply("mood", (d) => setMood(d, {
+      ...(tod ? { timeOfDay: tod as TimeOfDay } : {}), ...(palette ? { palette: palette as ScenePalette } : {}), ...(post ? { post: post as ScenePostPreset } : {}), ...(tod && overTime ? { at: atNow, dur: 6 } : {}),
+    }))}><Ic g="effect" size={16} /> Apply mood</button>
+    <Field label={`Camera rig at ${atNow}s`}>
+      <span className="v2-sed-row">
+        <select aria-label="Camera rig" value={rig} onChange={(e) => setRig(e.target.value)}>{SCENE_RIG_PRESETS.map((p) => <option key={p.id} value={p.id} title={p.description}>{p.label}</option>)}</select>
+        <select aria-label="Rig subject" value={subj} onChange={(e) => setSubject(e.target.value)}>{doc.objects.filter((o) => o.shape !== "plane").map((o) => <option key={o.id} value={o.id}>{o.name || o.id}</option>)}</select>
+        <button type="button" className="v2-btn" onClick={() => apply(`rig: ${rig}`, (d) => applyScenePreset(d, rig, { at: atNow, subject: subj || undefined }))}>Add</button>
+      </span>
+    </Field>
+    <Field label={`Blocking from ${atNow}s`}>
+      <textarea className="v2-sed-blocking" aria-label="Blocking" rows={3} value={text} placeholder={chars.length ? `${chars[0]} walks to the door, turns to camera and waves. Camera pushes in.` : "Add a character first (Add > Character), then: Ana walks to the door, camera pushes in."} onChange={(e) => setText(e.target.value)} />
+    </Field>
+    <button type="button" className="v2-btn" data-testid="scene-block" disabled={!text.trim()} onClick={() => {
+      let out: string | undefined;
+      void edit("block action", (d) => {
+        const r = blockAction(d, { text, at: atNow });
+        if ("error" in r) { out = r.error; return d; }
+        out = r.skipped.length ? `Skipped: ${r.skipped.map((x) => `“${x.text}” (${x.why})`).join(" ")}` : undefined;
+        return { doc: r.doc, note: `${r.beats.length} beat${r.beats.length === 1 ? "" : "s"} until ${r.endSec}s.${r.notes.length ? ` ${r.notes.join(" ")}` : ""}` };
+      }).then(() => { setMsg(out); });
+    }}><Ic g="person" size={16} /> Block it</button>
+    <button type="button" className="v2-btn" data-testid="scene-check" onClick={() => setChecks(checkScene(doc))}><Ic g="alert" size={16} /> Check scene</button>
+    {msg && <p className="v2-abnote" role="status">{msg}</p>}
+    {checks && (checks.length ? <ul className="v2-scene-list v2-scene-issues" aria-label="Scene check" data-testid="scene-checks">
+      {checks.map((c, i) => <li key={i} className={`is-${c.level}`}><button type="button" className="v2-linkbtn" onClick={() => onSeek(c.at)}>{c.at}s</button> {c.message}{c.fix ? <small> {c.fix}</small> : null}</li>)}
+    </ul> : <p className="v2-abnote" role="status" data-testid="scene-checks">No problems found: nothing intersects, the characters are in frame and in view, and no camera is inside an object.</p>)}
+  </>;
 }
 
 /** P81b: the camera: its start values (world.camera) and adding a camera move. */

@@ -13,8 +13,8 @@ import { agentStore, ALL_AGENT_TOOLS, registerAgentTools, type ToolResponse } fr
 import { runTimelineTool } from "./timelineTools";
 import { resetSceneAgentSession } from "../../clipTypes/scene/agent";
 
-const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation", "set_scene_camera", "set_scene_shots", "apply_scene_edits"];
-const READ_ONLY = new Set(["get_scene", "list_scene_objects"]);
+const SCENE_TOOLS = ["create_scene_clip", "get_scene", "list_scene_objects", "add_scene_object", "set_scene_object", "remove_scene_object", "add_scene_event", "update_scene_event", "retime_scene_event", "remove_scene_event", "set_scene_world", "set_scene_light", "set_scene_script", "set_scene_animation", "set_scene_camera", "set_scene_shots", "apply_scene_edits", "stage_scene", "block_action", "set_mood", "apply_scene_preset", "list_scene_presets", "check_scene", "review_scene", "draft_scene_from_shot"];
+const READ_ONLY = new Set(["get_scene", "list_scene_objects", "list_scene_presets", "check_scene", "review_scene"]);
 
 const readBlob = (b: Blob) => new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsText(b); });
 const memBlobs = (): BlobStore & { m: Map<string, Blob> } => {
@@ -62,7 +62,7 @@ describe("P78 scene agent tools through WebMCP", () => {
       expect(defs.get(n)!.annotations?.readOnlyHint, n).toBe(READ_ONLY.has(n));
       expect(JSON.stringify(defs.get(n)!.inputSchema)).toContain('"type":"object"');
     }
-    for (const n of SCENE_TOOLS.filter((x) => !READ_ONLY.has(x) && x !== "create_scene_clip")) expect(JSON.stringify(defs.get(n)!.inputSchema), n).toContain('"mode"');
+    for (const n of SCENE_TOOLS.filter((x) => !READ_ONLY.has(x) && x !== "create_scene_clip" && x !== "draft_scene_from_shot")) expect(JSON.stringify(defs.get(n)!.inputSchema), n).toContain('"mode"');
     off();
     expect(SCENE_TOOLS.some((n) => defs.has(n))).toBe(false);
   });

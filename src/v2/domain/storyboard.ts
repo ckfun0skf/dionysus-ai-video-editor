@@ -853,3 +853,19 @@ export function clipAffects(p: Project, shotId: string): string {
   const b = p.storyboard!;
   return `Affects ${c.users.map((id) => `Shot ${b.order.indexOf(id) + 1}`).join(", ")}`;
 }
+
+/**
+ * Scene Phase 4 (#353): what a first-draft scene for scene slot `slotId` is made from — the shot that plays it (given,
+ * else the first in story order): its title, prompt (the slot's brief added when it says more), camera note and length,
+ * and its reference assets (characters, locations, style) with their prompts.
+ */
+export function sceneDraftInput(p: Project, slotId: string, shotId?: string): import("./sceneStage").ShotDraftInput {
+  const b = p.storyboard;
+  const slot = b?.slots[slotId];
+  if (!b || !slot) return { prompt: "" };
+  const shot = (shotId ? b.shots[shotId] : undefined) ?? b.order.map((id) => b.shots[id]).find((x) => x?.clipSlot === slotId);
+  const refIds = shot ? shot.slotIds : slot.references;
+  const refs = refIds.map((id) => b.slots[id]).filter((x): x is AssetSlot => !!x && x.id !== slotId).map((x) => ({ id: x.id, name: x.name, type: x.type, prompt: x.prompt }));
+  const main = shot?.prompt || shot?.description || slot.prompt || "";
+  return { title: shot?.title ?? slot.name, prompt: [main, slot.prompt && slot.prompt !== main ? slot.prompt : ""].filter(Boolean).join(" "), ...(shot?.camera ? { camera: shot.camera } : {}), ...(shot ? { durationSec: shot.durationSec } : {}), refs };
+}
